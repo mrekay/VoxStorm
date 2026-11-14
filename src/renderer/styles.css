@@ -254,7 +254,8 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
 .acts{display:flex;flex-wrap:wrap;gap:6px}
 .q-empty{color:var(--muted);font-size:13px;padding:18px 6px;text-align:center;border:1px dashed var(--line);border-radius:8px}
 .agents{border-top:1px solid var(--line);flex:none;max-height:40%;overflow:auto}
-.agent-row{display:flex;align-items:center;gap:8px;padding:5px 12px;font-size:12px}
+.agent-row{display:flex;align-items:center;gap:8px;padding:5px 12px;font-size:12px;width:100%;background:none;border:0;color:inherit;font-family:inherit;text-align:left;cursor:pointer}
+.agent-row:hover{background:var(--surface-2)}
 .agent-row .k{font-size:10.5px;font-weight:600;text-transform:uppercase;letter-spacing:.04em;padding:1px 6px;border-radius:4px;flex:none}
 .agent-row .k.subagent{background:var(--violet-soft);color:var(--violet)}
 .agent-row .k.workflow{background:var(--accent-soft);color:var(--accent)}

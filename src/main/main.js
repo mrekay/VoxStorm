@@ -368,9 +368,9 @@ function transcriptOf(sessionId) {
   } catch (_) {}
   return null;
 }
-function liveEntries(o) {
+function liveEntries(o, sidechain) {
   // turn one transcript line into what the watch view shows; most lines are bookkeeping
-  if (o.isSidechain) return [];
+  if (o.isSidechain && !sidechain) return [];
   if (o.type === 'attachment' && o.attachment && o.attachment.type === 'queued_command' && typeof o.attachment.prompt === 'string') {
     return [{ k: 'user', text: o.attachment.prompt, ts: o.timestamp }];
   }
@@ -400,9 +400,47 @@ function liveEntries(o) {
   return [];
 }
 const TAIL_FIRST = 3 * 1024 * 1024; // first read of a long transcript starts this far from the end
-async function tailTranscript(sessionId, offset) {
+/* A subagent's own conversation: <project>/<session>/subagents/agent-<id>.jsonl, next to
+   agent-<id>.meta.json which records the Agent tool call (toolUseId) that started it. */
+const AGENT_ID_RE = /^[\w-]{1,64}$/;
+function subagentDir(sessionId) {
+  const f = transcriptOf(sessionId);
+  return f ? path.join(f.slice(0, -'.jsonl'.length), 'subagents') : null;
+}
+function agentMeta(dir, agentId) {
+  try { return JSON.parse(fs.readFileSync(path.join(dir, `agent-${agentId}.meta.json`), 'utf8')); } catch (_) { return null; }
+}
+function findSubagent(sessionId, { agentId, toolUseId } = {}) {
+  const dir = subagentDir(sessionId); if (!dir) return null;
+  if (agentId && AGENT_ID_RE.test(agentId)) return { agentId, file: path.join(dir, `agent-${agentId}.jsonl`) };
+  if (!toolUseId) return null;
+  let names = []; try { names = fs.readdirSync(dir); } catch (_) { return null; }
+  for (const n of names) {
+    const m = /^agent-([\w-]+)\.meta\.json$/.exec(n); if (!m) continue;
+    const meta = agentMeta(dir, m[1]);
+    if (meta && meta.toolUseId === toolUseId) return { agentId: m[1], file: path.join(dir, `agent-${m[1]}.jsonl`) };
+  }
+  return null;
+}
+// SubagentStop says which agent stopped; add the Agent tool call that started it so the
+// renderer can match it to the row it opened on PreToolUse
+function enrichSubagentStop(ev) {
+  let id = ev.agent_id;
+  if (!id && ev.agent_transcript_path) { const m = /agent-([\w-]+)\.jsonl$/.exec(ev.agent_transcript_path); if (m) id = m[1]; }
+  if (!id || !AGENT_ID_RE.test(id)) return;
+  ev.agent_id = id;
+  const dir = ev.agent_transcript_path ? path.dirname(ev.agent_transcript_path) : SID_RE.test(ev.session_id || '') && subagentDir(ev.session_id);
+  const meta = dir && agentMeta(dir, id);
+  if (meta && meta.toolUseId) ev.vs_tool_use_id = meta.toolUseId;
+}
+async function tailTranscript(sessionId, offset, agent) {
   if (!SID_RE.test(sessionId || '')) return null;
-  const file = transcriptOf(sessionId);
+  let file, agentId = null;
+  if (agent) {
+    const a = findSubagent(sessionId, agent);
+    if (a) { file = a.file; agentId = a.agentId; }
+    if (!file || !fs.existsSync(file)) return { offset: 0, entries: [], missing: true, agentId };
+  } else file = transcriptOf(sessionId);
   if (!file) return { offset: 0, entries: [], missing: true };
   let st; try { st = await fsp.stat(file); } catch (_) { return { offset: 0, entries: [], missing: true }; }
   let from = offset || 0, trimmed = false;
@@ -425,10 +463,10 @@ async function tailTranscript(sessionId, offset) {
   for (const line of lines) {
     if (!line.trim()) continue;
     let o; try { o = JSON.parse(line); } catch (_) { continue; }
-    entries.push(...liveEntries(o));
+    entries.push(...liveEntries(o, !!agent));
   }
-  if (offset) for (const e of entries) if (e.k === 'user') learnAddress(e.text);
-  return { offset: from + end + 1, entries, trimmed };
+  if (offset && !agent) for (const e of entries) if (e.k === 'user') learnAddress(e.text);
+  return { offset: from + end + 1, entries, trimmed, agentId };
 }
 async function takeOver(sessionId) {
   // close the outside copy so the conversation can continue in a VoxStorm terminal
@@ -712,6 +750,7 @@ function startHookServer() {
         res.end('');
         let ev; try { ev = JSON.parse(Buffer.concat(chunks).toString('utf8')); } catch (_) { return; }
         if (ev.hook_event_name === 'UserPromptSubmit' && ev.prompt) learnAddress(ev.prompt);
+        if (ev.hook_event_name === 'SubagentStop') { try { enrichSubagentStop(ev); } catch (_) {} }
         send('hook', ev);
       });
     });
@@ -1071,7 +1110,7 @@ function registerIpc() {
   ipcMain.handle('session:rename', (_e, sessionId, projectPath, title) => renameSession(sessionId, projectPath, title));
   ipcMain.handle('usage:get', () => computeUsage());
   ipcMain.handle('live:list', () => scanLive());
-  ipcMain.handle('live:tail', (_e, sid, offset) => tailTranscript(sid, offset));
+  ipcMain.handle('live:tail', (_e, sid, offset, agent) => tailTranscript(sid, offset, agent && typeof agent === 'object' ? { agentId: String(agent.agentId || ''), toolUseId: String(agent.toolUseId || '') } : null));
   ipcMain.handle('live:takeover', (_e, sid) => takeOver(sid));
   ipcMain.handle('mirror:start', (_e, sid) => startMirror(sid));
   ipcMain.on('mirror:input', (_e, id, data) => mirrorInput(id, data));

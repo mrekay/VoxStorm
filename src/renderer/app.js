@@ -164,7 +164,7 @@ async function refreshUsage() {
 }
 
 /* ---------------- terminals ---------------- */
-function tabIcon(t) { if (t.kind === 'watch') return `<span class="dot ${t.status}"></span><i class="fa-solid fa-eye watch-ic" title="VoxStorm dışında açık, izleniyor"></i>`; return t.kind === 'shell' ? (SHELL_ICONS[t.shell] || '<i class="shi fa-solid fa-terminal"></i>') : `<span class="dot ${t.status}"></span>`; }
+function tabIcon(t) { if (t.kind === 'agent') return `<span class="dot ${t.status}"></span><i class="fa-solid fa-robot watch-ic" title="Alt ajanın konuşması (salt okunur)"></i>`; if (t.kind === 'watch') return `<span class="dot ${t.status}"></span><i class="fa-solid fa-eye watch-ic" title="VoxStorm dışında açık, izleniyor"></i>`; return t.kind === 'shell' ? (SHELL_ICONS[t.shell] || '<i class="shi fa-solid fa-terminal"></i>') : `<span class="dot ${t.status}"></span>`; }
 
 async function openTerminal({ kind = 'claude', shell, projectId, resume, title, overrides }) {
   // already running in an outside terminal: follow it instead of starting a second copy
@@ -239,16 +239,18 @@ function activate(id) {
   requestAnimationFrame(() => {
     fitActive();
     if (t.kind === 'watch') setWatchView(t, t.view);
+    else if (t.kind === 'agent') { const log = t.el.querySelector('.watch-log'); if (t.stick) log.scrollTop = log.scrollHeight; }
     else if (t.term) t.term.focus();
   });
 }
 async function closeTab(id) {
   let t = tabById(id); if (!t) return;
-  if (t.kind !== 'watch' && !t.exited && (t.status === 'running' || t.status === 'waiting')) {
+  if (t.kind !== 'watch' && t.kind !== 'agent' && !t.exited && (t.status === 'running' || t.status === 'waiting')) {
     if (!(await uiConfirm({ title: 'Terminal kapatılsın mı?', message: `"${t.title}" hâlâ çalışıyor.`, detail: 'Claude oturumu geçmişte kalır, sonra devam ettirebilirsin.', ok: 'Kapat', danger: true }))) return;
     t = tabById(id); if (!t) return;
   }
   if (t.kind === 'watch') { clearInterval(t.timer); if (t.mirror) api.send('mirror:stop', t.mirror); }
+  else if (t.kind === 'agent') clearInterval(t.timer);
   else if (!t.exited) api.send('pty:kill', t.id);
   if (t.term) t.term.dispose();
   t.el.remove();
@@ -298,12 +300,20 @@ function addPending(t, card) {
   t.status = 'waiting';
 }
 function clearPending(t) { S.pending = S.pending.filter(p => p.tabId !== t.id); }
-function addAgent(t, kind, name, toolUseId) { S.agents.push({ id: 'a' + (seq++), tabId: t.id, kind, name: shorten(name, 80), toolUseId, t: Date.now() }); }
+function addAgent(t, kind, name, toolUseId, type) { S.agents.push({ id: 'a' + (seq++), tabId: t.id, sessionId: t.sessionId, kind, name: shorten(name, 80), type: type || '', toolUseId, t: Date.now() }); }
 function finishAgent(t, toolUseId, kind) {
   let a = toolUseId && S.agents.find(x => x.toolUseId === toolUseId);
-  if (!a) a = S.agents.find(x => x.tabId === t.id && x.kind === kind);
-  if (a) S.agents = S.agents.filter(x => x !== a);
+  if (!a && !toolUseId) a = S.agents.find(x => x.tabId === t.id && x.kind === kind && !x.bg);
+  if (a) { S.agents = S.agents.filter(x => x !== a); agentEnded(a); }
   return a;
+}
+// a background agent (run_in_background, or sent to the background with Ctrl+B) keeps
+// running after its Agent call returns; it ends with SubagentStop, not PostToolUse
+const isAsyncLaunch = r => !!r && typeof r === 'object' && (r.isAsync === true || r.status === 'async_launched');
+// an open conversation tab of an agent stops showing it as running
+function agentEnded(a) {
+  const v = S.tabs.find(x => x.kind === 'agent' && x.agentKey === a.id);
+  if (v) { v.status = 'done'; pollWatch(v); }
 }
 api.on('hook', ev => {
   S.lastHook = { name: ev.hook_event_name, session: ev.session_id, at: Date.now() };
@@ -320,7 +330,7 @@ api.on('hook', ev => {
     if (t.status !== 'waiting') t.status = 'running';
     if (SUB_TOOLS.has(tool)) {
       const n = input.description || input.subagent_type || 'Alt ajan';
-      addAgent(t, 'subagent', n, ev.tool_use_id);
+      addAgent(t, 'subagent', n, ev.tool_use_id, input.subagent_type);
       notify('subagent', 'Alt ajan açıldı', `${shorten(n, 60)} · ${t.title}`, t.id);
     } else if (tool === 'Workflow') {
       const n = input.name || input.description || 'Workflow';
@@ -335,7 +345,9 @@ api.on('hook', ev => {
       notify('decision', 'Plan onayı bekleniyor', t.title, t.id);
     }
   } else if (name === 'PostToolUse') {
-    if (SUB_TOOLS.has(tool) || tool === 'Workflow') {
+    const bgAgent = SUB_TOOLS.has(tool) && isAsyncLaunch(ev.tool_response) && S.agents.find(x => x.toolUseId === ev.tool_use_id);
+    if (bgAgent) { bgAgent.bg = true; if (ev.tool_response.agentId) bgAgent.agentId = String(ev.tool_response.agentId); }
+    else if (SUB_TOOLS.has(tool) || tool === 'Workflow') {
       const a = finishAgent(t, ev.tool_use_id, tool === 'Workflow' ? 'workflow' : 'subagent');
       if (a) notify(a.kind, a.kind === 'workflow' ? 'Workflow bitti' : 'Alt ajan bitti', `${shorten(a.name, 60)} · ${t.title}`, t.id);
     }
@@ -352,11 +364,19 @@ api.on('hook', ev => {
         notify('decision', 'Kararını bekliyor', `${t.title}: ${msg}`, t.id);
       }
     }
+  } else if (name === 'SubagentStop') {
+    let a = S.agents.find(x => x.tabId === t.id && x.kind === 'subagent' && ((ev.vs_tool_use_id && x.toolUseId === ev.vs_tool_use_id) || (ev.agent_id && x.agentId === ev.agent_id)));
+    if (!a && !ev.vs_tool_use_id) a = S.agents.find(x => x.tabId === t.id && x.kind === 'subagent' && x.bg); // oldest background one
+    // foreground agents are finished by their PostToolUse right after this
+    if (a && a.bg) {
+      S.agents = S.agents.filter(x => x !== a); agentEnded(a);
+      notify('subagent', 'Alt ajan bitti', `${shorten(a.name, 60)} · ${t.title}`, t.id);
+    } else if (a && ev.agent_id) a.agentId = ev.agent_id;
   } else if (name === 'Stop') {
     clearPending(t);
     const was = t.status;
     t.status = 'done';
-    S.agents = S.agents.filter(a => a.tabId !== t.id);
+    S.agents = S.agents.filter(a => a.tabId !== t.id || a.bg); // background agents outlive the turn
     if (was === 'running' || was === 'waiting') notify('done', 'İş bitti' + (addr() ? ', ' + addr() : ''), `${t.title} · ${(proj(t.projectId) || {}).name || ''}`, t.id);
     refreshHistory(t.projectId).then(renderSide);
   } else if (name === 'SessionEnd') {
@@ -452,6 +472,39 @@ function openWatch(sid) {
   tab.timer = setInterval(() => pollWatch(tab), 1500);
   connectMirror(tab);
   if (S.mode === 'ide' && tab.projectId && tab.projectId !== IDE.project) switchIdeProject(tab.projectId);
+  activate(tab.id);
+  return tab;
+}
+/* A subagent's own conversation in a read-only tab, followed live while it runs. */
+function openAgentView(id) {
+  const a = S.agents.find(x => x.id === id); if (!a) return;
+  if (S.mode !== 'claude' && S.mode !== 'ide') setMode('claude');
+  const ex = S.tabs.find(t => t.kind === 'agent' && t.agentKey === a.id);
+  if (ex) { activate(ex.id); return ex; }
+  const parent = tabById(a.tabId);
+  const sid = a.sessionId || (parent && parent.sessionId);
+  if (!sid) { toast('Ajanın oturumu bulunamadı'); return; }
+  const el = document.createElement('div');
+  el.className = 'term-pane watch-pane';
+  el.innerHTML = '<div class="watch-bar"></div><div class="watch-log"><div class="watch-note">Konuşma okunuyor…</div></div>';
+  $('#termHost').appendChild(el);
+  const tab = {
+    id: 'g' + (seq++), kind: 'agent', agentKey: a.id, parentSid: sid, agentId: a.agentId || null, toolUseId: a.toolUseId,
+    projectId: parent ? parent.projectId : null, el, exited: false, prompted: false, offset: 0, first: true, stick: true,
+    title: shorten(a.name, 40), status: 'running',
+  };
+  const log = el.querySelector('.watch-log');
+  log.addEventListener('scroll', () => { tab.stick = log.scrollHeight - log.scrollTop - log.clientHeight < 60; });
+  log.addEventListener('click', e => {
+    const l = e.target.closest('a[href]'); if (!l) return;
+    e.preventDefault();
+    if (/^https?:/i.test(l.getAttribute('href'))) window.open(l.getAttribute('href'));
+  });
+  el.querySelector('.watch-bar').innerHTML = `<span class="dot running"></span><span class="wb-t"><b>Alt ajan: ${esc(a.name)}</b>${a.type ? ' · ' + esc(a.type) : ''}<small>${esc(parent ? parent.title : '')} oturumunun ajanı · salt okunur, ajanın kendi konuşması</small></span>`
+    + (parent ? `<button class="btn" data-tab="${parent.id}"><i class="fa-solid fa-arrow-left"></i> Ana oturuma dön</button>` : '');
+  S.tabs.push(tab);
+  pollWatch(tab);
+  tab.timer = setInterval(() => pollWatch(tab), 1500);
   activate(tab.id);
   return tab;
 }
@@ -604,19 +657,27 @@ function renderWatchBar(t) {
       ? `<button class="btn" data-takeover="${t.sessionId}" title="Dışarıdaki claude sürecini kapatır, konuşmaya bir VoxStorm terminalinde kaldığı yerden devam eder"><i class="fa-solid fa-right-to-bracket"></i> VoxStorm'a taşı</button>`
       : `<button class="btn primary" data-continue="${t.sessionId}" title="Konuşmaya bir VoxStorm terminalinde kaldığı yerden devam eder"><i class="fa-solid fa-play"></i> VoxStorm'ta devam et</button>`);
 }
-function watchEntryHTML(e) {
+function watchEntryHTML(e, agent) {
   const tm = e.ts ? new Date(e.ts).toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' }) : '';
-  if (e.k === 'user') return `<div class="wm user"><div class="wm-h">Sen<span>${tm}</span></div><div class="wm-b">${esc(e.text)}</div></div>`;
-  if (e.k === 'ai') return `<div class="wm ai"><div class="wm-h">Claude<span>${tm}</span></div><div class="wm-b md">${DOMPurify.sanitize(marked.parse(e.text, { gfm: true, breaks: false }))}</div></div>`;
+  if (e.k === 'user') return `<div class="wm user"><div class="wm-h">${agent ? 'Görev' : 'Sen'}<span>${tm}</span></div><div class="wm-b">${esc(e.text)}</div></div>`;
+  if (e.k === 'ai') return `<div class="wm ai"><div class="wm-h">${agent ? 'Ajan' : 'Claude'}<span>${tm}</span></div><div class="wm-b md">${DOMPurify.sanitize(marked.parse(e.text, { gfm: true, breaks: false }))}</div></div>`;
   return `<div class="wm tool" title="${esc(e.name)}: ${esc(e.text)}"><i class="fa-solid fa-wrench"></i><b>${esc(e.name)}</b><span>${esc(e.text)}</span></div>`;
 }
 async function pollWatch(t) {
   if (t.busy || !S.tabs.includes(t)) return;
   t.busy = true;
   try {
-    const r = await api.invoke('live:tail', t.sessionId, t.offset);
+    const isAgent = t.kind === 'agent';
+    const r = isAgent
+      ? await api.invoke('live:tail', t.parentSid, t.offset, { agentId: t.agentId || '', toolUseId: t.toolUseId || '' })
+      : await api.invoke('live:tail', t.sessionId, t.offset);
     if (!r) return;
+    if (isAgent && r.agentId) t.agentId = r.agentId;
     const log = t.el.querySelector('.watch-log');
+    if (isAgent && r.missing) { // the agent may not have written its first line yet
+      if (t.first) { log.innerHTML = '<div class="watch-note empty">Ajanın konuşması bekleniyor…</div>'; t.first = false; }
+      return;
+    }
     if (t.first || r.offset < t.offset) {
       log.innerHTML = r.missing ? '<div class="watch-note">Konuşma kaydı bulunamadı.</div>' : r.trimmed ? '<div class="watch-note">Uzun konuşma: son kısmı gösteriliyor.</div>' : '';
       t.first = false;
@@ -627,7 +688,7 @@ async function pollWatch(t) {
       return;
     }
     const empty = log.querySelector('.watch-note.empty'); if (empty) empty.remove();
-    log.insertAdjacentHTML('beforeend', r.entries.map(watchEntryHTML).join(''));
+    log.insertAdjacentHTML('beforeend', r.entries.map(e => watchEntryHTML(e, isAgent)).join(''));
     while (log.children.length > 1500) log.firstElementChild.remove();
     if (t.stick) log.scrollTop = log.scrollHeight;
   } catch (_) {
@@ -672,7 +733,7 @@ function renderSide() {
     return;
   }
   $('#side').innerHTML = activeProjects.map(p => {
-    const live = S.tabs.filter(t => t.projectId === p.id && !(t.kind === 'watch' && t.ext));
+    const live = S.tabs.filter(t => t.projectId === p.id && t.kind !== 'agent' && !(t.kind === 'watch' && t.ext));
     const ext = outsideOf(p.id);
     const liveIds = new Set([...live.map(t => t.sessionId), ...ext.map(s => s.sessionId)].filter(Boolean));
     const hist = (S.history[p.id] || []).filter(h => !liveIds.has(h.id));
@@ -748,7 +809,11 @@ function renderQueue() {
       ${d.kind === 'question' && (d.multi || d.more) ? `<div class="card-d">${d.options.map(esc).join('\n')}</div>` : ''}
       <div class="acts">${acts}</div></div>`;
   }).join('') : '<div class="q-empty">Bekleyen karar yok. Bir oturum izin, plan onayı ya da cevap isteyince burada görünür.</div>';
-  $('#agents').innerHTML = S.agents.length ? S.agents.map(a => { const t = tabById(a.tabId) || {}; return `<div class="agent-row"><span class="k ${a.kind}">${a.kind === 'subagent' ? 'Ajan' : 'Workflow'}</span><span class="n" title="${esc(a.name)}">${esc(a.name)}</span><span class="s" title="${esc(t.title)}">${esc(t.title || '')}</span></div>`; }).join('') : '<div class="none">Şu an çalışan alt ajan ya da workflow yok.</div>';
+  $('#agents').innerHTML = S.agents.length ? S.agents.map(a => {
+    const t = tabById(a.tabId) || {};
+    const tip = a.kind === 'subagent' ? `${a.name}${a.type ? ' · ' + a.type : ''}${a.bg ? ' · arka planda' : ''}\nKonuşmasını açmak için tıkla` : `${a.name}\nOturuma gitmek için tıkla`;
+    return `<button class="agent-row" ${a.kind === 'subagent' ? `data-agent="${a.id}"` : `data-tab="${a.tabId}"`} title="${esc(tip)}"><span class="k ${a.kind}">${a.kind === 'subagent' ? 'Ajan' : 'Workflow'}</span><span class="n">${esc(a.name)}</span><span class="s">${esc(t.title || '')}</span></button>`;
+  }).join('') : '<div class="none">Şu an çalışan alt ajan ya da workflow yok.</div>';
 }
 function renderUsage() {
   const u = S.usage;
@@ -765,11 +830,11 @@ function renderUsage() {
     ].map(([l, t, c, tip]) => `<div class="us" title="${tip}"><small>${l}</small><b>${fmtTok(t)}</b>${u.cost != null && c != null ? `<span>≈ ${fmtUsd(c)}</span>` : ''}</div>`).join('')}</div>`;
 }
 function renderStatus() {
-  const running = S.tabs.filter(t => t.status === 'running' && t.kind !== 'watch').length;
+  const running = S.tabs.filter(t => t.status === 'running' && t.kind !== 'watch' && t.kind !== 'agent').length;
   const claudeOk = INFO && INFO.claude;
   const u = S.usage;
   const usageChip = u ? `<button class="sb-chip" data-report="1" title="Bu hafta · aylık rapor için tıkla (Ctrl+Shift+R)"><i class="fa-solid fa-chart-column"></i> ${fmtTok(u.total)} token${u.cost != null ? ' · ≈ ' + fmtUsd(u.cost) : ''}</button>` : '';
-  $('#statusbar').innerHTML = `<span><b>${running}</b> çalışıyor</span><span><b>${pendingCount()}</b> karar bekliyor</span>${S.live.length ? `<span title="VoxStorm dışında açık Claude oturumları"><b>${S.live.length}</b> dışarıda</span>` : ''}<span><b>${S.agents.length}</b> ajan / workflow</span><span><b>${S.tabs.filter(t => !t.exited).length}</b> açık terminal</span>`
+  $('#statusbar').innerHTML = `<span><b>${running}</b> çalışıyor</span><span><b>${pendingCount()}</b> karar bekliyor</span>${S.live.length ? `<span title="VoxStorm dışında açık Claude oturumları"><b>${S.live.length}</b> dışarıda</span>` : ''}<span><b>${S.agents.length}</b> ajan / workflow</span><span><b>${S.tabs.filter(t => !t.exited && t.kind !== 'agent').length}</b> açık terminal</span>`
     + (window.pluginHost ? pluginHost.statusHtml() : '') + `<span style="margin-left:auto"></span>${usageChip}`
     + `<button class="sb-chip" data-settab="claude" title="Yeni Claude oturumlarının varsayılanları · değiştirmek için tıkla"><i class="fa-solid fa-sliders"></i> ${esc(claudeSummary())}</button>`
     + `<span class="${claudeOk ? '' : 'warn'}">${claudeOk ? 'Claude Code bağlı' : 'claude komutu bulunamadı'} · bildirim portu ${INFO ? INFO.hookPort : '-'}</span>`;
@@ -1947,7 +2012,7 @@ async function updateAction(d) {
   else if (d.upddl !== undefined) { api.invoke('update:download'); return; }
   else if (d.updpage !== undefined) { if (UPD && UPD.url) api.invoke('shell:openGithub', UPD.url); return; }
   else if (d.updgo !== undefined) {
-    const open = S.tabs.filter(t => !t.exited && t.kind !== 'watch').length;
+    const open = S.tabs.filter(t => !t.exited && t.kind !== 'watch' && t.kind !== 'agent').length;
     if (open && !(await uiConfirm({ title: 'Güncellensin mi?', message: `${open} terminal kapanacak.`, detail: 'Claude oturumları yeni sürüm açılınca geri yüklenir.', ok: 'Yeniden başlat ve güncelle', icon: 'fa-rotate' }))) return;
     if (!(await api.invoke('update:restart'))) toast('Güncelleme başlatılamadı');
     return;
@@ -2037,6 +2102,7 @@ function bindEvents() {
   document.addEventListener('contextmenu', e => {
     const el = e.target.closest('#tabs [data-tab], #ptabs [data-tab], #side [data-tab], #side [data-watch], #side [data-resume], #newMenu [data-resume]');
     if (!el) return;
+    if (el.dataset.tab && (tabById(el.dataset.tab) || {}).kind === 'agent') return;
     e.preventDefault();
     $('#newMenu').hidden = true;
     renameSessionUi(el);
@@ -2058,6 +2124,7 @@ function bindEvents() {
     if (d.startnew) { if (!panelUi().side) { await setCfg({ settings: { ui: { side: true } } }); applyPanels(); } openStartPanel(); }
     else if (d.panel) togglePanel(d.panel);
     else if (d.watch) { if (S.mode === 'claude' || S.mode === 'ide') openWatch(d.watch); }
+    else if (d.agent) openAgentView(d.agent);
     else if (d.takeover) takeOverSession(d.takeover);
     else if (d.continue) continueHere(d.continue);
     else if (d.mode) setMode(d.mode);
