@@ -433,6 +433,18 @@ function enrichSubagentStop(ev) {
   const meta = dir && agentMeta(dir, id);
   if (meta && meta.toolUseId) ev.vs_tool_use_id = meta.toolUseId;
 }
+/* A Workflow call returns at once (status async_launched, runId); when the run ends Claude
+   Code writes its snapshot to <project>/<session>/workflows/<runId>.json. */
+const RUN_ID_RE = /^wf_[\w-]{1,64}$/;
+function workflowState(sessionId, runId) {
+  if (!SID_RE.test(sessionId || '') || !RUN_ID_RE.test(runId || '')) return null;
+  const f = transcriptOf(sessionId); if (!f) return null;
+  let snap;
+  try { snap = JSON.parse(fs.readFileSync(path.join(f.slice(0, -'.jsonl'.length), 'workflows', runId + '.json'), 'utf8')); } catch (_) { return { done: false }; }
+  const st = String(snap.status || '');
+  if (/^(running|pending|starting|queued)$/i.test(st)) return { done: false };
+  return { done: true, status: st, error: snap.error ? String(snap.error).slice(0, 300) : '' };
+}
 async function tailTranscript(sessionId, offset, agent) {
   if (!SID_RE.test(sessionId || '')) return null;
   let file, agentId = null;
@@ -1112,6 +1124,7 @@ function registerIpc() {
   ipcMain.handle('live:list', () => scanLive());
   ipcMain.handle('live:tail', (_e, sid, offset, agent) => tailTranscript(sid, offset, agent && typeof agent === 'object' ? { agentId: String(agent.agentId || ''), toolUseId: String(agent.toolUseId || '') } : null));
   ipcMain.handle('live:takeover', (_e, sid) => takeOver(sid));
+  ipcMain.handle('workflow:state', (_e, sid, runId) => workflowState(sid, runId));
   ipcMain.handle('mirror:start', (_e, sid) => startMirror(sid));
   ipcMain.on('mirror:input', (_e, id, data) => mirrorInput(id, data));
   ipcMain.on('mirror:stop', (_e, id) => stopMirror(id));

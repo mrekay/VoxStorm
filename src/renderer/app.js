@@ -310,6 +310,26 @@ function finishAgent(t, toolUseId, kind) {
 // a background agent (run_in_background, or sent to the background with Ctrl+B) keeps
 // running after its Agent call returns; it ends with SubagentStop, not PostToolUse
 const isAsyncLaunch = r => !!r && typeof r === 'object' && (r.isAsync === true || r.status === 'async_launched');
+// background workflows have no hook for their end: poll for the run snapshot Claude Code writes
+let wfTimer = null;
+function watchWorkflows() {
+  if (wfTimer) return;
+  wfTimer = setInterval(async () => {
+    const runs = S.agents.filter(a => a.kind === 'workflow' && a.bg && a.runId);
+    if (!runs.length) { clearInterval(wfTimer); wfTimer = null; return; }
+    let changed = false;
+    for (const a of runs) {
+      let st = null;
+      try { st = await api.invoke('workflow:state', a.sessionId, a.runId); } catch (_) {}
+      if (!st || !st.done || !S.agents.includes(a)) continue;
+      S.agents = S.agents.filter(x => x !== a); changed = true;
+      const t = tabById(a.tabId);
+      const failed = st.error || /fail|error|cancel|kill|abort/i.test(st.status || '');
+      notify('workflow', failed ? 'Workflow hatayla bitti' : 'Workflow bitti', `${shorten(a.name, 60)}${t ? ' · ' + t.title : ''}`, a.tabId);
+    }
+    if (changed) renderAll();
+  }, 3000);
+}
 // an open conversation tab of an agent stops showing it as running
 function agentEnded(a) {
   const v = S.tabs.find(x => x.kind === 'agent' && x.agentKey === a.id);
@@ -345,8 +365,13 @@ api.on('hook', ev => {
       notify('decision', 'Plan onayı bekleniyor', t.title, t.id);
     }
   } else if (name === 'PostToolUse') {
-    const bgAgent = SUB_TOOLS.has(tool) && isAsyncLaunch(ev.tool_response) && S.agents.find(x => x.toolUseId === ev.tool_use_id);
-    if (bgAgent) { bgAgent.bg = true; if (ev.tool_response.agentId) bgAgent.agentId = String(ev.tool_response.agentId); }
+    const r = ev.tool_response;
+    const bgAgent = (SUB_TOOLS.has(tool) || tool === 'Workflow') && isAsyncLaunch(r) && !(tool === 'Workflow' && r.error) && S.agents.find(x => x.toolUseId === ev.tool_use_id);
+    if (bgAgent) {
+      bgAgent.bg = true;
+      if (r.agentId) bgAgent.agentId = String(r.agentId);
+      if (r.runId) { bgAgent.runId = String(r.runId); watchWorkflows(); }
+    }
     else if (SUB_TOOLS.has(tool) || tool === 'Workflow') {
       const a = finishAgent(t, ev.tool_use_id, tool === 'Workflow' ? 'workflow' : 'subagent');
       if (a) notify(a.kind, a.kind === 'workflow' ? 'Workflow bitti' : 'Alt ajan bitti', `${shorten(a.name, 60)} · ${t.title}`, t.id);
