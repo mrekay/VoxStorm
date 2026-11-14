@@ -1777,7 +1777,11 @@ function bindIde() {
   $('#etabs').addEventListener('auxclick', e => { const t = e.target.closest('[data-etab]'); if (t && e.button === 1) { e.preventDefault(); closeFile(t.dataset.etab); } });
   $('#etabs').addEventListener('mousedown', e => { if (e.button === 1) e.preventDefault(); }); // no autoscroll cursor
   $('#etabs').addEventListener('contextmenu', e => { const t = e.target.closest('[data-etab]'); if (t) openIdeMenu(e, { kind: 'tab', path: t.dataset.etab }); });
-  $('#etabs').addEventListener('wheel', e => { if (e.deltaY && !e.deltaX) { $('#etabs').scrollLeft += e.deltaY; e.preventDefault(); } }, { passive: false });
+  // tab strips scroll sideways with the plain mouse wheel, no Shift needed
+  for (const id of ['#etabs', '#tabs', '#ptabs']) {
+    const strip = $(id);
+    strip.addEventListener('wheel', e => { if (e.deltaY && !e.deltaX && !e.shiftKey) { strip.scrollLeft += e.deltaY; e.preventDefault(); } }, { passive: false });
+  }
   $('#ideMenu').addEventListener('click', e => { const b = e.target.closest('[data-ixm]'); if (b) ideMenuAction(b.dataset.ixm); });
   $('#ideMenu').addEventListener('keydown', e => {
     const all = $$('#ideMenu button'), i = all.indexOf(document.activeElement); // -1 while the menu itself has focus
