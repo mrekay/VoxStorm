@@ -64,10 +64,11 @@ const DEFAULTS = {
     update: { check: true, auto: true }, // look for new releases on GitHub; download and install them
     soundStyle: 'claudelot', // 'claudelot': the app plays its own chime · 'windows': the system notification sound
     // defaults for every Claude session VoxStorm starts ('' = leave it to Claude Code)
-    claude: { model: '', effort: '', permissionMode: '', remoteControl: false },
+    // command: launch command line used instead of plain `claude` ('' = find claude on PATH); chrome: start with --chrome
+    claude: { model: '', effort: '', permissionMode: '', remoteControl: false, chrome: false, command: '' },
     notif: { done: true, decision: true, subagent: true, workflow: true, quiet: false },
     skin: 'mono', mode: 'claude', termColors: 'windows',
-    ui: { side: true, queue: true, usage: true }, // which side panels are open
+    ui: { side: true, queue: true, usage: true }, // IDE panels; AI mode side panels live in ui.dock (dock.js)
   },
   ide: { state: {}, ui: { ex: true, panel: true, size: 13 } },
 };
@@ -119,6 +120,30 @@ function findClaude() {
     if (fs.existsSync(guess)) claudePath = guess;
   }
   return claudePath;
+}
+// split a command line into words; "double quotes" group words containing spaces
+function splitArgs(line) {
+  const out = []; const re = /"([^"]*)"|(\S+)/g; let m;
+  while ((m = re.exec(String(line || '')))) out.push(m[1] !== undefined ? m[1] : m[2]);
+  return out;
+}
+const quoteArg = a => (/[\s"&|<>^()]/.test(a) || a === '' ? `"${String(a).replace(/"/g, '""')}"` : a);
+/* how to start Claude: the custom launch command from settings, or claude on PATH.
+   Returns { file, pre, line } — pre: words placed before VoxStorm's own arguments;
+   line: true when it must run through cmd.exe (.cmd/.bat scripts, commands not found as an .exe). */
+function claudeLaunch() {
+  const custom = splitArgs((config.settings.claude || {}).command);
+  if (custom.length) {
+    const [head, ...rest] = custom;
+    let exe = null;
+    if (path.isAbsolute(head) && fs.existsSync(head)) exe = head;
+    else { const f = whereFirst(head); exe = f.find(x => /\.exe$/i.test(x)) || f.find(x => /\.(cmd|bat)$/i.test(x)) || null; }
+    if (exe && /\.exe$/i.test(exe)) return { file: exe, pre: rest, line: false };
+    return { file: exe || head, pre: rest, line: true };
+  }
+  const exe = findClaude();
+  if (!exe) return null;
+  return { file: exe, pre: [], line: !/\.exe$/i.test(exe) };
 }
 function findShell(kind) {
   if (kind === 'cmd') return { file: 'cmd.exe', args: [] };
@@ -711,6 +736,47 @@ async function scanUsage() {
   return usageCache;
 }
 ipcMain.handle('usage:history', async () => { await computeUsage(); return usageHistory; });
+/* Plan limits, as Claude Code's /usage shows them ("Current week (all models) 44% used").
+   Read with the login Claude Code keeps in ~/.claude/.credentials.json; the token never leaves
+   this process and is never refreshed or written here — when it has expired, Claude Code renews it
+   the next time it runs. Cached for a minute. */
+let planCache = null;
+ipcMain.handle('usage:plan', async (_e, force) => {
+  if (!force && planCache && Date.now() - planCache.at < 60000) return planCache;
+  let oauth;
+  try { oauth = JSON.parse(fs.readFileSync(path.join(CLAUDE_DIR, '.credentials.json'), 'utf8')).claudeAiOauth; } catch (_) { oauth = null; }
+  if (!oauth || !oauth.accessToken) return (planCache = { at: Date.now(), error: 'nologin' });
+  if (oauth.expiresAt && oauth.expiresAt < Date.now()) return (planCache = { at: Date.now(), error: 'expired' });
+  try {
+    const r = await fetch('https://api.anthropic.com/api/oauth/usage?skip_spend=1', {
+      headers: { Authorization: `Bearer ${oauth.accessToken}`, 'anthropic-beta': 'oauth-2025-04-20', 'User-Agent': 'VoxStorm' },
+      signal: AbortSignal.timeout(15000),
+    });
+    if (r.status === 401 || r.status === 403) return (planCache = { at: Date.now(), error: 'expired' });
+    if (!r.ok) return (planCache = { at: Date.now(), error: 'http', status: r.status });
+    const d = await r.json();
+    const rows = [];
+    const win = (title, l) => { if (l && l.utilization != null) rows.push({ title, percent: l.utilization, resetsAt: l.resets_at || null, severity: 'normal' }); };
+    win('Bu oturum (5 saat)', d.five_hour);
+    if (Array.isArray(d.limits) && d.limits.length) {
+      for (const l of d.limits) {
+        if (l.percent == null) continue;
+        const model = l.scope && l.scope.model && l.scope.model.display_name;
+        const title = l.kind === 'weekly_all' ? 'Bu hafta (tüm modeller)' : model ? `Bu hafta (${model})` : String(l.kind || 'Limit').replace(/_/g, ' ');
+        rows.push({ title, percent: l.percent, resetsAt: l.resets_at || null, severity: l.severity || 'normal' });
+      }
+    } else {
+      // older answer shape: the fixed windows Claude Code itself falls back to
+      win('Bu hafta (tüm modeller)', d.seven_day);
+      win('Bu hafta (yalnızca Sonnet)', d.seven_day_sonnet);
+      win('Bu hafta (Opus)', d.seven_day_opus);
+      for (const m of d.model_scoped || []) win(`Bu hafta (${m.display_name})`, m);
+    }
+    return (planCache = { at: Date.now(), rows, plan: oauth.subscriptionType || null });
+  } catch (err) {
+    return (planCache = { at: Date.now(), error: 'net', message: String(err && err.message || err) });
+  }
+});
 ipcMain.handle('usage:exportCsv', async (_e, month) => {
   await computeUsage();
   const names = Object.fromEntries(config.projects.map(p => [encodeProjectDir(p.path), p.name]));
@@ -864,8 +930,9 @@ function spawnTerminal(opts) {
   let file, args = [], sessionId = null;
   const cwd = opts.cwd && fs.existsSync(opts.cwd) ? opts.cwd : os.homedir();
   if (opts.kind === 'claude') {
-    const exe = findClaude();
-    if (!exe) throw new Error('claude komutu bulunamadı. Claude Code kurulu ve PATH içinde olmalı.');
+    const launch = claudeLaunch();
+    if (!launch) throw new Error('claude komutu bulunamadı. Claude Code kurulu ve PATH içinde olmalı ya da Ayarlar → Claude oturumları → Açılış komutu doldurulmalı.');
+    args.push(...launch.pre);
     if (opts.resume) { args.push('--resume', opts.resume); sessionId = opts.resume; }
     else { sessionId = crypto.randomUUID(); args.push('--session-id', sessionId); }
     args.push('--settings', HOOK_SETTINGS);
@@ -874,10 +941,11 @@ function spawnTerminal(opts) {
     if (cs.effort) args.push('--effort', cs.effort);
     if (cs.permissionMode) args.push('--permission-mode', cs.permissionMode);
     if (cs.remoteControl) args.push('--remote-control', opts.rcName || 'VoxStorm');
+    if (cs.chrome && !args.includes('--chrome')) args.push('--chrome');
     writeAppendPrompt();
     args.push('--append-system-prompt-file', APPEND_PROMPT);
-    if (exe.toLowerCase().endsWith('.cmd')) { file = 'cmd.exe'; args = ['/c', exe, ...args]; }
-    else file = exe;
+    if (launch.line) { file = 'cmd.exe'; args = '/d /s /c "' + [quoteArg(launch.file), ...args.map(quoteArg)].join(' ') + '"'; }
+    else file = launch.file;
   } else {
     const sh = findShell(opts.shell);
     file = sh.file; args = sh.args;

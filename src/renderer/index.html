@@ -36,11 +36,20 @@
     </div>
   </header>
 
-  <!-- CLAUDE MODE -->
+  <!-- CLAUDE MODE: activity bars at the window edges, dock sides next to the terminal (see dock.js) -->
   <div class="app" id="claudeView">
-    <div class="col col-left" id="leftCol">
+    <nav class="rail act-bar rail-left" id="leftRail" aria-label="Sol panel"></nav>
+    <div class="dock-side dock-left" id="leftCol"></div>
+    <main class="center">
+      <div class="tabs" id="tabs" role="tablist"></div>
+      <div class="term-slot" id="centerSlot"></div>
+    </main>
+    <div class="dock-side dock-right" id="rightCol"></div>
+    <nav class="rail act-bar rail-right" id="rightRail" aria-label="Sağ panel"></nav>
+    <!-- the views; dock.js moves each into its place -->
+    <div id="dockPark" hidden>
     <aside class="side" id="sidePanel" aria-label="Projeler">
-      <div class="panel-h">Projeler <span class="ph-acts"><button class="start-btn" id="startBtn" title="Bir projede oturum başlat (Ctrl+Shift+P)" aria-haspopup="true" aria-expanded="false"><i class="fa-solid fa-play"></i> Proje Başlat <i class="fa-solid fa-chevron-down sb-car"></i></button><button class="ghost icon" data-panel="side" title="Paneli gizle (Ctrl+Shift+E)" aria-label="Projeler panelini gizle"><i class="fa-solid fa-angles-left"></i></button></span></div>
+      <div class="panel-h"><span class="ph-t">Projeler</span> <span class="ph-acts"><button class="start-btn" id="startBtn" title="Bir projede oturum başlat (Ctrl+Shift+P)" aria-haspopup="true" aria-expanded="false"><i class="fa-solid fa-play"></i> Proje Başlat <i class="fa-solid fa-chevron-down sb-car"></i></button></span></div>
       <div class="start-panel" id="startPanel" hidden>
         <div class="sp-search"><i class="fa-solid fa-magnifying-glass"></i><input id="startQ" placeholder="Proje ara…" autocomplete="off" spellcheck="false" aria-label="Proje ara"></div>
         <div class="sp-list" id="startList" role="listbox" aria-label="Projeler"></div>
@@ -48,34 +57,15 @@
       </div>
       <div class="side-scroll" id="side"></div>
     </aside>
-    <button class="sec-bar" id="sideBar" data-panel="side" hidden title="Projeleri göster (Ctrl+Shift+E)"><i class="fa-solid fa-folder-tree"></i><span>Projeler</span><i class="fa-solid fa-chevron-down sec-car"></i></button>
-    <div class="usage" id="usage"></div>
-    <button class="sec-bar" id="usageBar" data-panel="usage" hidden title="Kullanımı göster (Ctrl+Shift+U)"><i class="fa-solid fa-chart-column"></i><span>Haftalık kullanım</span><b class="sec-v" id="usageBarV"></b><i class="fa-solid fa-chevron-up sec-car"></i></button>
-    </div>
-    <div class="rail rail-left" id="leftRail" hidden>
-      <button data-panel="side" title="Projeleri göster (Ctrl+Shift+E)"><i class="fa-solid fa-folder-tree"></i><span>Projeler</span></button>
-      <button data-panel="usage" title="Kullanımı göster (Ctrl+Shift+U)"><i class="fa-solid fa-chart-column"></i><span>Kullanım</span></button>
-    </div>
-    <main class="center">
-      <div class="tabs" id="tabs" role="tablist"></div>
-      <div class="term-slot" id="centerSlot"></div>
-    </main>
-    <div class="rail rail-right" id="rightRail" hidden>
-      <button data-panel="queue" title="Kararları göster (Ctrl+Shift+D)"><i class="fa-solid fa-hand"></i><span>Kararlar</span><b class="rail-n" id="railCount" hidden></b></button>
-      <button data-panel="agents" title="Ajanları göster (Ctrl+Shift+J)"><i class="fa-solid fa-robot"></i><span>Ajanlar</span><b class="rail-n" id="railAgents" hidden></b></button>
-    </div>
-    <div class="col col-right" id="rightCol">
     <aside class="queue" id="queuePanel" aria-label="Kararını bekleyenler">
-      <div class="panel-h">Kararını bekleyenler <span class="ph-acts"><span class="count" id="qCount">0</span><button class="ghost icon" data-panel="queue" title="Paneli gizle (Ctrl+Shift+D)" aria-label="Karar panelini gizle"><i class="fa-solid fa-angles-right"></i></button></span></div>
+      <div class="panel-h"><span class="ph-t">Kararını bekleyenler</span> <span class="ph-acts"><span class="count" id="qCount">0</span></span></div>
       <div class="queue-scroll" id="queue"></div>
     </aside>
-    <button class="sec-bar" id="queueBar" data-panel="queue" hidden title="Kararları göster (Ctrl+Shift+D)"><i class="fa-solid fa-hand"></i><span>Kararını bekleyenler</span><b class="sec-v warn" id="queueBarV"></b><i class="fa-solid fa-chevron-down sec-car"></i></button>
-    <div class="plug-side" id="plugSide" hidden></div>
     <div class="agents" id="agentsPanel">
-      <div class="panel-h">Aktif ajanlar ve workflow'lar <span class="ph-acts"><button class="ghost icon" data-panel="agents" title="Gizle (Ctrl+Shift+J)" aria-label="Ajanlar bölümünü gizle"><i class="fa-solid fa-eye-slash"></i></button></span></div>
+      <div class="panel-h"><span class="ph-t">Aktif ajanlar ve workflow'lar</span></div>
       <div id="agents"></div>
     </div>
-    <button class="sec-bar" id="agentsBar" data-panel="agents" hidden title="Ajanları göster (Ctrl+Shift+J)"><i class="fa-solid fa-robot"></i><span>Aktif ajanlar</span><b class="sec-v" id="agentsBarV"></b><i class="fa-solid fa-chevron-up sec-car"></i></button>
+    <div class="usage" id="usage"><div class="panel-h"><span class="ph-t">Haftalık kullanım</span> <span class="ph-acts"><button class="ghost icon usage-mode" data-usagemode title="Plan limitlerini göster (Claude Code /usage gibi)" aria-pressed="false"><i class="fa-solid fa-gauge-high"></i></button><button class="ghost" data-report="1" title="Aylık kullanım raporu ve CSV (Ctrl+Shift+R)"><i class="fa-solid fa-chart-column"></i> Aylık rapor</button></span></div><div class="usage-body" id="usageBody"></div></div>
     </div>
   </div>
 
@@ -240,6 +230,7 @@
 <script src="../../node_modules/marked/lib/marked.umd.js"></script>
 <script src="../../node_modules/dompurify/dist/purify.min.js"></script>
 <script src="ui.js"></script>
+<script src="dock.js"></script>
 <script src="app.js"></script>
 <script src="db.js"></script>
 <script src="plugins.js"></script>

@@ -113,7 +113,8 @@
       const place = ['mode', 'side'].includes(p.place) ? p.place : 'drawer';
       // side panels can be limited to projects (by name or folder name): shown only while one is in view
       const projects = Array.isArray(p.projects) ? p.projects.map(x => str(x, 200).toLowerCase()).filter(Boolean).slice(0, 20) : [];
-      st.panels.set(p.id, { id: p.id, title: str(p.title || st.info.name, 60), icon: str(p.icon || st.info.icon, 60), page, place, projects, height: Math.min(Math.max(+p.height || 300, 100), 1200), frame: null, secs: {} });
+      const column = p.column === 'left' ? 'left' : 'right'; // AI mode column for side panels; the user can move it
+      st.panels.set(p.id, { id: p.id, title: str(p.title || st.info.name, 60), icon: str(p.icon || st.info.icon, 60), page, place, column, projects, height: Math.min(Math.max(+p.height || 300, 100), 1200), frame: null, secs: {} });
       renderModes(); renderButtons(); renderSideSecs();
       if (wantMode === modeKey(st.info.id, p.id) && S.mode === 'claude') { wantMode = ''; setMode(wantMode || modeKey(st.info.id, p.id), true); }
       return true;
@@ -266,7 +267,7 @@
     const pn = st.panels.get(panelId);
     if (!pn) throw new Error('Böyle bir panel yok');
     if (pn.place === 'mode') { setMode(modeKey(st.info.id, pn.id)); return; }
-    if (pn.place === 'side') { if (S.mode !== 'claude' && S.mode !== 'ide') setMode('claude'); setCollapsed(st, pn, false); return; }
+    if (pn.place === 'side') { if (S.mode !== 'claude' && S.mode !== 'ide') setMode('claude'); setCollapsed(st, pn, false); if (S.mode === 'claude' && window.showPanel) showPanel(plugKey(st, pn)); return; }
     if (drawer) { const o = P.get(drawer.id); const op = o && o.panels.get(drawer.panelId); if (o && op) emit(o, 'panel', { id: op.id, visible: false }); }
     const d = document.getElementById('plugDrawer'), body = d.querySelector('.pd-body');
     [...body.children].forEach(c => { c.hidden = true; });
@@ -295,7 +296,11 @@
      off whatever the panel is doing (a running deploy, its log), so each side panel has ONE frame that
      lives in a fixed layer and is laid over whichever section is showing; the sections only hold the
      header and an empty slot of the right height. */
-  const SIDE_HOSTS = { claude: 'plugSide', ide: 'plugSideIde' };
+  const SIDE_HOSTS = { claude: 'dockPark', ide: 'plugSideIde' };
+  /* AI mode: a side section is a view of the dock (dock.js) like projects or usage: it starts in the
+     dock's park and the dock moves it to its place; the plugin only picks the side it starts on (column). */
+  const plugKey = (st, pn) => 'plug:' + st.info.id + ':' + pn.id;
+  const hostFor = (st, pn, mode) => document.getElementById(SIDE_HOSTS[mode]);
   const collapsedKey = (st, pn) => 'vox-plug-collapsed:' + st.info.id + ':' + pn.id;
   function isCollapsed(st, pn) { try { return localStorage.getItem(collapsedKey(st, pn)) === '1'; } catch (_) { return false; } }
   function setCollapsed(st, pn, on) {
@@ -326,16 +331,21 @@
   function renderSideSecs() {
     P.forEach(st => st.panels.forEach(pn => {
       if (pn.place !== 'side') return;
-      for (const [mode, hostId] of Object.entries(SIDE_HOSTS)) {
-        const host = document.getElementById(hostId);
+      for (const mode of Object.keys(SIDE_HOSTS)) {
+        const host = hostFor(st, pn, mode);
         if (!host || pn.secs[mode]) continue;
         const sec = document.createElement('section');
         sec.className = 'psec' + (isCollapsed(st, pn) ? ' collapsed' : '');
         sec.dataset.plid = st.info.id; sec.dataset.panel = pn.id;
-        sec.innerHTML = `<button class="psec-h panel-h" aria-expanded="${!isCollapsed(st, pn)}" title="${escH(st.info.name)} eklentisi · katlamak / açmak için tıkla"><span class="psec-t"><i class="${icon(pn.icon)}"></i>${escH(pn.title)}</span><i class="fa-solid fa-chevron-down psec-car"></i></button><div class="psec-b" style="height:${pn.height}px"></div>`;
-        sec.querySelector('.psec-h').addEventListener('click', () => setCollapsed(st, pn, !sec.classList.contains('collapsed')));
+        if (mode === 'claude') sec.dataset.maxkey = plugKey(st, pn);
+        sec.innerHTML = `<div class="psec-h panel-h" role="button" tabindex="0" aria-expanded="${!isCollapsed(st, pn)}" title="${escH(st.info.name)} eklentisi · katlamak / açmak için tıkla"><span class="psec-t"><i class="${icon(pn.icon)}"></i>${escH(pn.title)}</span><i class="fa-solid fa-chevron-down psec-car"></i></div><div class="psec-b" style="height:${pn.height}px"></div>`;
+        const head = sec.querySelector('.psec-h');
+        const flip = () => setCollapsed(st, pn, !sec.classList.contains('collapsed'));
+        head.addEventListener('click', flip);
+        head.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); flip(e); } });
         pn.secs[mode] = sec;
         host.appendChild(sec);
+        if (mode === 'claude' && window.applyPanels) applyPanels(); // let app.js put it in its place
       }
       if (!pn.frame) { const f = panelFrame(st, pn); f.classList.add('plug-float'); f.style.visibility = 'hidden'; layer().appendChild(f); }
     }));
@@ -352,13 +362,15 @@
   function syncSide() {
     let any = false;
     const used = new Set();
+    const hostState = () => [...document.querySelectorAll('#claudeView .psec[data-maxkey]')].map(x => x.dataset.maxkey + (x.hidden ? 0 : 1)).join(',');
+    const before = hostState();
     P.forEach(st => st.panels.forEach(pn => {
       if (pn.place !== 'side') return;
       any = true;
       const show = inContext(pn, st);
       for (const [mode, sec] of Object.entries(pn.secs)) sec.hidden = !(show && S.mode === mode);
       const sec = show && pn.secs[S.mode];
-      const slot = sec && !sec.classList.contains('collapsed') ? sec.querySelector('.psec-b') : null;
+      const slot = sec && (!sec.classList.contains('collapsed') || sec.closest('.dock-group')) ? sec.querySelector('.psec-b') : null;
       const r = slot && slot.offsetParent ? slot.getBoundingClientRect() : null;
       const f = pn.frame;
       if (!f) return;
@@ -379,10 +391,12 @@
       }
       used.add(f);
     }));
-    for (const id of Object.values(SIDE_HOSTS)) {
+    for (const id of ['plugSideIde']) {
       const host = document.getElementById(id);
       if (host) host.hidden = ![...host.children].some(c => !c.hidden);
     }
+    // a plugin section appeared, left or moved: the columns (open / rail, full height) follow
+    if (hostState() !== before && window.applyPanels) applyPanels();
     // keep following the layout (panels resized, columns toggled) while there is a side panel at all
     if (any && !sideLoop) { const tick = () => { sideLoop = 0; syncSide(); }; sideLoop = requestAnimationFrame(tick); }
   }
@@ -615,6 +629,9 @@
     onRender() { const c = String(contextProject()); if (c !== lastCtx) { lastCtx = c; renderTbOnly(); } syncSide(); clearTimeout(stateTimer); stateTimer = setTimeout(emitState, 150); },
     statusHtml,
     settingsHtml,
+    relayout() { syncSide(); },
+    // the column a plugin side section starts in, before the user moves it
+    defaultCol(key) { const [, id, panelId] = String(key).split(':'); const st = P.get(id); const pn = st && st.panels.get(panelId); return pn ? pn.column || 'right' : 'right'; },
   };
   function emitState() {
     if (!P.size) return;

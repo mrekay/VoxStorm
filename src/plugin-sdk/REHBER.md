@@ -99,10 +99,14 @@ const info = await vox.ready;   // { id, name, version, permissions, theme, stat
 
 ```js
 // place: 'drawer' sağdan açılan panel · 'mode' AI / IDE / DB yanında kendi sekmesi
-//        'side'   AI modunda sağ sütunda, kararlar ile ajanlar arasında katlanabilir bölüm (height: piksel)
+//        'side'   AI modunda yan sütunda katlanabilir bölüm (height: piksel)
+//                 column: 'right' (varsayılan, kararlar ile ajanlar arası) · 'left' (projeler ile kullanım arası)
+//                 Kullanıcı bölümü başlığından sürükleyip yerini ya da sütununu değiştirebilir,
+//                 sağ tıkla "tam boy" yapıp sütunu doldurabilir;
+//                 sayfan yüksekliğe göre esnek olsun (sabit piksel yükseklik varsayma).
 await vox.ui.addPanel({ id: 'notes', title: 'Notlar', icon: 'fa-solid fa-note-sticky', page: 'notes.html', place: 'drawer' });
 await vox.ui.addPanel({ id: 'board', title: 'Pano', icon: 'fa-solid fa-table-cells-large', page: 'board.html', place: 'mode' });
-await vox.ui.addPanel({ id: 'yayin', title: 'Yayın', icon: 'fa-solid fa-rocket', page: 'panel.html', place: 'side', height: 420 });
+await vox.ui.addPanel({ id: 'yayin', title: 'Yayın', icon: 'fa-solid fa-rocket', page: 'panel.html', place: 'side', column: 'left', height: 420 });
 await vox.ui.openPanel('notes');
 await vox.ui.closePanel('notes');
 

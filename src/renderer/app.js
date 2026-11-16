@@ -46,6 +46,8 @@ function claudeSummary() {
   if (c.effort) parts.push((EFFORTS.find(([k]) => k === c.effort) || [0, c.effort])[1].toLowerCase() + ' efor');
   if (c.permissionMode) parts.push((PERM_MODES.find(([k]) => k === c.permissionMode) || [0, c.permissionMode])[1].toLocaleLowerCase('tr'));
   if (c.remoteControl) parts.push('RC açık');
+  if (c.chrome) parts.push('Chrome');
+  if ((c.command || '').trim()) parts.push('özel komut');
   return parts.join(' · ');
 }
 const EDIT_TOOLS = new Set(['Edit', 'Write', 'MultiEdit', 'NotebookEdit']);
@@ -840,14 +842,62 @@ function renderQueue() {
     return `<button class="agent-row" ${a.kind === 'subagent' ? `data-agent="${a.id}"` : `data-tab="${a.tabId}"`} title="${esc(tip)}"><span class="k ${a.kind}">${a.kind === 'subagent' ? 'Ajan' : 'Workflow'}</span><span class="n">${esc(a.name)}</span><span class="s">${esc(t.title || '')}</span></button>`;
   }).join('') : '<div class="none">Şu an çalışan alt ajan ya da workflow yok.</div>';
 }
-function renderUsage() {
+/* The usage view has two modes: tokens counted from the session logs on this machine, or the plan
+   limits as Claude Code's /usage shows them (percent of the weekly allowance, when it resets). */
+const usageMode = () => ((CFG && CFG.settings.usageMode) === 'plan' ? 'plan' : 'tokens');
+const PLAN = { data: null, loading: false };
+function loadPlan(force) {
+  if (PLAN.loading) return;
+  PLAN.loading = true;
+  api.invoke('usage:plan', !!force)
+    .then(d => { PLAN.data = d; }, e => { PLAN.data = { at: Date.now(), error: 'net', message: String(e && e.message || e) }; })
+    .finally(() => { PLAN.loading = false; if (usageMode() === 'plan') renderUsage(); });
+}
+setInterval(() => { if (usageMode() === 'plan') loadPlan(); }, 120000);
+function planResetText(iso) {
+  if (!iso) return '';
+  const t0 = new Date(iso);
+  if (isNaN(t0)) return '';
+  const t = new Date(Math.floor(t0 / 60000) * 60000), ms = t0 - Date.now(); // 05:59:59.9 reads 05:59, as in Claude Code
+  const when = t.toLocaleString('tr-TR', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+  const h = Math.round(ms / 3600000);
+  const left = ms <= 0 ? 'şimdi' : h < 1 ? Math.max(1, Math.round(ms / 60000)) + ' dk sonra' : h < 48 ? h + ' sa sonra' : Math.round(h / 24) + ' gün sonra';
+  return `${when} sıfırlanır · ${left}`;
+}
+function renderPlanUsage() {
+  const d = PLAN.data, body = $('#usageBody');
+  if (!d || Date.now() - d.at > 60000) loadPlan();
+  if (!d) { body.innerHTML = '<div class="usage-note">Plan limitleri okunuyor…</div>'; return; }
+  if (d.error) {
+    const msg = { nologin: "Claude Code'da claude.ai hesabıyla giriş yapılmamış; plan limitleri yalnızca abonelikle görünür.", expired: "Claude Code'un oturum anahtarının süresi dolmuş. Claude Code'u bir kez açınca yenilenir.", http: `Plan limitleri okunamadı (HTTP ${d.status}).`, net: 'Plan limitleri okunamadı: bağlantı kurulamadı.' }[d.error] || 'Plan limitleri okunamadı.';
+    body.innerHTML = `<div class="usage-note">${esc(msg)} <button class="ghost" data-planretry="1"><i class="fa-solid fa-rotate-right"></i> Yenile</button></div>`;
+    return;
+  }
+  if (!d.rows.length) { body.innerHTML = '<div class="usage-note">Bu hesapta gösterilecek bir plan limiti yok.</div>'; return; }
+  body.innerHTML = `<div class="plan-rows">${d.rows.map(r => {
+    const p = Math.max(0, Math.min(100, Math.round(r.percent)));
+    const lvl = r.severity && r.severity !== 'normal' ? 'hot' : p >= 90 ? 'hot' : p >= 70 ? 'warm' : '';
+    return `<div class="plan-row ${lvl}" title="${esc(r.title)}: %${p} kullanıldı${r.resetsAt ? '\n' + esc(planResetText(r.resetsAt)) : ''}">`
+      + `<div class="plan-top"><span class="plan-t">${esc(r.title)}</span><b>%${p} kullanıldı</b></div>`
+      + `<div class="plan-bar"><i style="width:${p}%"></i></div>`
+      + (r.resetsAt ? `<div class="plan-reset">${esc(planResetText(r.resetsAt))}</div>` : '') + '</div>';
+  }).join('')}</div>`;
+}
+function renderUsage() { renderUsageView(); if (typeof dockFit === 'function') dockFit(); } // the dock keeps the group as tall as its content
+function renderUsageView() {
+  const mb = document.querySelector('[data-usagemode]');
+  if (mb) {
+    const plan = usageMode() === 'plan';
+    mb.classList.toggle('on', plan);
+    mb.title = plan ? 'Token görünümüne geç' : 'Plan limitlerini göster (Claude Code /usage gibi)';
+    mb.setAttribute('aria-pressed', String(plan));
+  }
+  if (usageMode() === 'plan') return renderPlanUsage();
   const u = S.usage;
-  const head = `<div class="panel-h">Haftalık kullanım <span class="ph-acts"><button class="ghost" data-report="1" title="Aylık kullanım raporu ve CSV (Ctrl+Shift+R)"><i class="fa-solid fa-chart-column"></i> Aylık rapor</button><button class="ghost icon" data-panel="usage" title="Gizle; özet alt çubukta kalır (Ctrl+Shift+U)" aria-label="Kullanım panelini gizle"><i class="fa-solid fa-eye-slash"></i></button></span></div>`;
-  if (!u) { $('#usage').innerHTML = head + '<div class="usage-note">Hesaplanıyor…</div>'; return; }
+  if (!u) { $('#usageBody').innerHTML = '<div class="usage-note">Hesaplanıyor…</div>'; return; }
   const max = Math.max(...u.days, 1), names = ['Pzt', 'Sal', 'Çar', 'Per', 'Cum', 'Cmt', 'Paz'];
   const dc = u.dayCost || [];
-  $('#usage').innerHTML = head
-    + `<div class="days">${u.days.map((v, i) => `<div class="day ${i > u.today ? 'future' : ''} ${i === u.today ? 'today' : ''}" title="${names[i]}: ${i > u.today ? 'henüz yok' : fmtTok(v) + ' token · ≈ ' + fmtUsd(dc[i] || 0)}"><i style="${i > u.today ? '' : `height:${Math.max(3, v / max * 42)}px`}"></i><span>${names[i]}</span></div>`).join('')}</div>`
+  $('#usageBody').innerHTML = `<div class="days">${u.days.map((v, i) => `<div class="day ${i > u.today ? 'future' : ''} ${i === u.today ? 'today' : ''}" title="${names[i]}: ${i > u.today ? 'henüz yok' : fmtTok(v) + ' token · ≈ ' + fmtUsd(dc[i] || 0)}"><i style="${i > u.today ? '' : `height:${Math.max(3, v / max * 42)}px`}"></i><span>${names[i]}</span></div>`).join('')}</div>`
     + `<div class="usage-stats">${[
       ['Son 5 saat', u.last5h ? u.last5h.t : 0, u.last5h ? u.last5h.c : null, 'Son 5 saatte harcanan token (Claude oturum limitleri 5 saatlik pencereyle sayılır)'],
       ['Bugün', u.days[u.today], dc[u.today] || 0, 'Bugün harcanan token'],
@@ -1665,7 +1715,8 @@ function openIdeMenu(e, ctx) {
   const it = (act, icon, label, key, cls = '') => `<button data-ixm="${act}" class="${cls}" role="menuitem"><span class="mi"><i class="mic ${icon}"></i>${label}</span>${key ? `<code>${key}</code>` : ''}</button>`;
   const sep = '<div class="sep"></div>';
   let html = '';
-  if (ctx.kind === 'tab') {
+  if (ctx.kind === 'dock') html = dockMenuHtml(ctx, it, sep);
+  else if (ctx.kind === 'tab') {
     const s = ist(), i = s.tabs.indexOf(ctx.path);
     html = it('close', 'fa-solid fa-xmark', 'Kapat', 'Ctrl+W')
       + (s.tabs.length > 1 ? it('closeothers', 'fa-solid fa-clone', 'Diğerlerini kapat') : '')
@@ -1696,6 +1747,7 @@ function closeIdeMenu() { $('#ideMenu').hidden = true; }
 function ideMenuAction(act) {
   const ctx = IDE.menu; closeIdeMenu();
   if (!ctx) return;
+  if (ctx.kind === 'dock') return dockMenuAction(act, ctx);
   const r = projRoot(), fp = ctx.path || r, isDir = ctx.kind === 'tree' && (!ctx.path || ctx.dir);
   const s = ist();
   if (act === 'close') closeFile(fp);
@@ -2087,6 +2139,11 @@ function renderSettings() {
       ${c.permissionMode === 'bypassPermissions' ? '<p class="set-warn">Dikkat: Claude hiçbir şey sormadan komut çalıştırır, dosya yazar ve siler. Sadece güvendiğin projelerde kullan. İlk açılışta Claude bir onay isteyebilir.</p>' : ''}
       <h4>Remote Control</h4>
       <div class="set-row"><span>Oturumlar Remote Control açık başlasın<small>Oturumu claude.ai veya telefondaki Claude uygulamasından da sürdürebilirsin. Oturum adı: “proje · VoxStorm”.</small></span>${sw('data-cset="remoteControl"', c.remoteControl, 'Remote Control')}</div>
+      <h4>Chrome</h4>
+      <div class="set-row"><span>Oturumlar Chrome ile başlasın<small>Claude Code <code>--chrome</code> ile açılır; Claude in Chrome uzantısı üzerinden tarayıcını kullanabilir.</small></span>${sw('data-cset="chrome"', c.chrome, 'Chrome ile başlat')}</div>
+      <h4>Varsayılan açılış komutu</h4>
+      <input type="text" id="cCommand" spellcheck="false" placeholder="claude" value="${esc(c.command || '')}">
+      <p class="set-note">Boş bırakılırsa PATH'teki <code>claude</code> çalışır. Doldurursan oturumlar bu komutla açılır; VoxStorm kendi argümanlarını (<code>--session-id</code>, <code>--settings</code>, model, izin modu…) sonuna ekler. Ör: <code>claude --verbose</code>, <code>"C:\\Araçlar\\claude.exe"</code>, <code>npx @anthropic-ai/claude-code</code>. Boşluk içeren yolları çift tırnakla yaz.</p>
       <p class="set-note">Bu ayarlar VoxStorm'tan yeni açılan ve devam ettirilen oturumlara uygulanır; açık oturumlar etkilenmez. Boş bırakılanlarda Claude Code kendi ayarını kullanır. Tek bir oturum için izin modunu “+ Oturum ▾” menüsünden de seçebilirsin.</p>
       <h4>Oturum geçmişi ne kadar saklansın?</h4>
       <div class="seg">${[30, 90, 180, 365].map(n => `<button class="${(CLEANUP || 30) === n ? 'on' : ''}" data-cleanup="${n}">${n} gün${n === 30 ? ' (varsayılan)' : ''}</button>`).join('')}</div>
@@ -2127,6 +2184,7 @@ function updatePromptPreview() {
 /* ---------------- events ---------------- */
 function closeMenus() { $('#newMenu').hidden = true; $('#skinMenu').hidden = true; $('#pop').hidden = true; closeIdeMenu(); }
 function bindEvents() {
+  bindDock();
   // right click on a session (top tab, sidebar row, past session): rename it
   document.addEventListener('contextmenu', e => {
     const el = e.target.closest('#tabs [data-tab], #ptabs [data-tab], #side [data-tab], #side [data-watch], #side [data-resume], #newMenu [data-resume]');
@@ -2150,7 +2208,7 @@ function bindEvents() {
     const d = el.dataset;
     if (d.gsync) { runSync(d.gsync, d.act); return; }
     if (d.gitopen) { openGitFor(d.gitopen); return; }
-    if (d.startnew) { if (!panelUi().side) { await setCfg({ settings: { ui: { side: true } } }); applyPanels(); } openStartPanel(); }
+    if (d.startnew) { await showPanel('side'); openStartPanel(); }
     else if (d.panel) togglePanel(d.panel);
     else if (d.watch) { if (S.mode === 'claude' || S.mode === 'ide') openWatch(d.watch); }
     else if (d.agent) openAgentView(d.agent);
@@ -2199,6 +2257,8 @@ function bindEvents() {
     else if (d.mdmode) { const fp = ist().file; if (d.mdmode === 'view') IDE.mdView.add(fp); else IDE.mdView.delete(fp); showFile(); if (d.mdmode === 'src') IDE.cm.focus(); }
     else if (d.tb) toolbar(d.tb);
     else if (d.report) openReport();
+    else if ('usagemode' in d) { setCfg({ settings: { usageMode: usageMode() === 'plan' ? 'tokens' : 'plan' } }).then(renderUsage); }
+    else if (d.planretry) { PLAN.data = null; loadPlan(true); renderUsage(); }
     else if (d.repmonth) { REP.month = d.repmonth; renderReport(); }
     else if (el.closest('tr[data-month]')) { REP.month = el.closest('tr[data-month]').dataset.month; renderReport(); }
     else if (d.csv) { const f = await api.invoke('usage:exportCsv', d.csv === 'all' ? null : d.csv); if (f) toast('CSV kaydedildi', f); }
@@ -2251,6 +2311,7 @@ function bindEvents() {
   });
   document.addEventListener('input', e => {
     if (e.target.id === 'cModelCustom') setCfg({ settings: { claude: { model: e.target.value.trim() } } }).then(renderStatus);
+    if (e.target.id === 'cCommand') setCfg({ settings: { claude: { command: e.target.value.trim() } } }).then(renderStatus);
   });
   // Ctrl+V in a terminal with files copied in Explorer: paste their paths (like Windows Terminal)
   document.addEventListener('paste', async e => {
@@ -2400,8 +2461,8 @@ async function handleOpen(req) {
   renderSide();
   if (req.action === 'claude') { openTerminal({ kind: 'claude', projectId: p.id }); return; }
   if (req.action === 'restore') { await restoreTabs(p.id); return; }
-  // project has no open terminal: offer it in the start panel
-  if (!S.tabs.some(t => t.projectId === p.id)) { if (!panelUi().side) togglePanel('side'); openStartPanel(p.name); return; }
+  // project has no open terminal: start a new Claude session in it right away
+  if (!S.tabs.some(t => t.projectId === p.id)) { await openTerminal({ kind: 'claude', projectId: p.id }); return; }
   const row = [...document.querySelectorAll('#side [data-toggle]')].find(b => b.dataset.toggle === p.id);
   if (row) {
     const box = row.closest('.proj');
@@ -2446,35 +2507,7 @@ function renderStartList() {
   const el = $('#startList .sp-row.sel'); if (el) el.scrollIntoView({ block: 'nearest' });
 }
 
-/* ---------------- panels ---------------- */
-const panelUi = () => Object.assign({ side: true, queue: true, usage: true, agents: true }, CFG.settings.ui || {});
-/* Each column holds two sections that hide on their own; a hidden section leaves a
-   one-line bar in its place, and a column with both hidden becomes a thin rail. */
-function applyPanels() {
-  const ui = panelUi();
-  $('#sidePanel').hidden = !ui.side; $('#sideBar').hidden = ui.side;
-  $('#usage').hidden = !ui.usage; $('#usageBar').hidden = ui.usage;
-  $('#leftCol').hidden = !ui.side && !ui.usage; $('#leftRail').hidden = ui.side || ui.usage;
-  $('#queuePanel').hidden = !ui.queue; $('#queueBar').hidden = ui.queue;
-  $('#agentsPanel').hidden = !ui.agents; $('#agentsBar').hidden = ui.agents;
-  $('#rightCol').hidden = !ui.queue && !ui.agents; $('#rightRail').hidden = ui.queue || ui.agents;
-  renderPanelBadges();
-  requestAnimationFrame(fitActive);
-}
-function renderPanelBadges() {
-  const u = S.usage, n = pendingCount(), a = S.agents.length;
-  $('#usageBarV').textContent = u ? fmtTok(u.total) + ' token' : '';
-  $('#queueBarV').textContent = n || '';
-  $('#agentsBarV').textContent = a || '';
-  $('#railCount').hidden = !n; $('#railCount').textContent = n;
-  $('#railAgents').hidden = !a; $('#railAgents').textContent = a;
-}
-function togglePanel(name) {
-  if (S.mode === 'ide' && (name === 'side' || name === 'queue')) { toolbar(name === 'side' ? 'ex' : 'panel'); return; }
-  const ui = panelUi();
-  setCfg({ settings: { ui: { [name]: !ui[name] } } });
-  applyPanels();
-}
+/* ---------------- panels: see dock.js (applyPanels, togglePanel, showPanel) ---------------- */
 
 /* ---------------- keyboard shortcuts ---------------- */
 function comboOf(e) {
@@ -2495,14 +2528,14 @@ const SHORTCUTS = [
   { group: 'Genel', keys: 'Ctrl+1', label: 'AI modu (Claude oturumları)', run: () => setMode('claude') },
   { group: 'Genel', keys: 'Ctrl+2', label: 'IDE modu', run: () => setMode('ide') },
   { group: 'Genel', keys: 'Ctrl+3', label: 'Veritabanı (DB) modu', run: () => setMode('db') },
-  { group: 'Genel', keys: 'Ctrl+Shift+P', label: 'Proje Başlat paneli', run: () => { if (!panelUi().side) togglePanel('side'); openStartPanel(); } },
+  { group: 'Genel', keys: 'Ctrl+Shift+P', label: 'Proje Başlat paneli', run: () => showPanel('side').then(() => openStartPanel()) },
   { group: 'Genel', keys: 'Ctrl+Shift+O', label: 'Karşılama ekranı', run: () => api.send('app:welcome') },
   { group: 'Genel', keys: 'Ctrl+,', label: 'Ayarlar', run: () => openSettings() },
   { group: 'Genel', keys: 'Ctrl+Shift+R', label: 'Aylık kullanım raporu', run: () => openReport() },
   { group: 'Genel', keys: 'Ctrl+Shift+G', label: 'Git / GitHub paneli', run: () => toggleGitPanel() },
   { group: 'Genel', keys: 'F1', label: 'Kısayol listesi', run: () => openSettings('kisayol') },
-  { group: 'Paneller', keys: 'Ctrl+Shift+E', label: 'Projeler paneli (IDE: dosya gezgini)', run: () => togglePanel('side') },
-  { group: 'Paneller', keys: 'Ctrl+Shift+D', label: 'Karar paneli (IDE: Claude paneli)', run: () => togglePanel('queue') },
+  { group: 'Paneller', keys: 'Ctrl+Shift+E', label: 'Sol panel (IDE: dosya gezgini)', run: () => togglePanel('left') },
+  { group: 'Paneller', keys: 'Ctrl+Shift+D', label: 'Sağ panel (IDE: Claude paneli)', run: () => togglePanel('right') },
   { group: 'Paneller', keys: 'Ctrl+Shift+U', label: 'Haftalık kullanım paneli', run: () => togglePanel('usage') },
   { group: 'Paneller', keys: 'Ctrl+Shift+J', label: 'Aktif ajanlar bölümü', run: () => togglePanel('agents') },
   { group: 'Terminaller', keys: 'Ctrl+Shift+N', label: 'Yeni Claude oturumu (seçili proje)', run: () => { const p = projectHere(); if (p) openTerminal({ kind: 'claude', projectId: p }); } },
