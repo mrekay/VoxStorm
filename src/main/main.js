@@ -34,7 +34,14 @@ if (!app.requestSingleInstanceLock()) {
   app.quit();
   return;
 }
-app.setAppUserModelId('VoxStorm');
+// Windows names a notification and decides what a click launches from the Start Menu shortcut
+// carrying this ID. A dev run (bare electron.exe) gets its own ID and shortcut so its toasts
+// don't show up as "Electron" and a click doesn't open Electron's default app.
+const AUMID = app.isPackaged ? 'VoxStorm' : 'VoxStorm.Dev';
+app.setAppUserModelId(AUMID);
+if (process.platform === 'win32') {
+  try { app.setToastActivatorCLSID(app.isPackaged ? '{6E0B6F4A-3C1D-4B7E-9A55-2F1C8D0B7A11}' : '{6E0B6F4A-3C1D-4B7E-9A55-2F1C8D0B7A12}'); } catch (_) {}
+}
 // notification chimes play from the (often hidden) window without a click first
 app.commandLine.appendSwitch('autoplay-policy', 'no-user-gesture-required');
 
@@ -1302,7 +1309,55 @@ app.on('second-instance', () => showWindow());
 app.on('before-quit', () => { isQuitting = true; killAll(); saveConfigNow(); if (U) U.onQuit(); });
 app.on('window-all-closed', e => e.preventDefault());
 
+/* ---------------- Start Menu shortcuts (notification name, icon, click target) ---------------- */
+function ensureShortcuts() {
+  if (process.platform !== 'win32') return;
+  try {
+    const dir = path.join(process.env.APPDATA || '', 'Microsoft', 'Windows', 'Start Menu', 'Programs');
+    if (!fs.existsSync(dir)) return;
+    // Electron.lnk, made on its own by an earlier dev run: bare electron.exe under the installed
+    // app's ID, so the installed app's toasts read "Electron" and a click opened Electron's default app
+    const stray = path.join(dir, 'Electron.lnk');
+    try {
+      const l = shell.readShortcutLink(stray);
+      if (/^electron\.exe$/i.test(path.basename(l.target || '')) && /^VoxStorm/.test(l.appUserModelId || '')) fs.rmSync(stray, { force: true });
+    } catch (_) {}
+    if (app.isPackaged) {
+      // the installer's shortcut: keep its toast activator in step with the app's fixed one
+      const own = path.join(dir, 'VoxStorm.lnk');
+      try {
+        const l = shell.readShortcutLink(own);
+        if (l.appUserModelId === AUMID && l.toastActivatorClsid !== app.toastActivatorCLSID) {
+          shell.writeShortcutLink(own, 'update', { toastActivatorClsid: app.toastActivatorCLSID });
+        }
+      } catch (_) {}
+      return;
+    }
+    // a PNG-in-ICO of the app logo for the shortcut
+    const ico = path.join(DATA, 'voxstorm-dev.ico');
+    const png = appIcon(256, 1).toPNG();
+    const head = Buffer.alloc(22);
+    head.writeUInt16LE(0, 0); head.writeUInt16LE(1, 2); head.writeUInt16LE(1, 4);
+    head[6] = 0; head[7] = 0; head[8] = 0; head[9] = 0; // 256x256
+    head.writeUInt16LE(1, 10); head.writeUInt16LE(32, 12);
+    head.writeUInt32LE(png.length, 14); head.writeUInt32LE(22, 18);
+    fs.writeFileSync(ico, Buffer.concat([head, png]));
+    const appDir = app.getAppPath();
+    shell.writeShortcutLink(path.join(dir, 'VoxStorm (Geliştirme).lnk'), 'create', {
+      target: process.execPath,
+      args: `"${appDir}"`,
+      cwd: appDir,
+      description: 'VoxStorm',
+      icon: ico,
+      iconIndex: 0,
+      appUserModelId: AUMID,
+      toastActivatorClsid: app.toastActivatorCLSID,
+    });
+  } catch (_) {}
+}
+
 app.whenReady().then(async () => {
+  ensureShortcuts();
   // drop cached page files so an updated build never shows yesterday's styles
   try { await session.defaultSession.clearCache(); } catch (_) {}
   appMenu();
