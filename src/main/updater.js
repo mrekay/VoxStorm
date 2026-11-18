@@ -7,6 +7,8 @@
 //   nsis      installed with Setup  -> run the new Setup silently (/S), it reinstalls in place
 //   portable  the single .exe       -> replace that .exe
 //   asar      an unpacked folder    -> replace resources\app.asar (only when Electron is unchanged)
+//   mac       VoxStorm.app          -> unzip VoxStorm-x.y.z-mac-<arch>.zip next to it and swap the bundle
+//             (checked against the sha256 digest GitHub keeps for every release file)
 // Every download is checked against the sha256 in voxstorm-update.json; a release without
 // that file is only announced, never installed.
 const path = require('path');
@@ -30,6 +32,8 @@ function newer(a, b) { // is version a newer than b?
 module.exports = function updater({ app, net, DATA, settings, notify, onState, beforeRestart }) {
   const DIR = path.join(DATA, 'updates');
   const exe = process.execPath;
+  // macOS: .../VoxStorm.app/Contents/MacOS/VoxStorm -> .../VoxStorm.app
+  const bundle = process.platform === 'darwin' ? path.resolve(exe, '..', '..', '..') : '';
   const kind = !app.isPackaged ? 'dev'
     : process.platform !== 'win32' ? 'mac'
     : process.env.PORTABLE_EXECUTABLE_FILE ? 'portable'
@@ -53,8 +57,7 @@ module.exports = function updater({ app, net, DATA, settings, notify, onState, b
   // which file this copy needs, or why it cannot update itself
   function pick() {
     if (kind === 'dev') return { reason: 'Geliştirme modunda (npm start) güncelleme yapılmaz.' };
-    // an unsigned macOS app cannot replace itself safely: announce it, the .dmg comes from the release page
-    if (kind === 'mac') return { reason: 'macOS sürümü kendini güncellemiyor; yeni .dmg dosyasını sürüm sayfasından indir.' };
+    if (kind === 'mac') return pickMac();
     if (!manifest) return { reason: 'Bu sürümde otomatik kurulum bilgisi yok; sürüm sayfasından indirebilirsin.' };
     const want = kind === 'nsis' ? 'setup' : kind === 'portable' ? 'portable' : 'asar';
     if (want === 'asar' && manifest.electron && manifest.electron !== process.versions.electron)
@@ -63,6 +66,21 @@ module.exports = function updater({ app, net, DATA, settings, notify, onState, b
     const a = f && asset(f.name);
     if (!f || !a || !/^[0-9a-f]{64}$/i.test(f.sha256 || '')) return { reason: 'Bu sürümde bu kurulum türü için dosya yok.' };
     return { want, f, a };
+  }
+
+  function pickMac() {
+    if (!/\.app$/.test(bundle)) return { reason: 'Uygulama paketi bulunamadı; sürüm sayfasından indirebilirsin.' };
+    // opened straight from the .dmg or from Downloads (macOS runs it from a read-only copy)
+    if (/^\/Volumes\//.test(bundle) || bundle.includes('/AppTranslocation/'))
+      return { reason: 'Otomatik güncelleme için VoxStorm\'u Uygulamalar klasörüne taşıyıp oradan aç.' };
+    try { fs.accessSync(path.dirname(bundle), fs.constants.W_OK); fs.accessSync(bundle, fs.constants.W_OK); }
+    catch (_) { return { reason: `${path.dirname(bundle)} klasörüne yazılamıyor; sürüm sayfasından indirebilirsin.` }; }
+    const name = `VoxStorm-${release.tag_name.replace(/^v/, '')}-mac-${process.arch}.zip`;
+    const a = asset(name);
+    const sha = a && /^sha256:([0-9a-f]{64})$/i.exec(a.digest || '');
+    if (!a) return { reason: 'Bu sürümün macOS dosyası henüz yüklenmedi; biraz sonra tekrar kontrol et.' };
+    if (!sha) return { reason: 'Bu sürümün macOS dosyası doğrulanamıyor; sürüm sayfasından indirebilirsin.' };
+    return { want: 'mac', f: { name, size: a.size, sha256: sha[1].toLowerCase() }, a };
   }
 
   async function check({ quiet } = {}) {
@@ -111,7 +129,7 @@ module.exports = function updater({ app, net, DATA, settings, notify, onState, b
       set({ status: 'downloading', progress: 0, error: '' });
       await fsp.mkdir(DIR, { recursive: true });
       // keep only what this release needs
-      for (const n of await fsp.readdir(DIR)) if (n !== p.f.name && !/\.(ps1|vbs|log)$/.test(n)) await fsp.rm(path.join(DIR, n), { force: true, recursive: true }).catch(() => {});
+      for (const n of await fsp.readdir(DIR)) if (n !== p.f.name && !/\.(ps1|vbs|sh|log)$/.test(n)) await fsp.rm(path.join(DIR, n), { force: true, recursive: true }).catch(() => {});
       const tmp = path.join(DIR, p.f.name + '.part');
       try {
         const r = await net.fetch(p.a.browser_download_url, { headers: { 'User-Agent': 'VoxStorm', Accept: 'application/octet-stream' } });
@@ -150,6 +168,7 @@ module.exports = function updater({ app, net, DATA, settings, notify, onState, b
      copy to exit, swaps the files, and (optionally) starts the new version. */
   function apply(relaunch) {
     if (!file || applying || st.status !== 'ready') return false;
+    if (kind === 'mac') return applyMac(relaunch);
     applying = true;
     const ps1 = path.join(DIR, 'apply.ps1');
     const res = path.join(path.dirname(exe), 'resources');
@@ -197,6 +216,41 @@ ${relaunch ? `Start-Process -FilePath ${q(start)}${args.length ? ` -ArgumentList
     const cmd = `powershell.exe -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File "${ps1}"`;
     fs.writeFileSync(vbs, '﻿' + `CreateObject("WScript.Shell").Run "${cmd.replace(/"/g, '""')}", 0, False\r\n`, 'utf16le');
     spawn('wscript.exe', ['//B', '//Nologo', vbs], { detached: true, stdio: 'ignore', windowsHide: true }).unref();
+    return true;
+  }
+
+  /* macOS: a detached shell script waits for this process to exit, unpacks the new VoxStorm.app
+     next to the old one (same folder, so the move is atomic), swaps them and starts it again. */
+  function applyMac(relaunch) {
+    applying = true;
+    const q = s => "'" + String(s).replace(/'/g, "'\\''") + "'";
+    const sh = path.join(DIR, 'apply.sh');
+    const stage = path.join(path.dirname(bundle), '.VoxStorm-update');
+    const script = `#!/bin/bash
+LOG=${q(path.join(DIR, 'apply.log'))}
+APP=${q(bundle)}
+STAGE=${q(stage)}
+log() { echo "$(date '+%F %T') $*" >> "$LOG"; }
+log 'VoxStorm ${st.current} -> ${st.latest} (mac)'
+for i in $(seq 1 120); do kill -0 ${process.pid} 2>/dev/null || break; sleep 0.5; done
+if kill -0 ${process.pid} 2>/dev/null; then log 'hata: VoxStorm kapanmadı'; exit 1; fi
+rm -rf "$STAGE" && mkdir -p "$STAGE"
+if ! /usr/bin/ditto -x -k ${q(file.path)} "$STAGE"; then log 'hata: zip açılamadı'; rm -rf "$STAGE"; exit 1; fi
+NEW=$(find "$STAGE" -maxdepth 1 -name '*.app' | head -n 1)
+if [ -z "$NEW" ]; then log 'hata: zip içinde .app yok'; rm -rf "$STAGE"; exit 1; fi
+/usr/bin/xattr -dr com.apple.quarantine "$NEW" 2>/dev/null
+rm -rf "$APP.old"
+if mv "$APP" "$APP.old" && mv "$NEW" "$APP"; then
+  log 'kuruldu'; rm -rf "$APP.old" ${q(file.path)}
+else
+  log 'hata: değiştirilemedi, eski sürüm geri kondu'; [ -d "$APP.old" ] && [ ! -d "$APP" ] && mv "$APP.old" "$APP"
+fi
+rm -rf "$STAGE"
+${relaunch ? `/usr/bin/open -n "$APP"${process.argv.length > 1 ? ' --args ' + process.argv.slice(1).map(q).join(' ') : ''}` : ''}
+`;
+    fs.mkdirSync(DIR, { recursive: true });
+    fs.writeFileSync(sh, script, { mode: 0o755 });
+    spawn('/bin/bash', [sh], { detached: true, stdio: 'ignore' }).unref();
     return true;
   }
 

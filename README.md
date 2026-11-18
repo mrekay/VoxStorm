@@ -42,7 +42,7 @@ macOS'taki farklar:
 - Sistem tepsisi yerine menü çubuğu simgesi; Dock simgesine tıklayınca pencere geri gelir.
 - Plan limitleri, Claude Code'un Anahtar Zinciri'ndeki girişiyle okunur; ilk seferde macOS izin sorabilir.
 - VoxStorm dışında açık oturumların terminaline bağlanma (ayna) yalnızca Windows'ta var; macOS'ta konuşma izlenir, **VoxStorm'a taşı** ile devam edilir.
-- Uygulama kendini otomatik güncellemez; yeni sürüm çıkınca haber verir, .dmg sürüm sayfasından indirilir.
+- Otomatik güncelleme Windows'taki gibi çalışır: yeni sürüm indirilir, GitHub'daki SHA-256 özetiyle doğrulanır, yeniden başlatınca (ya da çıkışta) kurulur. Bunun için VoxStorm Uygulamalar klasöründe olmalı; .dmg içinden ya da İndirilenler'den doğrudan açılan kopya kendini güncelleyemez.
 
 ## Geliştirme
 
