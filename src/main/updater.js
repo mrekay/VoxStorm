@@ -22,11 +22,13 @@ const REPO = 'mrekay/claudelot';
 const API = process.env.CLAUDELOT_UPDATE_API || `https://api.github.com/repos/${REPO}/releases/latest`;
 const CHECK_EVERY = 6 * 60 * 60 * 1000;
 
-function newer(a, b) { // is version a newer than b?
-  const p = v => String(v || '').replace(/^v/, '').split('-')[0].split('.').map(n => parseInt(n, 10) || 0);
+function newer(a, b) { // is version a newer than b? 0.7.0 > 0.7.0-beta.2 > 0.7.0-beta.1 > 0.6.0
+  const p = v => { const [main, pre = ''] = String(v || '').replace(/^v/, '').split(/-(.*)/); return { n: main.split('.').map(n => parseInt(n, 10) || 0), pre }; };
   const x = p(a), y = p(b);
-  for (let i = 0; i < 3; i++) if ((x[i] || 0) !== (y[i] || 0)) return (x[i] || 0) > (y[i] || 0);
-  return false;
+  for (let i = 0; i < 3; i++) if ((x.n[i] || 0) !== (y.n[i] || 0)) return (x.n[i] || 0) > (y.n[i] || 0);
+  if (x.pre === y.pre) return false;
+  if (!x.pre || !y.pre) return !x.pre; // a release is newer than its pre-releases
+  return x.pre.localeCompare(y.pre, 'en', { numeric: true }) > 0;
 }
 
 module.exports = function updater({ app, net, DATA, settings, notify, onState, beforeRestart }) {
