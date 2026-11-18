@@ -1,7 +1,7 @@
 {
   "name": "voxstorm",
   "version": "0.6.0",
-  "description": "Claude Code oturumlarını tek pencereden yöneten Windows masaüstü uygulaması",
+  "description": "Claude Code oturumlarını tek pencereden yöneten Windows ve macOS masaüstü uygulaması",
   "author": "mrekay",
   "homepage": "https://github.com/mrekay/claudelot",
   "repository": {
@@ -13,7 +13,8 @@
   "productName": "VoxStorm",
   "scripts": {
     "start": "electron .",
-    "dist": "node scripts/make-icon.js && electron-builder --win"
+    "dist": "node scripts/make-icon.js && electron-builder --win",
+    "dist:mac": "node scripts/make-icon.js --size 1024 && electron-builder --mac"
   },
   "dependencies": {
     "@fortawesome/fontawesome-free": "^7.3.1",
@@ -77,6 +78,33 @@
     },
     "portable": {
       "artifactName": "VoxStorm-Portable-${version}.${ext}"
+    },
+    "mac": {
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "arm64",
+            "x64"
+          ]
+        },
+        {
+          "target": "zip",
+          "arch": [
+            "arm64",
+            "x64"
+          ]
+        }
+      ],
+      "icon": "build/icon.png",
+      "category": "public.app-category.developer-tools",
+      "identity": "-",
+      "hardenedRuntime": false,
+      "darkModeSupport": true,
+      "artifactName": "VoxStorm-${version}-mac-${arch}.${ext}"
+    },
+    "dmg": {
+      "title": "VoxStorm ${version}"
     }
   }
 }

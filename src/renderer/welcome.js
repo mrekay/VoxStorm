@@ -153,7 +153,7 @@ $('#wlQ').addEventListener('input', () => { sel = 0; render(); });
 $('#wlQ').addEventListener('keydown', e => {
   if (e.key === 'ArrowDown') { e.preventDefault(); sel = Math.min(view.length - 1, sel + 1); render(); }
   else if (e.key === 'ArrowUp') { e.preventDefault(); sel = Math.max(0, sel - 1); render(); }
-  else if (e.key === 'Enter') { e.preventDefault(); open(sel, e.ctrlKey ? 'claude' : 'select'); }
+  else if (e.key === 'Enter') { e.preventDefault(); open(sel, modKey(e) ? 'claude' : 'select'); }
 });
 document.addEventListener('keydown', e => {
   if (e.key === 'Escape') { if ($('#wlQ').value) { $('#wlQ').value = ''; render(); } else api.send('welcome:close'); }

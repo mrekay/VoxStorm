@@ -5,7 +5,7 @@
   --bg:#0b0a12; --surface:#15131f; --surface-2:#100e18; --hover:#211d33; --line:#2a2540;
   --fg:#e7e4f3; --muted:#8e89a8; --accent:#a78bfa; --accent-soft:#2b2250; --on-accent:#150e2b;
   --warn:#f2b155; --warn-soft:#3b2c14; --ok:#6fd39a; --ok-soft:#14301f; --danger:#f27b8c; --violet:#e48ad8; --violet-soft:#3a1d3a;
-  --font:"Segoe UI Variable Text","Segoe UI",system-ui,sans-serif; --f-mono:"Cascadia Mono",Consolas,monospace;
+  --font:"Segoe UI Variable Text","Segoe UI",-apple-system,BlinkMacSystemFont,system-ui,sans-serif; --f-mono:"Cascadia Mono",Consolas,"SF Mono",Menlo,monospace;
 }
 *{box-sizing:border-box}
 html,body{margin:0;height:100%}

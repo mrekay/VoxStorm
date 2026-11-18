@@ -6,8 +6,8 @@
   --warn:#f2b155; --warn-soft:#3b2c14; --ok:#6fd39a; --ok-soft:#14301f; --danger:#f27b8c; --violet:#e48ad8; --violet-soft:#3a1d3a;
   --term-bg:#0a0911; --term-fg:#ddd8ef; --term-dim:#7a7596; --term-cursor:#a78bfa; --term-sel:#3a2f66;
   --shadow:0 20px 60px -20px rgba(0,0,0,.85);
-  --f-body:"Segoe UI Variable Text","Segoe UI",system-ui,sans-serif;
-  --f-mono:"Cascadia Mono","Cascadia Code",Consolas,ui-monospace,monospace;
+  --f-body:"Segoe UI Variable Text","Segoe UI",-apple-system,BlinkMacSystemFont,system-ui,sans-serif;
+  --f-mono:"Cascadia Mono","Cascadia Code",Consolas,"SF Mono",Menlo,ui-monospace,monospace;
 }
 :root[data-skin="teal"]{
   color-scheme:light;
@@ -1192,3 +1192,8 @@ kbd{font:10.5px var(--f-mono);opacity:.75;margin-left:4px}
 /* in a dock group the projects view has no header of its own: the start panel opens right under the group header */
 .dg-body > #sidePanel > .start-panel{top:6px;max-height:calc(100% - 12px)}
 .dg-head > .ph-acts [data-report].ghost{font-size:0;padding:3px 6px}
+
+/* macOS: the native traffic lights sit at the left of the app's title bar (main.js trafficLightPosition) */
+html.is-mac .win-ctl{display:none}
+html.is-mac .titlebar .tb-left{padding-left:80px}
+html.is-mac.is-fullscreen .titlebar .tb-left{padding-left:10px}

@@ -4,7 +4,7 @@
 const $ = s => document.querySelector(s);
 const $$ = s => [...document.querySelectorAll(s)];
 const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-const normPath = p => String(p || '').replace(/\//g, '\\').toLowerCase();
+const normPath = p => String(p || '').replace(/[\\/]/g, SEP).toLowerCase(); // SEP, IS_MAC: ui.js
 const cleanErr = e => String((e && e.message) || e).replace(/^Error invoking remote method '[^']+': (Error: )?/, '');
 const shorten = (s, n) => { s = String(s || '').replace(/\s+/g, ' ').trim(); return s.length > n ? s.slice(0, n - 1) + '…' : s; };
 
@@ -22,7 +22,15 @@ const SHELL_ICONS = {
   cmd: '<svg class="shi" viewBox="0 0 16 16" aria-hidden="true"><rect x=".75" y="1.75" width="14.5" height="12.5" rx="1.5" fill="#1b1b1f" stroke="#8a8f98" stroke-width="1"/><path d="M.75 4.5h14.5" stroke="#8a8f98" stroke-width="1"/><path d="M3.5 7.2l2.3 1.6-2.3 1.6" fill="none" stroke="#e8e8e8" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/><path d="M7.2 11.2h3.4" stroke="#e8e8e8" stroke-width="1.2" stroke-linecap="round"/></svg>',
   bash: '<i class="shi fa-brands fa-git-alt" style="color:#f05133" aria-hidden="true"></i>',
 };
-const SHELLS = { pwsh: { name: 'PowerShell', exe: 'powershell' }, cmd: { name: 'Komut İstemi', exe: 'cmd.exe' }, bash: { name: 'Git Bash', exe: 'bash.exe' } };
+if (IS_MAC) {
+  SHELL_ICONS.zsh = '<i class="shi fa-solid fa-terminal" style="color:#8be28b" aria-hidden="true"></i>';
+  SHELL_ICONS.bash = '<i class="shi fa-solid fa-dollar-sign" style="color:#c9c9d1" aria-hidden="true"></i>';
+}
+const SHELLS = IS_MAC
+  ? { zsh: { name: 'Terminal (zsh)', exe: 'zsh' }, bash: { name: 'Bash', exe: 'bash' } }
+  : { pwsh: { name: 'PowerShell', exe: 'powershell' }, cmd: { name: 'Komut İstemi', exe: 'cmd.exe' }, bash: { name: 'Git Bash', exe: 'bash.exe' } };
+const DEFAULT_SHELL = IS_MAC ? 'zsh' : 'pwsh';
+const MONO_FONT = IS_MAC ? '"SF Mono", Menlo, Monaco, monospace' : '"Cascadia Mono", "Cascadia Code", Consolas, monospace';
 const STATUS_TEXT = { running: 'Çalışıyor', waiting: 'Kararını bekliyor', done: 'Bitti', idle: 'Hazır', exited: 'Kapandı', shell: 'Terminal' };
 const STATUS_SHORT = { running: 'çalışıyor', waiting: 'bekliyor', done: 'bitti', idle: 'açık', exited: 'kapandı', shell: 'terminal' };
 const ICONS = { done: '<i class="fa-solid fa-check"></i>', decision: '<i class="fa-solid fa-hand"></i>', subagent: '<i class="fa-solid fa-robot"></i>', workflow: '<i class="fa-solid fa-diagram-project"></i>', system: '<i class="fa-solid fa-circle-info"></i>', plugin: '<i class="fa-solid fa-puzzle-piece"></i>' };
@@ -177,7 +185,7 @@ async function openTerminal({ kind = 'claude', shell, projectId, resume, title, 
   el.className = 'term-pane';
   $('#termHost').appendChild(el);
   const term = new Terminal({
-    fontFamily: '"Cascadia Mono", "Cascadia Code", Consolas, monospace', fontSize: 13, lineHeight: 1.15,
+    fontFamily: MONO_FONT, fontSize: 13, lineHeight: 1.15,
     cursorBlink: true, scrollback: 8000, allowProposedApi: true, theme: termTheme(),
   });
   const fit = new FitAddon.FitAddon();
@@ -188,7 +196,7 @@ async function openTerminal({ kind = 'claude', shell, projectId, resume, title, 
   try { fit.fit(); } catch (_) {}
   const tab = {
     id: 'pending-' + (seq++), kind, shell, projectId, sessionId: null, term, fit, el, exited: false,
-    title: title || (kind === 'claude' ? 'Yeni oturum' : SHELLS[shell].name + numberSuffix(projectId, shell)),
+    title: title || (kind === 'claude' ? 'Yeni oturum' : (SHELLS[shell] || SHELLS[DEFAULT_SHELL]).name + numberSuffix(projectId, shell)),
     status: kind === 'claude' ? 'idle' : 'shell',
     prompted: !!resume, // a brand-new session has nothing to resume until the first message
   };
@@ -212,11 +220,11 @@ async function openTerminal({ kind = 'claude', shell, projectId, resume, title, 
   term.attachCustomKeyEventHandler(e => {
     if (e.type !== 'keydown') return true;
     const k = e.key.toLowerCase();
-    if (e.ctrlKey && k === 'c' && (e.shiftKey || term.hasSelection())) {
+    if (!IS_MAC && e.ctrlKey && k === 'c' && (e.shiftKey || term.hasSelection())) {
       if (term.hasSelection()) { navigator.clipboard.writeText(term.getSelection()).catch(() => {}); term.clearSelection(); }
       return false;
     }
-    if (e.ctrlKey && k === 'v') return false; // browser paste event delivers the text
+    if (!IS_MAC && e.ctrlKey && k === 'v') return false; // browser paste event delivers the text
     return true;
   });
   activate(tab.id);
@@ -537,7 +545,7 @@ function openAgentView(id) {
 }
 /* the live terminal of the outside session, mirrored into an xterm */
 async function connectMirror(t) {
-  if (!t.ext) { t.mirrorState = 'off'; setWatchView(t, 'log'); return; }
+  if (!t.ext || !IS_WIN) { t.mirrorState = 'off'; setWatchView(t, 'log'); return; } // Windows-only console attach
   try {
     const r = await api.invoke('mirror:start', t.sessionId);
     if (!S.tabs.includes(t)) { api.send('mirror:stop', r.id); return; }
@@ -556,7 +564,7 @@ function mirrorTerm(t) {
   const box = t.el.querySelector('.watch-term');
   box.innerHTML = '';
   const term = new Terminal({
-    fontFamily: '"Cascadia Mono", "Cascadia Code", Consolas, monospace', fontSize: t.fontSize, lineHeight: 1.15,
+    fontFamily: MONO_FONT, fontSize: t.fontSize, lineHeight: 1.15,
     cursorBlink: true, scrollback: 0, allowProposedApi: true, theme: termTheme(),
   });
   term.open(box);
@@ -595,11 +603,11 @@ function mirrorTerm(t) {
   term.attachCustomKeyEventHandler(e => {
     if (e.type !== 'keydown') return true;
     const k = e.key.toLowerCase();
-    if (e.ctrlKey && k === 'c' && (e.shiftKey || term.hasSelection())) {
+    if (!IS_MAC && e.ctrlKey && k === 'c' && (e.shiftKey || term.hasSelection())) {
       if (term.hasSelection()) { navigator.clipboard.writeText(term.getSelection()).catch(() => {}); term.clearSelection(); }
       return false;
     }
-    if (e.ctrlKey && k === 'v') return false; // the paste event delivers the text
+    if (!IS_MAC && e.ctrlKey && k === 'v') return false; // the paste event delivers the text
     return true;
   });
   t.term = term;
@@ -675,7 +683,7 @@ function renderWatchBar(t) {
   const bar = t.el.querySelector('.watch-bar'); if (!bar) return;
   const s = t.ext;
   const st = s ? (s.status === 'waiting' ? waitText(s.waitingFor) : s.status === 'busy' ? 'Çalışıyor' : 'Hazır') : '';
-  const conn = !s ? 'kapandı' : t.mirrorState === 'live' ? 'terminale bağlı, yazdıkların o pencereye gider' : t.mirrorState === 'connecting' ? 'terminale bağlanılıyor…' : 'terminale bağlanılamadı, sadece konuşma görünüyor';
+  const conn = !s ? 'kapandı' : t.mirrorState === 'live' ? 'terminale bağlı, yazdıkların o pencereye gider' : t.mirrorState === 'connecting' ? 'terminale bağlanılıyor…' : !IS_WIN ? 'macOS\'ta yalnızca konuşma görünür; yazmak için VoxStorm\'a taşı' : 'terminale bağlanılamadı, sadece konuşma görünüyor';
   bar.innerHTML = `<span class="dot ${t.status}"></span>`
     + `<span class="wb-t"><b>${s ? 'VoxStorm dışında açık' : 'Dışarıdaki oturum kapandı'}</b>${st ? ' · ' + esc(st) : ''}`
     + `<small>${esc(s ? s.cwd : t.cwd)}${s ? ' · PID ' + s.pid : ''} · ${conn}</small></span>`
@@ -965,11 +973,11 @@ const baseName = p => p.split(/[\\/]/).pop();
 const langName = fp => ({ dart: 'Dart', gd: 'GDScript', svg: 'SVG', vue: 'Vue' })[extOf(fp)] || LANG_NAMES[MODES[extOf(fp)]] || 'Düz metin';
 const isImage = fp => /\.(png|jpe?g|gif|webp|bmp|ico|avif)$/i.test(fp);
 const dirOf = fp => fp.slice(0, Math.max(fp.lastIndexOf('\\'), fp.lastIndexOf('/')));
-const joinP = (dir, name) => dir.replace(/[\\/]+$/, '') + '\\' + name;
+const joinP = (dir, name) => dir.replace(/[\\/]+$/, '') + SEP + name;
 const projRoot = () => { const p = proj(IDE.project); return p ? p.path.replace(/[\\/]+$/, '') : ''; };
-const relOf = fp => { const r = projRoot(); return r && normPath(fp).startsWith(normPath(r) + '\\') ? fp.slice(r.length + 1) : fp; };
-const under = (fp, base) => { const a = normPath(fp), b = normPath(base); return a === b || a.startsWith(b + '\\'); };
-const fileUrl = fp => 'file:///' + fp.replace(/\\/g, '/').split('/').map((s, i) => (i === 0 && /^[a-z]:$/i.test(s) ? s : encodeURIComponent(s))).join('/');
+const relOf = fp => { const r = projRoot(); return r && normPath(fp).startsWith(normPath(r) + SEP) ? fp.slice(r.length + 1) : fp; };
+const under = (fp, base) => { const a = normPath(fp), b = normPath(base); return a === b || a.startsWith(b + SEP); };
+const fileUrl = fp => 'file:///' + fp.replace(/\\/g, '/').replace(/^\/+/, '').split('/').map((s, i) => (i === 0 && /^[a-z]:$/i.test(s) ? s : encodeURIComponent(s))).join('/');
 const fmtSize = n => (n < 1024 ? n + ' B' : n < 1048576 ? (n / 1024).toLocaleString('tr-TR', { maximumFractionDigits: 1 }) + ' KB' : (n / 1048576).toLocaleString('tr-TR', { maximumFractionDigits: 1 }) + ' MB');
 const BAD_NAME = /[<>:"|?*\x00-\x1f]/;
 function nameError(v, allowSub) {
@@ -1023,7 +1031,7 @@ const isMarkdown = fp => /\.(md|markdown|mdx)$/i.test(fp);
 function resolveRel(fromFile, href) {
   const parts = fromFile.split(/[\\/]/); parts.pop();
   for (const seg of href.split(/[\\/]/)) { if (seg === '..') parts.pop(); else if (seg && seg !== '.') parts.push(seg); }
-  return parts.join('\\');
+  return parts.join(SEP);
 }
 function renderMarkdown(fp) {
   const f = IDE.files[fp]; if (!f || !f.doc) return;
@@ -1032,7 +1040,7 @@ function renderMarkdown(fp) {
   // local images: make paths relative to the markdown file
   el.querySelectorAll('img[src]').forEach(img => {
     const src = img.getAttribute('src');
-    if (!/^(https?:|data:|file:)/i.test(src)) img.src = 'file:///' + resolveRel(fp, decodeURI(src)).replace(/\\/g, '/');
+    if (!/^(https?:|data:|file:)/i.test(src)) img.src = 'file:///' + resolveRel(fp, decodeURI(src)).replace(/\\/g, '/').replace(/^\/+/, '');
   });
   el.dataset.file = fp;
 }
@@ -1060,12 +1068,12 @@ function setupEditor() {
   IDE.cm = CodeMirror($('#code'), {
     theme: 'claudelot', lineNumbers: true, matchBrackets: true, autoCloseBrackets: true, styleActiveLine: true,
     indentUnit: 2, tabSize: 2, value: '', lineWrapping: !!IDE.ui.wrap,
-    extraKeys: {
+    extraKeys: cmKeys({
       'Ctrl-S': () => saveFile(),
       'Ctrl-F': () => { const sel = IDE.cm.somethingSelected() && IDE.cm.getSelection(); if (sel && !sel.includes('\n')) $('#findIn').value = sel; $('#findIn').focus(); $('#findIn').select(); },
       Tab: cm => (cm.somethingSelected() ? cm.indentSelection('add') : cm.replaceSelection('  ')),
       'Shift-Tab': cm => cm.indentSelection('subtract'),
-    },
+    }),
   });
   IDE.cm.getWrapperElement().hidden = true;
   IDE.cm.on('changes', () => renderEdChrome());
@@ -1195,7 +1203,7 @@ async function fileChangedByClaude(fp, created) {
   const key = normPath(fp);
   S.modified[key] = Date.now();
   if (created) { // a new file may live in a folder we have cached
-    const dir = key.slice(0, key.lastIndexOf('\\'));
+    const dir = key.slice(0, key.lastIndexOf(SEP));
     Object.keys(IDE.dirCache).forEach(d => { if (normPath(d) === dir) delete IDE.dirCache[d]; });
     delete IDE.index[IDE.project];
   }
@@ -1221,7 +1229,7 @@ async function applyFsChanges() {
   if (many) IDE.dirCache = {};
   else if (paths.length) {
     const dirs = new Set();
-    paths.forEach(p => { const n = normPath(p); dirs.add(n); dirs.add(n.slice(0, n.lastIndexOf('\\'))); });
+    paths.forEach(p => { const n = normPath(p); dirs.add(n); dirs.add(n.slice(0, n.lastIndexOf(SEP))); });
     Object.keys(IDE.dirCache).forEach(d => { if (dirs.has(normPath(d))) delete IDE.dirCache[d]; });
   }
   const changed = new Set(paths.map(normPath));
@@ -1236,11 +1244,11 @@ function refreshGit() {
     const p = proj(IDE.project); if (!p) return;
     let g; try { g = await api.invoke('ide:git', p.path); } catch (_) { g = { repo: false, files: {} }; }
     if (!proj(IDE.project) || proj(IDE.project).path !== p.path) return;
-    const root = normPath(p.path).replace(/\\+$/, ''), dirs = new Set();
+    const root = normPath(p.path).replace(/[\\/]+$/, ''), dirs = new Set();
     for (const [k, c] of Object.entries(g.files)) {
       if (c === 'D') continue;
       let d = k;
-      while ((d = d.slice(0, d.lastIndexOf('\\'))).length > root.length) dirs.add(d);
+      while ((d = d.slice(0, d.lastIndexOf(SEP))).length > root.length) dirs.add(d);
     }
     IDE.git = { repo: g.repo, branch: g.branch || '', files: g.files, dirs };
     if (S.mode === 'ide') { renderTree(); renderEdChrome(); }
@@ -1515,7 +1523,7 @@ async function fileIndex() {
 }
 /* subsequence match; rewards word starts, runs and hits in the file name */
 function fuzzy(q, path) {
-  const t = path.toLowerCase(), base = t.lastIndexOf('\\') + 1;
+  const t = path.toLowerCase(), base = Math.max(t.lastIndexOf('\\'), t.lastIndexOf('/')) + 1;
   const tryFrom = start => {
     let qi = 0, score = 0, last = -2;
     const pos = [];
@@ -1604,7 +1612,7 @@ function renderPalette() {
     const seen = new Set(open.map(x => x.toLowerCase()));
     items = [...open, ...idx.files.filter(x => !seen.has(x.toLowerCase()))].slice(0, 60).map(rel => ({ rel, pos: new Set(), open: seen.has(rel.toLowerCase()) }));
   } else {
-    const ql = q.toLowerCase().replace(/\//g, '\\').replace(/\s+/g, '');
+    const ql = q.toLowerCase().replace(/[\\/]/g, SEP).replace(/\s+/g, '');
     const scored = [];
     for (const rel of idx.files) { const r = fuzzy(ql, rel); if (r) scored.push({ rel, score: r.score, pos: new Set(r.pos) }); }
     scored.sort((a, b) => b.score - a.score || a.rel.length - b.rel.length);
@@ -1613,7 +1621,7 @@ function renderPalette() {
   QO.items = items.map(it => ({ ...it, full: joinP(root, it.rel), line }));
   QO.sel = Math.min(QO.sel, Math.max(0, QO.items.length - 1));
   list.innerHTML = QO.items.length ? QO.items.map((it, i) => {
-    const b = it.rel.lastIndexOf('\\') + 1, name = it.rel.slice(b), dir = it.rel.slice(0, Math.max(0, b - 1));
+    const b = Math.max(it.rel.lastIndexOf('\\'), it.rel.lastIndexOf('/')) + 1, name = it.rel.slice(b), dir = it.rel.slice(0, Math.max(0, b - 1));
     const g = gitOf(it.full);
     return `<button class="qo-row ${i === QO.sel ? 'sel' : ''} ${g ? 'g-' + g : ''}" data-qoi="${i}" role="option" aria-selected="${i === QO.sel}">${fileIcon(name)}<span class="qo-n">${markPos(name, it.pos, b)}</span><span class="qo-d">${markPos(dir, it.pos, 0)}</span>${it.open ? '<span class="qo-tag">açık</span>' : ''}</button>`;
   }).join('') + (idx.complete ? '' : '<div class="qo-note">Proje çok büyük; yalnızca ilk 20.000 dosya tarandı.</div>')
@@ -1645,7 +1653,7 @@ async function newEntry(dir, isDir) {
     validate: v => nameError(v, true),
   });
   if (!name) return;
-  const clean = name.replace(/\//g, '\\').replace(/^\\+|\\+$/g, '');
+  const clean = name.replace(/[\\/]/g, SEP).replace(/^[\\/]+|[\\/]+$/g, '');
   const full = joinP(dir, clean);
   let st = { exists: false }; try { st = await api.invoke('fs:stat', full); } catch (_) {}
   if (st.exists && (isDir || st.dir)) { toast('Zaten var', `${clean} adında bir ${st.dir ? 'klasör' : 'dosya'} var.`); return; }
@@ -1666,7 +1674,7 @@ function remapPaths(from, to) {
   IDE.mdView = new Set([...IDE.mdView].map(swap));
   const exp = {}; for (const [k, v] of Object.entries(IDE.expanded)) exp[swap(k)] = v; IDE.expanded = exp;
   const fromN = normPath(from), toN = normPath(to);
-  for (const k of Object.keys(S.modified)) if (k === fromN || k.startsWith(fromN + '\\')) { S.modified[toN + k.slice(fromN.length)] = S.modified[k]; delete S.modified[k]; }
+  for (const k of Object.keys(S.modified)) if (k === fromN || k.startsWith(fromN + SEP)) { S.modified[toN + k.slice(fromN.length)] = S.modified[k]; delete S.modified[k]; }
   saveIdeState();
 }
 async function renameEntry(fp, isDir) {
@@ -2355,6 +2363,7 @@ function bindEvents() {
   }, true);
   api.on('focus-tab', id => { if (String(id).startsWith('watch:')) { const sid = id.slice(6); const w = watchTab(sid); if (w) id = w.id; else { if (isExtLive(sid)) openWatch(sid); return; } } const t = tabById(id); if (!t) return; if (S.mode === 'ide' && t.projectId !== IDE.project) switchIdeProject(t.projectId); activate(id); });
   api.on('open-settings', () => openSettings());
+  api.on('win:state', st => { if (st && 'fullscreen' in st) document.documentElement.classList.toggle('is-fullscreen', !!st.fullscreen); });
   window.addEventListener('focus', () => { const t = tabById(S.active); if (t && t.attn) { t.attn = null; renderAll(); } });
   // the welcome window picked a project; take it (only once) and act on it
   api.on('open-project', async () => handleOpen(await api.invoke('app:takePendingOpen')));
@@ -2512,7 +2521,9 @@ function renderStartList() {
 /* ---------------- keyboard shortcuts ---------------- */
 function comboOf(e) {
   let k = e.code.startsWith('Key') ? e.code.slice(3) : e.code.startsWith('Digit') ? e.code.slice(5) : e.code === 'Comma' ? ',' : e.key;
-  return (e.ctrlKey ? 'Ctrl+' : '') + (e.shiftKey ? 'Shift+' : '') + (e.altKey ? 'Alt+' : '') + k;
+  // macOS: Cmd is the app's Ctrl; Control+Tab stays the tab switcher (Cmd+Tab belongs to macOS)
+  const ctrl = IS_MAC ? (k === 'Tab' ? e.ctrlKey : e.metaKey) : e.ctrlKey;
+  return (ctrl ? 'Ctrl+' : '') + (e.shiftKey ? 'Shift+' : '') + (e.altKey ? 'Alt+' : '') + k;
 }
 function projectHere() {
   const t = tabById(S.active);
@@ -2539,7 +2550,7 @@ const SHORTCUTS = [
   { group: 'Paneller', keys: 'Ctrl+Shift+U', label: 'Haftalık kullanım paneli', run: () => togglePanel('usage') },
   { group: 'Paneller', keys: 'Ctrl+Shift+J', label: 'Aktif ajanlar bölümü', run: () => togglePanel('agents') },
   { group: 'Terminaller', keys: 'Ctrl+Shift+N', label: 'Yeni Claude oturumu (seçili proje)', run: () => { const p = projectHere(); if (p) openTerminal({ kind: 'claude', projectId: p }); } },
-  { group: 'Terminaller', keys: 'Ctrl+Shift+T', label: 'Yeni PowerShell (seçili proje)', run: () => { const p = projectHere(); if (p) openTerminal({ kind: 'shell', shell: 'pwsh', projectId: p }); } },
+  { group: 'Terminaller', keys: 'Ctrl+Shift+T', label: IS_MAC ? 'Yeni terminal (seçili proje)' : 'Yeni PowerShell (seçili proje)', run: () => { const p = projectHere(); if (p) openTerminal({ kind: 'shell', shell: DEFAULT_SHELL, projectId: p }); } },
   { group: 'Terminaller', keys: 'Ctrl+Shift+W', label: 'Açık terminali kapat', run: () => { if (S.active) closeTab(S.active); } },
   { group: 'Terminaller', keys: 'Ctrl+Tab', label: 'Sonraki terminal', run: () => cycleTabs(1) },
   { group: 'Terminaller', keys: 'Ctrl+Shift+Tab', label: 'Önceki terminal', run: () => cycleTabs(-1) },
@@ -2559,8 +2570,8 @@ const SHORTCUTS = [
 
 function kisayolHTML() {
   const groups = [...new Set(SHORTCUTS.map(s => s.group))];
-  return groups.map(g => `<h4>${g}</h4><table class="kbd-t">${SHORTCUTS.filter(s => s.group === g).map(s => `<tr><td>${s.label}</td><td class="n">${s.keys.split(' / ').map(k => k.split('+').map(x => `<kbd>${x}</kbd>`).join('+')).join(' / ')}</td></tr>`).join('')}</table>`).join('')
-    + '<p class="set-note">Uygulama kısayolları terminal ve kod düzenleyici açıkken de çalışır. Claude Code\'un kendi kısayolları (Ctrl+B, Ctrl+R, Shift+Tab vb.) terminale gitmeye devam eder.</p>';
+  return groups.map(g => `<h4>${g}</h4><table class="kbd-t">${SHORTCUTS.filter(s => s.group === g).map(s => `<tr><td>${s.label}</td><td class="n">${s.keys.split(' / ').map(k => (IS_MAC ? [keysLabel(k)] : k.split('+')).map(x => `<kbd>${x}</kbd>`).join('+')).join(' / ')}</td></tr>`).join('')}</table>`).join('')
+    + '<p class="set-note">Uygulama kısayolları terminal ve kod düzenleyici açıkken de çalışır. Claude Code\'un kendi kısayolları (' + (IS_MAC ? '⌃B, ⌃R, ⇧Tab' : 'Ctrl+B, Ctrl+R, Shift+Tab') + ' vb.) terminale gitmeye devam eder.' + (IS_MAC ? ' macOS\'ta uygulama kısayolları ⌘ ile çalışır; ⌃ (Control) terminalde kalır.' : '') + '</p>';
 }
 
 /* ---------------- git / GitHub ----------------

@@ -1,12 +1,12 @@
 # VoxStorm
 
-Claude Code oturumlarını tek pencereden yöneten Windows masaüstü uygulaması.
+Claude Code oturumlarını tek pencereden yöneten Windows ve macOS masaüstü uygulaması.
 
 > Resmi bir Anthropic ürünü değildir. Bilgisayarında kurulu [Claude Code](https://claude.com/claude-code) ile çalışır.
 
 ## Özellikler
 
-- **Sekmeli terminaller:** Claude, PowerShell, Komut İstemi ve Git Bash yan yana
+- **Sekmeli terminaller:** Claude, PowerShell, Komut İstemi ve Git Bash yan yana (macOS'ta zsh ve bash)
 - **Projeler ve geçmiş:** Eski oturuma tıkla, kaldığın yerden devam et; kapanışta açık olanları geri yükle
 - **Karar paneli:** İzin istekleri, plan onayları ve Claude'un soruları tek yerde
 - **Bildirimler:** İş bitince, karar beklenince, alt ajan veya workflow açılıp kapanınca
@@ -27,19 +27,37 @@ Gerekenler: Windows 10/11 ve PATH'te `claude` komutu (Claude Code). Git Bash ist
 
 Dosyalar imzasız olduğu için Windows ilk açılışta uyarı verebilir: **Ek bilgi → Yine de çalıştır**.
 
+### macOS
+
+- `VoxStorm-x.y.z-mac-arm64.dmg`: Apple Silicon (M1 ve sonrası)
+- `VoxStorm-x.y.z-mac-x64.dmg`: Intel Mac
+
+Gerekenler: macOS 12+ ve `claude` komutu (Claude Code). VoxStorm, Finder'dan açılsa da giriş kabuğunun PATH'ini okur; Homebrew veya `~/.local/bin` altındaki `claude`, `git`, `gh` bulunur.
+
+Uygulama Apple tarafından onaylanmadığı (notarize edilmediği) için ilk açılışta uyarı çıkar: Uygulamalar klasöründe VoxStorm'a **sağ tık → Aç → Aç**. Uyarı yine de açtırmazsa: `xattr -dr com.apple.quarantine /Applications/VoxStorm.app`
+
+macOS'taki farklar:
+
+- Uygulama kısayolları **⌘** ile çalışır (⌘1, ⌘⇧P, ⌘P…); **⌃ Control** terminalde kalır (⌃C durdurur, ⌃R arar). Sekmeler arasında ⌃Tab.
+- Sistem tepsisi yerine menü çubuğu simgesi; Dock simgesine tıklayınca pencere geri gelir.
+- Plan limitleri, Claude Code'un Anahtar Zinciri'ndeki girişiyle okunur; ilk seferde macOS izin sorabilir.
+- VoxStorm dışında açık oturumların terminaline bağlanma (ayna) yalnızca Windows'ta var; macOS'ta konuşma izlenir, **VoxStorm'a taşı** ile devam edilir.
+- Uygulama kendini otomatik güncellemez; yeni sürüm çıkınca haber verir, .dmg sürüm sayfasından indirilir.
+
 ## Geliştirme
 
 ```
 npm install
 npm start        # uygulamayı çalıştır
-npm run dist     # Setup ve Portable dosyalarını dist/ klasörüne derle
+npm run dist     # Windows: Setup ve Portable dosyalarını dist/ klasörüne derle
+npm run dist:mac # macOS: .dmg ve .zip (arm64 + x64) dosyalarını dist/ klasörüne derle
 ```
 
 ## Nasıl çalışır
 
 - Claude oturumları, VoxStorm'un kendi hook ayarlarıyla (`--settings`) başlatılır. Hook'lar olayları uygulamanın yerel portuna gönderir; durumlar, bildirimler ve karar paneli buradan beslenir. `~/.claude/settings.json` ve `CLAUDE.md` dosyalarına dokunulmaz.
 - Geçmiş oturumlar ve kullanım, `~/.claude/projects` altındaki oturum kayıtlarından okunur.
-- Ayarlar, proje listesi ve günlük kullanım geçmişi `%APPDATA%\VoxStorm` klasöründe tutulur.
+- Ayarlar, proje listesi ve günlük kullanım geçmişi `%APPDATA%\VoxStorm` (macOS'ta `~/Library/Application Support/VoxStorm`) klasöründe tutulur.
 
 ## Proje yapısı
 
@@ -47,5 +65,6 @@ npm run dist     # Setup ve Portable dosyalarını dist/ klasörüne derle
 |---|---|
 | `src/main/main.js` | Pencere, tepsi, terminal süreçleri, hook dinleyicisi, geçmiş ve kullanım |
 | `src/main/preload.js` | Arayüze açılan sınırlı API |
+| `src/main/platform.js` | Windows / macOS farkları: PATH, kabuklar, komut bulma |
 | `src/renderer/` | Ana pencere (`index.html`, `app.js`, `styles.css`) ve karşılama ekranı (`welcome.*`) |
 | `scripts/make-icon.js` | Uygulama simgesini üretir |

@@ -1,7 +1,7 @@
 // VoxStorm — main process
 // Window + tray, terminal processes (node-pty), Claude Code hook listener,
 // session history / usage from ~/.claude, project file access for IDE mode.
-const { app, BrowserWindow, Tray, Menu, ipcMain, Notification, dialog, shell, session, protocol } = require('electron');
+const { app, BrowserWindow, Tray, Menu, ipcMain, Notification, dialog, shell, session, protocol, clipboard } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const fsp = fs.promises;
@@ -10,6 +10,8 @@ const http = require('http');
 const crypto = require('crypto');
 const { execFile, execFileSync, spawn } = require('child_process');
 const pty = require('@lydell/node-pty');
+const { IS_WIN, IS_MAC, fixUnixEnv, whereAll, userShell, shQuote } = require('./platform');
+fixUnixEnv(); // macOS: a Finder-started app gets the login shell's PATH (claude, git, gh, brew)
 const { appIcon } = require('./icon');
 const pluginsModule = require('./plugins');
 pluginsModule.registerScheme(protocol); // custom schemes must be registered before 'ready'
@@ -111,16 +113,16 @@ function insideProject(p) {
   return config.projects.some(pr => { const r = norm(pr.path); return n === r || n.startsWith(r + path.sep); });
 }
 
-function whereFirst(name) {
-  try {
-    const out = execFileSync('where', [name], { encoding: 'utf8', windowsHide: true });
-    return out.split(/\r?\n/).map(s => s.trim()).filter(Boolean);
-  } catch (_) { return []; }
-}
+const whereFirst = whereAll;
 let claudePath = null;
 function findClaude() {
   if (claudePath && fs.existsSync(claudePath)) return claudePath;
   const found = whereFirst('claude');
+  if (!IS_WIN) {
+    const guesses = [path.join(os.homedir(), '.local', 'bin', 'claude'), path.join(os.homedir(), '.claude', 'local', 'claude'), '/opt/homebrew/bin/claude', '/usr/local/bin/claude'];
+    claudePath = found[0] || guesses.find(g => fs.existsSync(g)) || null;
+    return claudePath;
+  }
   claudePath = found.find(f => f.toLowerCase().endsWith('.exe')) || found.find(f => f.toLowerCase().endsWith('.cmd')) || null;
   if (!claudePath) {
     const guess = path.join(os.homedir(), '.local', 'bin', 'claude.exe');
@@ -137,9 +139,15 @@ function splitArgs(line) {
 const quoteArg = a => (/[\s"&|<>^()]/.test(a) || a === '' ? `"${String(a).replace(/"/g, '""')}"` : a);
 /* how to start Claude: the custom launch command from settings, or claude on PATH.
    Returns { file, pre, line } — pre: words placed before VoxStorm's own arguments;
-   line: true when it must run through cmd.exe (.cmd/.bat scripts, commands not found as an .exe). */
+   line: true when it must run through cmd.exe (.cmd/.bat scripts, commands not found as an .exe)
+   or, on macOS, through the login shell (a command that is not a file on PATH, e.g. an alias). */
 function claudeLaunch() {
   const custom = splitArgs((config.settings.claude || {}).command);
+  if (custom.length && !IS_WIN) {
+    const [head, ...rest] = custom;
+    const exe = path.isAbsolute(head) ? (fs.existsSync(head) ? head : null) : whereFirst(head)[0] || null;
+    return exe ? { file: exe, pre: rest, line: false } : { file: head, pre: rest, line: true };
+  }
   if (custom.length) {
     const [head, ...rest] = custom;
     let exe = null;
@@ -153,6 +161,14 @@ function claudeLaunch() {
   return { file: exe, pre: [], line: !/\.exe$/i.test(exe) };
 }
 function findShell(kind) {
+  if (!IS_WIN) {
+    // zsh / bash as login shells so the user's profile (PATH, prompt, aliases) loads
+    if (kind === 'zsh' || kind === 'bash') {
+      const f = ['/bin/' + kind, ...whereFirst(kind)].find(c => fs.existsSync(c));
+      if (f) return { file: f, args: ['-l'] };
+    }
+    return { file: userShell(), args: ['-l'] };
+  }
   if (kind === 'cmd') return { file: 'cmd.exe', args: [] };
   if (kind === 'bash') {
     const cands = ['C:\\Program Files\\Git\\bin\\bash.exe', 'C:\\Program Files (x86)\\Git\\bin\\bash.exe', ...whereFirst('bash').filter(p => !/system32/i.test(p))];
@@ -273,7 +289,8 @@ async function listSessions(projectPath) {
 /* ~/.claude/projects/<name>: the name is the folder path with every non-alphanumeric
    character turned into '-'. Walk the disk to find the folder that encodes to it. */
 async function decodeProjectDir(enc) {
-  const m = enc.match(/^([A-Za-z])--(.+)$/);
+  // Windows: C:\\Users\\x -> "C--Users-x" · macOS: /Users/x -> "-Users-x"
+  const m = IS_WIN ? enc.match(/^([A-Za-z])--(.+)$/) : enc.match(/^-(.+)$/);
   if (!m) return null;
   async function walk(dir, rest, depth) {
     if (depth > 24) return null;
@@ -287,7 +304,7 @@ async function decodeProjectDir(enc) {
     }
     return null;
   }
-  return walk(m[1].toUpperCase() + ':' + path.sep, m[2], 0);
+  return IS_WIN ? walk(m[1].toUpperCase() + ':' + path.sep, m[2], 0) : walk('/', m[1], 0);
 }
 /* add every folder with Claude Code history that is not in the list yet (unless the user removed it) */
 async function syncDiscovered() {
@@ -338,7 +355,12 @@ function classifyPids(pids) {
   if (!todo.length) return;
   const roots = new Set([...ptys.values()].map(p => p.pid));
   const parents = {};
-  try {
+  if (!IS_WIN) {
+    try {
+      const out = execFileSync('/bin/ps', ['-o', 'pid=,ppid=', '-p', todo.join(',')], { encoding: 'utf8', timeout: 8000 });
+      for (const line of out.split(/\r?\n/)) { const [a, b] = line.trim().split(/\s+/).map(Number); if (a) parents[a] = b; }
+    } catch (_) {}
+  } else try {
     const filter = todo.map(p => 'ProcessId=' + p).join(' or ');
     const out = execFileSync('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command',
       `Get-CimInstance Win32_Process -Filter '${filter}' | ForEach-Object { "$($_.ProcessId) $($_.ParentProcessId)" }`],
@@ -553,6 +575,8 @@ function mirrorBinary() {
 async function startMirror(sessionId) {
   const s = liveList.find(x => x.sessionId === sessionId);
   if (!s) throw new Error('Oturum artık açık değil.');
+  // attaching to another terminal's console is a Windows API; macOS shows the conversation only
+  if (!IS_WIN) throw new Error('macOS\'ta dışarıdaki terminale bağlanılamıyor; konuşma görünür, devralarak burada devam edebilirsin.');
   const exe = await mirrorBinary();
   const id = crypto.randomUUID();
   const child = spawn(exe, [String(s.pid)], { windowsHide: true, stdio: ['pipe', 'pipe', 'ignore'] });
@@ -752,6 +776,13 @@ ipcMain.handle('usage:plan', async (_e, force) => {
   if (!force && planCache && Date.now() - planCache.at < 60000) return planCache;
   let oauth;
   try { oauth = JSON.parse(fs.readFileSync(path.join(CLAUDE_DIR, '.credentials.json'), 'utf8')).claudeAiOauth; } catch (_) { oauth = null; }
+  // on macOS Claude Code keeps the login in the Keychain instead of a file
+  if (!oauth && IS_MAC) {
+    try {
+      const raw = execFileSync('/usr/bin/security', ['find-generic-password', '-s', 'Claude Code-credentials', '-w'], { encoding: 'utf8', timeout: 15000 });
+      oauth = JSON.parse(raw.trim()).claudeAiOauth;
+    } catch (_) { oauth = null; }
+  }
   if (!oauth || !oauth.accessToken) return (planCache = { at: Date.now(), error: 'nologin' });
   if (oauth.expiresAt && oauth.expiresAt < Date.now()) return (planCache = { at: Date.now(), error: 'expired' });
   try {
@@ -808,7 +839,7 @@ ipcMain.handle('usage:exportCsv', async (_e, month) => {
 /* ---------------- hooks ---------------- */
 function writeHookSettings() {
   const url = `http://127.0.0.1:${hookPort}/hook`;
-  const command = `curl.exe -s -m 3 -X POST -H "Content-Type: application/json" --data-binary @- ${url}`;
+  const command = `${IS_WIN ? 'curl.exe' : 'curl'} -s -m 3 -X POST -H "Content-Type: application/json" --data-binary @- ${url}`;
   const h = [{ type: 'command', command, timeout: 5 }];
   const settings = {
     hooks: {
@@ -951,7 +982,8 @@ function spawnTerminal(opts) {
     if (cs.chrome && !args.includes('--chrome')) args.push('--chrome');
     writeAppendPrompt();
     args.push('--append-system-prompt-file', APPEND_PROMPT);
-    if (launch.line) { file = 'cmd.exe'; args = '/d /s /c "' + [quoteArg(launch.file), ...args.map(quoteArg)].join(' ') + '"'; }
+    if (launch.line && !IS_WIN) { file = userShell(); args = ['-lc', 'exec ' + [launch.file, ...args].map(shQuote).join(' ')]; }
+    else if (launch.line) { file = 'cmd.exe'; args = '/d /s /c "' + [quoteArg(launch.file), ...args.map(quoteArg)].join(' ') + '"'; }
     else file = launch.file;
   } else {
     const sh = findShell(opts.shell);
@@ -1067,14 +1099,18 @@ function rebuildTrayMenu() {
   ]));
 }
 function createTray() {
-  tray = new Tray(appIcon(32, 2));
-  tray.on('click', () => { if (win.isVisible() && win.isFocused()) win.hide(); else showWindow(); rebuildTrayMenu(); });
+  // the macOS menu bar wants a small (~18pt) icon; @2x keeps it sharp on Retina
+  tray = new Tray(IS_MAC ? appIcon(18, 2) : appIcon(32, 2));
+  // macOS opens the menu on click (the menu bar convention); Windows toggles the window
+  if (!IS_MAC) tray.on('click', () => { if (win.isVisible() && win.isFocused()) win.hide(); else showWindow(); rebuildTrayMenu(); });
   rebuildTrayMenu();
 }
 function createWindow() {
   win = new BrowserWindow({
     width: 1440, height: 900, minWidth: 980, minHeight: 620,
-    frame: false, backgroundColor: '#0b0a12', show: false, title: 'VoxStorm',
+    // macOS: keep the native traffic lights inside the app's own title bar (40px high)
+    ...(IS_MAC ? { titleBarStyle: 'hidden', trafficLightPosition: { x: 14, y: 13 } } : { frame: false }),
+    backgroundColor: '#0b0a12', show: false, title: 'VoxStorm',
     icon: appIcon(64, 1),
     webPreferences: { preload: path.join(__dirname, 'preload.js'), contextIsolation: true, nodeIntegration: false, sandbox: true },
   });
@@ -1092,6 +1128,8 @@ function createWindow() {
   win.on('show', rebuildTrayMenu);
   win.on('hide', rebuildTrayMenu);
   win.on('maximize', () => send('win:state', { maximized: true }));
+  win.on('enter-full-screen', () => send('win:state', { fullscreen: true }));
+  win.on('leave-full-screen', () => send('win:state', { fullscreen: false }));
   win.on('unmaximize', () => send('win:state', { maximized: false }));
   win.webContents.setWindowOpenHandler(({ url }) => { if (/^https?:/.test(url)) shell.openExternal(url); return { action: 'deny' }; });
   win.webContents.on('will-navigate', e => e.preventDefault());
@@ -1104,6 +1142,22 @@ function createWindow() {
   });
 }
 function appMenu() {
+  if (IS_MAC) {
+    // macOS needs the app menu and real Edit accelerators: Cmd+C / Cmd+V / Cmd+A in text fields and
+    // terminals only work through them. Ctrl stays with the terminal (Ctrl+C stops, Ctrl+R searches).
+    Menu.setApplicationMenu(Menu.buildFromTemplate([
+      { label: 'VoxStorm', submenu: [
+        { role: 'about', label: 'VoxStorm hakkında' }, { type: 'separator' },
+        { label: 'Ayarlar…', accelerator: 'Cmd+,', click: () => { showWindow(); send('open-settings'); } },
+        { type: 'separator' }, { role: 'hide', label: 'VoxStorm\'u gizle' }, { role: 'hideOthers', label: 'Diğerlerini gizle' }, { role: 'unhide', label: 'Tümünü göster' },
+        { type: 'separator' }, { label: 'VoxStorm\'dan çık', accelerator: 'Cmd+Q', click: () => quitFlow() },
+      ] },
+      { label: 'Düzen', submenu: [{ role: 'undo', label: 'Geri al' }, { role: 'redo', label: 'Yinele' }, { type: 'separator' }, { role: 'cut', label: 'Kes' }, { role: 'copy', label: 'Kopyala' }, { role: 'paste', label: 'Yapıştır' }, { role: 'selectAll', label: 'Tümünü seç' }] },
+      { label: 'Görünüm', submenu: [{ role: 'toggleDevTools', accelerator: 'Cmd+Alt+I' }, { role: 'resetZoom' }, { role: 'zoomIn' }, { role: 'zoomOut' }, { type: 'separator' }, { role: 'togglefullscreen', label: 'Tam ekran' }] },
+      { label: 'Pencere', submenu: [{ role: 'minimize', label: 'Küçült' }, { role: 'zoom', label: 'Yakınlaştır' }, { label: 'Kapat', accelerator: 'Cmd+W', click: () => win && win.close() }, { type: 'separator' }, { role: 'front', label: 'Tümünü öne getir' }] },
+    ]));
+    return;
+  }
   // keeps copy/paste shortcuts working, removes reload shortcuts that would wipe terminals
   Menu.setApplicationMenu(Menu.buildFromTemplate([
     // registerAccelerator:false lets Chromium handle Ctrl+C/V itself (no double paste into terminals)
@@ -1114,7 +1168,7 @@ function appMenu() {
 
 /* ---------------- IPC ---------------- */
 function registerIpc() {
-  ipcMain.handle('config:get', () => ({ config, info: { claude: findClaude(), hookPort, hookSettings: HOOK_SETTINGS, appendPrompt: APPEND_PROMPT, home: os.homedir() } }));
+  ipcMain.handle('config:get', () => ({ config, info: { platform: process.platform, claude: findClaude(), hookPort, hookSettings: HOOK_SETTINGS, appendPrompt: APPEND_PROMPT, home: os.homedir() } }));
   ipcMain.handle('config:set', (_e, patch) => {
     config = merge(config, patch);
     if (patch.settings && 'autostart' in patch.settings) {
@@ -1147,6 +1201,17 @@ function registerIpc() {
   // files copied in Explorer: the clipboard holds a file list, not text. Read it the way
   // Windows Terminal pastes it (full paths). Electron has no API for CF_HDROP.
   ipcMain.handle('clipboard:files', () => new Promise(res => {
+    if (IS_MAC) {
+      // files copied in Finder: a plist of paths under NSFilenamesPboardType
+      try {
+        const xml = clipboard.read('NSFilenamesPboardType') || '';
+        const list = [...xml.matchAll(/<string>([^<]*)<\/string>/g)].map(m => m[1].replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&apos;/g, "'"));
+        if (list.length) return res(list);
+        const url = clipboard.read('public.file-url');
+        return res(url ? [decodeURIComponent(url.replace(/^file:\/\//, ''))] : []);
+      } catch (_) { return res([]); }
+    }
+    if (!IS_WIN) return res([]);
     execFile('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command',
       '[Console]::OutputEncoding=[Text.Encoding]::UTF8; Get-Clipboard -Format FileDropList | ForEach-Object { $_.FullName }'],
     { encoding: 'utf8', windowsHide: true, timeout: 5000 },
@@ -1306,6 +1371,7 @@ function addProject(p, auto) {
 
 /* ---------------- start ---------------- */
 app.on('second-instance', () => showWindow());
+app.on('activate', () => showWindow()); // macOS: clicking the Dock icon brings the window back
 app.on('before-quit', () => { isQuitting = true; killAll(); saveConfigNow(); if (U) U.onQuit(); });
 app.on('window-all-closed', e => e.preventDefault());
 
@@ -1358,6 +1424,7 @@ function ensureShortcuts() {
 
 app.whenReady().then(async () => {
   ensureShortcuts();
+  if (IS_MAC && !app.isPackaged && app.dock) { try { app.dock.setIcon(appIcon(256, 2)); } catch (_) {} } // dev run: logo instead of Electron's
   // drop cached page files so an updated build never shows yesterday's styles
   try { await session.defaultSession.clearCache(); } catch (_) {}
   appMenu();

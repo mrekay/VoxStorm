@@ -117,3 +117,71 @@
   window.uiChoose = opts => dialog(Object.assign({ choices: [] }, opts));
   window.uiAlert = opts => dialog(Object.assign({ alert: true }, typeof opts === 'string' ? { message: opts } : opts));
 })();
+
+/* ---------------- platform ----------------
+   The same pages run on Windows and macOS. Paths use the platform's separator, app shortcuts use
+   Cmd on macOS (Ctrl stays with the terminal: Ctrl+C stops, Ctrl+R searches), and the labels that
+   say "Ctrl+…", "Geri Dönüşüm Kutusu", "tepsi" are rewritten for macOS as they appear. */
+(() => {
+  'use strict';
+  const platform = (window.api && window.api.platform) || 'win32';
+  const IS_MAC = platform === 'darwin', IS_WIN = platform === 'win32';
+  window.PLATFORM = platform; window.IS_MAC = IS_MAC; window.IS_WIN = IS_WIN;
+  window.SEP = IS_WIN ? '\\' : '/';
+  // the app's own "Ctrl" modifier: Cmd on macOS
+  window.modKey = e => (IS_MAC ? e.metaKey : e.ctrlKey);
+  // "Ctrl+Shift+P" -> "⌘⇧P"; Ctrl+Tab stays on Control (Cmd+Tab belongs to macOS)
+  const macKeys = s => String(s)
+    .replace(/\bCtrl\+(Shift\+)?Tab\b/g, (_m, sh) => '⌃' + (sh ? '⇧' : '') + 'Tab')
+    .replace(/\bCtrl\+/g, '⌘').replace(/\bShift\+/g, '⇧').replace(/\bAlt\+/g, '⌥');
+  window.keysLabel = s => (IS_MAC ? macKeys(s) : s);
+  // CodeMirror key maps: the same commands on Cmd- (Ctrl-Space stays, Cmd+Space is Spotlight)
+  window.cmKeys = map => {
+    if (!IS_MAC) return map;
+    const out = { ...map };
+    for (const k of Object.keys(map)) if (/^Ctrl-/.test(k) && k !== 'Ctrl-Space') out[k.replace(/^Ctrl-/, 'Cmd-')] = map[k];
+    return out;
+  };
+  if (!IS_MAC) return;
+
+  document.documentElement.classList.add('is-mac');
+  const WORDS = [
+    [/Geri Dönüşüm Kutusu’na/g, 'Çöp Sepeti’ne'], [/Geri Dönüşüm Kutusu/g, 'Çöp Sepeti'],
+    [/Dosya Gezgini’nde/g, 'Finder’da'], [/Gezgin'de aç/g, "Finder'da aç"],
+    [/sistem tepsisindeki simgeye sağ tıkla → Çık\./g, 'menü çubuğundaki simgeye tıkla → Çık ya da ⌘Q.'],
+    [/Doğrudan sistem tepsisine başlar/g, 'Pencere açmadan menü çubuğunda başlar'],
+    [/Kapat düğmesi tepsiye küçültsün/g, 'Kapat düğmesi menü çubuğuna gizlesin'], [/Tepsiye küçült/g, 'Menü çubuğuna gizle'],
+    [/Windows açılınca başlat/g, 'Oturum açılınca başlat'], [/Windows ile başlat/g, 'Oturum açılınca başlat'],
+    [/Windows bildirimi/g, 'macOS bildirimi'], [/Windows sesi/g, 'Sistem sesi'],
+  ];
+  const fix = s => { let o = macKeys(s); for (const [re, to] of WORDS) o = o.replace(re, to); return o; };
+  const KBD = { Ctrl: '⌘', Shift: '⇧', Alt: '⌥' };
+  const NEEDS = /Ctrl|Shift\+|Alt\+|Geri Dönüşüm|Gezgin|tepsi|Tepsi|Windows/;
+  // terminals, editors and rendered Markdown show the user's own text: never rewrite those
+  const SKIP = '.xterm,.CodeMirror,.md,.wm-b,.db-grid,[data-raw]';
+  function fixNode(n) {
+    if (n.nodeType === 3) {
+      const p = n.parentElement;
+      if (!p || !NEEDS.test(n.data) || p.closest(SKIP)) return;
+      if (p.tagName === 'KBD' && KBD[n.data.trim()]) { n.data = KBD[n.data.trim()]; return; }
+      const v = fix(n.data); if (v !== n.data) n.data = v;
+      return;
+    }
+    if (n.nodeType !== 1 || n.closest(SKIP)) return;
+    for (const a of ['title', 'data-tip', 'aria-label', 'placeholder']) {
+      const v = n.getAttribute(a); if (v && NEEDS.test(v)) { const w = fix(v); if (w !== v) n.setAttribute(a, w); }
+    }
+    for (let c = n.firstChild; c; c = c.nextSibling) fixNode(c);
+  }
+  const start = () => {
+    fixNode(document.body);
+    new MutationObserver(list => {
+      for (const m of list) {
+        if (m.type === 'attributes') { fixNode(m.target); continue; }
+        if (m.type === 'characterData') { fixNode(m.target); continue; }
+        m.addedNodes.forEach(fixNode);
+      }
+    }).observe(document.body, { subtree: true, childList: true, characterData: true, attributes: true, attributeFilter: ['title', 'data-tip', 'aria-label', 'placeholder'] });
+  };
+  if (document.body) start(); else document.addEventListener('DOMContentLoaded', start);
+})();

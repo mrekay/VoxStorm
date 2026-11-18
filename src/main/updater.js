@@ -31,6 +31,7 @@ module.exports = function updater({ app, net, DATA, settings, notify, onState, b
   const DIR = path.join(DATA, 'updates');
   const exe = process.execPath;
   const kind = !app.isPackaged ? 'dev'
+    : process.platform !== 'win32' ? 'mac'
     : process.env.PORTABLE_EXECUTABLE_FILE ? 'portable'
     : ['Uninstall VoxStorm.exe', 'Uninstall Claudelot.exe'].some(n => fs.existsSync(path.join(path.dirname(exe), n))) ? 'nsis'
     : 'asar';
@@ -52,6 +53,8 @@ module.exports = function updater({ app, net, DATA, settings, notify, onState, b
   // which file this copy needs, or why it cannot update itself
   function pick() {
     if (kind === 'dev') return { reason: 'Geliştirme modunda (npm start) güncelleme yapılmaz.' };
+    // an unsigned macOS app cannot replace itself safely: announce it, the .dmg comes from the release page
+    if (kind === 'mac') return { reason: 'macOS sürümü kendini güncellemiyor; yeni .dmg dosyasını sürüm sayfasından indir.' };
     if (!manifest) return { reason: 'Bu sürümde otomatik kurulum bilgisi yok; sürüm sayfasından indirebilirsin.' };
     const want = kind === 'nsis' ? 'setup' : kind === 'portable' ? 'portable' : 'asar';
     if (want === 'asar' && manifest.electron && manifest.electron !== process.versions.electron)

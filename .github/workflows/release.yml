@@ -1,5 +1,6 @@
 # Pushing a tag like v0.2.0 builds VoxStorm on Windows and publishes a GitHub release
-# with the installers, the app.asar and voxstorm-update.json (used by the in-app updater).
+# with the installers, the app.asar and voxstorm-update.json (used by the in-app updater);
+# the mac job then adds the macOS .dmg / .zip files to the same release.
 # The tag must match "version" in package.json:  npm version minor && git push --follow-tags
 name: Release
 
@@ -48,3 +49,32 @@ jobs:
             "dist/VoxStorm-Portable-$v.exe" \
             "dist/voxstorm-app-$v.asar" \
             "dist/voxstorm-update.json"
+
+  # macOS: .dmg and .zip for Apple Silicon (arm64) and Intel (x64), added to the release made above.
+  # Ad-hoc signed, not notarized: first launch needs right-click → Open (see README).
+  mac:
+    needs: release
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      # npm only installs node-pty's native package for the runner's own CPU; add the Intel one too
+      - name: node-pty for x64
+        run: npm install --no-save --force "@lydell/node-pty-darwin-x64@$(node -p "require('@lydell/node-pty/package.json').version")"
+
+      - name: Build
+        run: |
+          node scripts/make-icon.js --size 1024
+          npx electron-builder --mac --arm64 --x64 --publish never
+
+      - name: Upload to release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload "$GITHUB_REF_NAME" dist/VoxStorm-*-mac-*.dmg dist/VoxStorm-*-mac-*.zip --clobber
