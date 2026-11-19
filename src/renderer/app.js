@@ -916,7 +916,8 @@ function renderStatus() {
   $('#statusbar').innerHTML = `<span><b>${running}</b> çalışıyor</span><span><b>${pendingCount()}</b> karar bekliyor</span>${S.live.length ? `<span title="VoxStorm dışında açık Claude oturumları"><b>${S.live.length}</b> dışarıda</span>` : ''}<span><b>${S.agents.length}</b> ajan / workflow</span><span><b>${S.tabs.filter(t => !t.exited && t.kind !== 'agent').length}</b> açık terminal</span>`
     + (window.pluginHost ? pluginHost.statusHtml() : '') + `<span style="margin-left:auto"></span>${usageChip}`
     + `<button class="sb-chip" data-settab="claude" title="Yeni Claude oturumlarının varsayılanları · değiştirmek için tıkla"><i class="fa-solid fa-sliders"></i> ${esc(claudeSummary())}</button>`
-    + `<span class="${claudeOk ? '' : 'warn'}">${claudeOk ? 'Claude Code bağlı' : 'claude komutu bulunamadı'} · bildirim portu ${INFO ? INFO.hookPort : '-'}</span>`;
+    + `<span class="${claudeOk ? '' : 'warn'}">${claudeOk ? 'Claude Code bağlı' : 'claude komutu bulunamadı'} · bildirim portu ${INFO ? INFO.hookPort : '-'}</span>`
+    + (window.whatsNew ? whatsNew.chipHtml() : '');
   const pb = $('#pillBadge'); pb.hidden = !pendingCount() || S.mode !== 'ide'; pb.textContent = pendingCount();
   const bb = $('#bellBadge'); bb.hidden = !S.unread; bb.textContent = S.unread > 9 ? '9+' : S.unread;
   api.send('tray:update', { running, pending: pendingCount() });
@@ -3250,5 +3251,6 @@ async function init() {
   if (window.pluginHost) pluginHost.init();
   handleOpen(await api.invoke('app:takePendingOpen'));
   adoptTabs(); // terminals another window handed over while this one was starting
+  if (window.whatsNew) whatsNew.maybeShow();
 }
 init();
