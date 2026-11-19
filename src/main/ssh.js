@@ -11,6 +11,7 @@ const crypto = require('crypto');
 const { StringDecoder } = require('string_decoder');
 const { execFile, spawn } = require('child_process');
 const { safeStorage, shell } = require('electron');
+const IS_WIN = process.platform === 'win32', IS_MAC = process.platform === 'darwin';
 
 const COLORS = new Set(['', 'red', 'orange', 'yellow', 'green', 'blue', 'purple', 'gray']);
 const MAX_EDIT = 5 * 1024 * 1024; // bytes of a remote file opened in the editor
@@ -469,7 +470,8 @@ module.exports = function registerSsh({ ipcMain, dialog, getWin, send, sendTo, D
   }
   ipcMain.handle('ssh:localLs', async (_e, dir) => {
     try {
-      if (!dir) return { path: '', items: drives() };
+      // Windows: '' is "this computer", the list of drives; elsewhere everything starts at /
+      if (!dir) { if (IS_WIN) return { path: '', items: drives() }; dir = '/'; }
       const p = path.resolve(dir);
       const ents = await fs.promises.readdir(p, { withFileTypes: true });
       const items = [];
@@ -539,7 +541,7 @@ module.exports = function registerSsh({ ipcMain, dialog, getWin, send, sendTo, D
     return list;
   }
   // Windows cannot store some characters that are fine on Linux
-  const safeName = n => n.replace(/[<>:"\\|?*\x00-\x1f]/g, '_').replace(/[. ]+$/, m => '_'.repeat(m.length)) || '_';
+  const safeName = n => !IS_WIN ? (n.replace(/\x00/g, '_') || '_') : n.replace(/[<>:"\\|?*\x00-\x1f]/g, '_').replace(/[. ]+$/, m => '_'.repeat(m.length)) || '_';
 
   ipcMain.handle('ssh:transfer', async (_e, sid, dir, paths, target, opts = {}) => {
     const s = sessions.get(sid);
@@ -667,7 +669,15 @@ module.exports = function registerSsh({ ipcMain, dialog, getWin, send, sendTo, D
   /* ---------------- RDP ---------------- */
   ipcMain.handle('ssh:rdp', async (_e, hostId, given) => {
     const h = hostById(hostId); if (!h) return { error: 'Bağlantı bulunamadı.' };
-    if (process.platform !== 'win32') return { error: 'Uzak Masaüstü yalnızca Windows\'ta açılabilir.' };
+    if (IS_MAC) { // Windows App (Microsoft Remote Desktop) opens rdp:// links
+      const q = [`full address=s:${h.host}:${h.port || 3389}`];
+      if (h.user) q.push(`username=s:${h.domain ? h.domain + '\\' : ''}${h.user}`);
+      if (h.fullscreen) q.push('screen mode id=i:2');
+      try { await shell.openExternal('rdp://' + q.map(x => encodeURIComponent(x).replace(/%3D/g, '=').replace(/%3A/g, ':')).join('&')); }
+      catch (_) { return { error: 'Windows App (Microsoft Remote Desktop) bulunamadı; App Store’dan kurabilirsin.' }; }
+      return { ok: true };
+    }
+    if (!IS_WIN) return { error: 'Uzak Masaüstü bu sistemde açılamıyor.' };
     const target = h.port && h.port !== 3389 ? `${h.host}:${h.port}` : h.host;
     const pw = typeof given === 'string' ? given : secretOf(h, 'pw');
     const user = h.user ? (h.domain ? `${h.domain}\\${h.user}` : h.user) : '';

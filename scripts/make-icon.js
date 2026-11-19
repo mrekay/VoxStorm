@@ -1,11 +1,12 @@
-// Writes build/icon.png (256x256) from the same logo the app draws at runtime (src/main/logo.js).
+// Writes build/icon.png (256x256; `--size 1024` for macOS, which needs at least 512) from the same logo the app draws at runtime (src/main/logo.js).
 // electron-builder turns it into the Windows .ico.
 const fs = require('fs');
 const path = require('path');
 const zlib = require('zlib');
 const { rasterize } = require('../src/main/logo');
 
-const S = 256;
+const i = process.argv.indexOf('--size');
+const S = (i > 0 && Number(process.argv[i + 1])) || 256;
 const px = rasterize(S); // RGBA
 
 // minimal PNG encoder

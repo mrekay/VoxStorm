@@ -58,7 +58,7 @@ onay ister.
 | `notify` | `vox.notify`: bildirim listesine ve Windows bildirimine yazma. |
 | `fs.read` | `vox.fs.read / list / stat`: VoxStorm'a ekli projelerin içindeki dosyaları okuma. |
 | `fs.write` | `vox.fs.write / mkdir`: aynı klasörlere yazma. |
-| `shell` | `vox.shell.run`: bir proje klasöründe PowerShell komutu çalıştırma. Bu izin pratikte bilgisayarda her şeyi yapabilir. |
+| `shell` | `vox.shell.run`: bir proje klasöründe kabuk komutu çalıştırma (Windows'ta PowerShell, macOS'ta zsh). Bu izin pratikte bilgisayarda her şeyi yapabilir. |
 | `claude` | `vox.claude.newSession / send`: Claude oturumu başlatma, açık oturuma mesaj yazma. |
 | `net` | `fetch`, `WebSocket` ve `https:` kaynaklı resim, yazı tipi, stil. İzin yoksa ağ kapalıdır. |
 
@@ -187,7 +187,7 @@ await vox.shell.run('& "C:\\Program Files\\Git\\bin\\bash.exe" ./deploy.sh; exit
 await vox.shell.stop();   // bu eklentinin çalıştırdığı bütün komutları alt süreçleriyle birlikte durdurur
 ```
 
-`cwd` verilmezse seçili proje kullanılır. Komut PowerShell'de çalışır; süre sınırı en fazla 1 saattir. Komutun
+`cwd` verilmezse seçili proje kullanılır. Komut Windows'ta PowerShell'de, macOS'ta kullanıcının giriş kabuğunda (genelde zsh) çalışır; süre sınırı en fazla 1 saattir. Komutun
 çıkış kodunu almak için sonuna `; exit $LASTEXITCODE` ekle. Bash betikleri için Git Bash'in tam yolunu kullan;
 düz `bash` WSL'i açabilir. Komut etkileşimsiz çalışır: parola ya da onay bekleyen bir komut süre dolana kadar
 bekler. Eklenti kapatılınca ya da yeniden yüklenince çalışan komutları durdurulur.

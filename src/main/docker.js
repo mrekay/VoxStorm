@@ -132,6 +132,9 @@ module.exports = function registerDocker({ ipcMain, shell, getSsh }) {
         };
       }
       if (op === 'startDesktop') { // local only: launch Docker Desktop
+        if (process.platform === 'darwin') {
+          return await new Promise(res => execFile('open', ['-a', 'Docker'], err => res(err ? { error: 'Docker Desktop bulunamadı (/Applications/Docker.app).' } : { ok: true })));
+        }
         const exe = path.join(process.env.ProgramFiles || 'C:\\Program Files', 'Docker', 'Docker', 'Docker Desktop.exe');
         if (!fs.existsSync(exe)) return { error: 'Docker Desktop bulunamadı: ' + exe };
         try { const p = spawn(exe, [], { detached: true, stdio: 'ignore' }); p.on('error', () => {}); p.unref(); } catch (e) { return { error: e.message }; }
@@ -188,7 +191,7 @@ module.exports = function registerDocker({ ipcMain, shell, getSsh }) {
     let p;
     try {
       p = ptyLib().spawn('docker', ['exec', '-it', id, 'sh', '-c', SHELL_CMD], {
-        name: 'xterm-256color', cols: Math.max(20, cols || 100), rows: Math.max(5, rows || 30), cwd: process.env.USERPROFILE || process.cwd(), env: process.env,
+        name: 'xterm-256color', cols: Math.max(20, cols || 100), rows: Math.max(5, rows || 30), cwd: require('os').homedir(), env: process.env,
       });
     } catch (err) { return { error: 'docker exec başlatılamadı: ' + err.message }; }
     const c = ssh.addChannel(e.sender, null, {

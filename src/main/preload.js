@@ -10,6 +10,7 @@ const SEND = new Set(['app:welcome', 'welcome:open', 'welcome:close', 'welcome:m
 const ON = new Set(['open-project', 'projects-changed','pty:data', 'pty:exit', 'hook', 'focus-tab', 'open-settings', 'config-changed', 'win:state', 'live-sessions', 'address-learned', 'mirror:frame', 'mirror:error', 'mirror:exit', 'update:state', 'ide:fs-changed', 'plugin:shell-out', 'plugins:changed', 'win:detached', 'win:set-mode', 'win:tabs', 'ssh:data', 'ssh:exit', 'ssh:closed', 'ssh:xfer', 'ssh:xferAsk', 'ssh:tunnels', 'docker:log', 'docker:logEnd']);
 
 contextBridge.exposeInMainWorld('api', {
+  platform: process.platform,
   invoke: (ch, ...args) => (INVOKE.has(ch) ? ipcRenderer.invoke(ch, ...args) : Promise.reject(new Error('blocked: ' + ch))),
   send: (ch, ...args) => { if (SEND.has(ch)) ipcRenderer.send(ch, ...args); },
   // full path of a file dropped from Windows Explorer (File.path is gone in recent Electron)

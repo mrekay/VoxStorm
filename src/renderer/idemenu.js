@@ -135,11 +135,11 @@ async function imSaveAs() {
   if (!fp || !r) { toast('Önce bir metin dosyası aç'); return; }
   const name = await askName({
     title: 'Farklı kaydet', hint: 'Proje köküne göre yol · alt klasör için / kullanabilirsin',
-    value: relOf(fp).replace(/\\/g, '/'), select: [relOf(fp).lastIndexOf('\\') + 1, relOf(fp).length - (extOf(fp) ? extOf(fp).length + 1 : 0)],
+    value: relOf(fp).replace(/\\/g, '/'), select: [Math.max(relOf(fp).lastIndexOf('\\'), relOf(fp).lastIndexOf('/')) + 1, relOf(fp).length - (extOf(fp) ? extOf(fp).length + 1 : 0)],
     validate: v => nameError(v, true),
   });
   if (!name) return;
-  const to = joinP(r, name.replace(/\//g, '\\').replace(/^\\+|\\+$/g, ''));
+  const to = joinP(r, name.replace(/[\\/]+/g, SEP).replace(/^[\\/]+|[\\/]+$/g, '')); // SEP: \ on Windows, / on macOS
   if (normPath(to) === normPath(fp)) { saveFile(fp); return; }
   let st = { exists: false }; try { st = await api.invoke('fs:stat', to); } catch (_) {}
   if (st.exists && st.dir) { toast('Kaydedilemedi', 'Bu adda bir klasör var.'); return; }
@@ -484,7 +484,7 @@ function setupIdeMenu() {
   const cm = IDE.cm;
   const keys = {};
   for (const [k, v] of Object.entries(IM_KEYS)) keys[k] = typeof v === 'string' ? cm2 => cm2.execCommand(v) : v;
-  cm.setOption('extraKeys', Object.assign({}, cm.getOption('extraKeys'), keys));
+  cm.setOption('extraKeys', Object.assign({}, cm.getOption('extraKeys'), cmKeys(keys))); // Cmd- on macOS
   cm.setOption('highlightSelectionMatches', { minChars: 2, showToken: false, delay: 150, wordsOnly: true });
   cm.setOption('foldOptions', { widget: '\u2026', minFoldSize: 1 });
   imApplyUi();
@@ -549,11 +549,11 @@ function setupIdeMenu() {
   const fi = $('#fbFind'), ri = $('#fbRep');
   fi.addEventListener('input', () => { clearTimeout(FB.timer); FB.timer = setTimeout(fbHighlight, 80); });
   fi.addEventListener('keydown', e => {
-    if (e.key === 'Enter') { e.preventDefault(); if (e.ctrlKey && e.altKey) fbReplace(true); else imFindStep(e.shiftKey); }
+    if (e.key === 'Enter') { e.preventDefault(); if (modKey(e) && e.altKey) fbReplace(true); else imFindStep(e.shiftKey); }
     else if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); fbClose(); }
   });
   ri.addEventListener('keydown', e => {
-    if (e.key === 'Enter') { e.preventDefault(); fbReplace(e.ctrlKey && e.altKey); }
+    if (e.key === 'Enter') { e.preventDefault(); fbReplace(modKey(e) && e.altKey); }
     else if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); fbClose(); }
   });
   $('#fbTog').addEventListener('click', () => { fbShowRep(!FB.rep); (FB.rep ? ri : fi).focus(); });

@@ -10,6 +10,17 @@ const fs = require('fs');
 const fsp = fs.promises;
 const os = require('os');
 const { spawn, execFile } = require('child_process');
+const { IS_WIN, userShell } = require('./platform');
+
+// macOS: ditto, the system's own zip tool (keeps UTF-8 names)
+function dittoZip(args) {
+  return new Promise((resolve, reject) => {
+    execFile('/usr/bin/ditto', args, { timeout: 120000 },
+      (err, _out, stderr) => (err ? reject(new Error(String(stderr || err.message).trim().split('\n')[0])) : resolve()));
+  });
+}
+const unzipTo = (zip, out) => (IS_WIN ? psZip('Expand-Archive -LiteralPath $env:VOX_ZIP -DestinationPath $env:VOX_OUT -Force', { VOX_ZIP: zip, VOX_OUT: out }) : dittoZip(['-x', '-k', zip, out]));
+const zipFolder = (src, zip) => (IS_WIN ? psZip('Compress-Archive -LiteralPath $env:VOX_SRC -DestinationPath $env:VOX_ZIP -Force', { VOX_SRC: src, VOX_ZIP: zip }) : dittoZip(['-c', '-k', '--keepParent', src, zip]));
 
 // Windows' own zip support; paths go in as environment variables so nothing needs quoting
 function psZip(script, env) {
@@ -214,7 +225,7 @@ module.exports = function plugins({ app, ipcMain, protocol, shell, dialog, getWi
     if (r.canceled || !r.filePaths[0]) return null;
     const tmp = await fsp.mkdtemp(path.join(os.tmpdir(), 'voxstorm-plugin-'));
     try {
-      await psZip('Expand-Archive -LiteralPath $env:VOX_ZIP -DestinationPath $env:VOX_OUT -Force', { VOX_ZIP: r.filePaths[0], VOX_OUT: tmp });
+      await unzipTo(r.filePaths[0], tmp);
       let src = tmp;
       if (!fs.existsSync(path.join(src, 'manifest.json'))) {
         const dirs = (await fsp.readdir(tmp, { withFileTypes: true })).filter(e => e.isDirectory());
@@ -237,7 +248,7 @@ module.exports = function plugins({ app, ipcMain, protocol, shell, dialog, getWi
       const stage = path.join(tmp, p.id);
       await fsp.cp(p.dir, stage, { recursive: true, filter: skipJunk(p.dir) });
       await fsp.rm(r.filePath, { force: true });
-      await psZip('Compress-Archive -LiteralPath $env:VOX_SRC -DestinationPath $env:VOX_ZIP -Force', { VOX_SRC: stage, VOX_ZIP: r.filePath });
+      await zipFolder(stage, r.filePath);
       return { file: r.filePath };
     } finally { fsp.rm(tmp, { recursive: true, force: true }).catch(() => {}); }
   });
@@ -328,6 +339,7 @@ module.exports = function plugins({ app, ipcMain, protocol, shell, dialog, getWi
   // the whole tree: a command usually starts bash, ssh, node... under PowerShell
   const killTree = child => {
     child.stopped = true;
+    if (!IS_WIN) { try { process.kill(-child.pid, 'SIGKILL'); } catch (_) { try { child.kill('SIGKILL'); } catch (__) {} } return; } // its own process group
     try { spawn('taskkill', ['/PID', String(child.pid), '/T', '/F'], { windowsHide: true }); } catch (_) { try { child.kill(); } catch (__) {} }
   };
   ipcMain.handle('plugin:shell', async (e, id, command, opts) => {
@@ -337,7 +349,9 @@ module.exports = function plugins({ app, ipcMain, protocol, shell, dialog, getWi
     const runId = opts && /^[\w-]{1,40}$/.test(String(opts.runId || '')) ? String(opts.runId) : '';
     const { StringDecoder } = require('string_decoder');
     return new Promise(resolve => {
-      const child = spawn('powershell.exe', ['-NoLogo', '-NoProfile', '-NonInteractive', '-Command', '[Console]::OutputEncoding=[Text.Encoding]::UTF8; $OutputEncoding=[Text.Encoding]::UTF8; ' + String(command)], { cwd, windowsHide: true });
+      const child = IS_WIN
+        ? spawn('powershell.exe', ['-NoLogo', '-NoProfile', '-NonInteractive', '-Command', '[Console]::OutputEncoding=[Text.Encoding]::UTF8; $OutputEncoding=[Text.Encoding]::UTF8; ' + String(command)], { cwd, windowsHide: true })
+        : spawn(userShell(), ['-lc', String(command)], { cwd, detached: true, stdio: ['ignore', 'pipe', 'pipe'] }); // macOS: the login shell (zsh)
       const set = running.get(id) || new Set(); set.add(child); running.set(id, set);
       let out = '', err = '', done = false, timedOut = false;
       // live output for the page that asked (runId); the full text still comes back at the end

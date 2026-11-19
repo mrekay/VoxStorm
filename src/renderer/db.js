@@ -134,7 +134,7 @@
     cm = CodeMirror(document.getElementById('dbEd'), {
       theme: 'claudelot', mode: 'text/x-sql', lineNumbers: true, matchBrackets: true, autoCloseBrackets: true, styleActiveLine: true,
       indentUnit: 2, tabSize: 2, value: '',
-      extraKeys: {
+      extraKeys: cmKeys({
         'Ctrl-Enter': () => run('auto'),
         'Ctrl-Shift-Enter': () => run('stmt'),
         'Ctrl-Space': () => hint(),
@@ -142,7 +142,7 @@
         Tab: c => (c.somethingSelected() ? c.indentSelection('add') : c.replaceSelection('  ')),
         'Shift-Tab': c => c.indentSelection('subtract'),
         'Ctrl-/': c => toggleComment(c),
-      },
+      }),
     });
     cm.on('changes', () => { const t = cur(); if (t && t.page && !t.pageEdited) { t.pageEdited = true; } saveState(); });
     cm.on('cursorActivity', () => renderStatus());
@@ -1259,7 +1259,7 @@
       if (S.mode !== 'db' || !D.built) return;
       if (!layer('dbModal').hidden) return;
       if (document.querySelector('#settings:not([hidden]),#report:not([hidden]),#discover:not([hidden])')) return;
-      const k = (e.ctrlKey ? 'C' : '') + (e.shiftKey ? 'S' : '') + (e.altKey ? 'A' : '') + '+' + e.key;
+      const k = (modKey(e) ? 'C' : '') + (e.shiftKey ? 'S' : '') + (e.altKey ? 'A' : '') + '+' + e.key;
       const map = {
         '+F5': () => run('auto'), 'S+F5': () => cancelRun(), 'C+Enter': () => run('auto'), 'CS+Enter': () => run('stmt'),
         'C+t': () => { const t = cur(); addTab({ connId: t && t.connId, db: t && t.db }); }, 'C+w': () => closeTab(D.active),
@@ -1294,8 +1294,8 @@
   }
   function gridKey(grid, e) {
     const r = grid._r;
-    if (e.ctrlKey && (e.key === 'c' || e.key === 'C')) { e.preventDefault(); copySel(r, e.shiftKey); return; }
-    if (e.ctrlKey && (e.key === 'a' || e.key === 'A')) { e.preventDefault(); r.sel = { r0: 0, r1: r.shown - 1, c0: 0, c1: r.columns.length - 1 }; paintRows(grid); updateSelInfo(grid); return; }
+    if (modKey(e) && (e.key === 'c' || e.key === 'C')) { e.preventDefault(); copySel(r, e.shiftKey); return; }
+    if (modKey(e) && (e.key === 'a' || e.key === 'A')) { e.preventDefault(); r.sel = { r0: 0, r1: r.shown - 1, c0: 0, c1: r.columns.length - 1 }; paintRows(grid); updateSelInfo(grid); return; }
     const mv = { ArrowDown: [1, 0], ArrowUp: [-1, 0], ArrowRight: [0, 1], ArrowLeft: [0, -1], PageDown: [Math.floor(grid.clientHeight / RH) - 1, 0], PageUp: [-(Math.floor(grid.clientHeight / RH) - 1), 0] }[e.key];
     if (mv) {
       e.preventDefault();

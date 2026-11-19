@@ -201,7 +201,7 @@
     Q.cm = CodeMirror(byId('idbEd'), {
       theme: 'claudelot', mode: (target() && dbApi.CM_MODE[target().type]) || 'text/x-sql', lineNumbers: true, matchBrackets: true, autoCloseBrackets: true,
       indentUnit: 2, tabSize: 2, value: st().sql || '',
-      extraKeys: { 'Ctrl-Enter': () => runScratch(false), 'Ctrl-Shift-Enter': () => runScratch(true), Tab: c => (c.somethingSelected() ? c.indentSelection('add') : c.replaceSelection('  ')), 'Shift-Tab': c => c.indentSelection('subtract') },
+      extraKeys: cmKeys({ 'Ctrl-Enter': () => runScratch(false), 'Ctrl-Shift-Enter': () => runScratch(true), Tab: c => (c.somethingSelected() ? c.indentSelection('add') : c.replaceSelection('  ')), 'Shift-Tab': c => c.indentSelection('subtract') }),
     });
     Q.cm.on('changes', () => { st().sql = Q.cm.getValue().slice(0, 100000); persist(); });
     el.addEventListener('click', onDrawerClick);

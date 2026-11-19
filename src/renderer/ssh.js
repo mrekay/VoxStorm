@@ -1,7 +1,8 @@
 /* VoxStorm SSH mode: PuTTY + WinSCP in one place.
    Saved hosts on the left; each session tab has a terminal and a two-pane file manager
    (this computer on the left, the server on the right) with a transfer queue, a remote file
-   editor and local port forwarding. RDP hosts open Windows Remote Desktop (mstsc).
+   editor and local port forwarding. RDP hosts open Remote Desktop (mstsc on Windows, Windows App on macOS).
+   Works on Windows and macOS: local paths use SEP, app shortcuts use modKey (Cmd on macOS).
    Everything that touches a server runs in the main process (src/main/ssh.js).
    Uses globals from app.js: $, esc, toast, termTheme, MODES, extOf, SHORTCUTS. */
 /* global api, Terminal, FitAddon, CodeMirror */
@@ -26,8 +27,10 @@
   };
   const rjoin = (a, b) => (a.endsWith('/') ? a + b : a + '/' + b);
   const rparent = p => { if (!p || p === '/') return '/'; const i = p.replace(/\/+$/, '').lastIndexOf('/'); return i <= 0 ? '/' : p.slice(0, i); };
-  const ljoin = (a, b) => (/[\\/]$/.test(a) ? a + b : a + '\\' + b);
-  const lparent = p => { if (!p) return ''; if (/^[A-Za-z]:\\?$/.test(p)) return ''; const t = p.replace(/[\\/]+$/, ''); const i = t.lastIndexOf('\\'); return i < 0 ? '' : (i === 2 ? t.slice(0, 3) : t.slice(0, i)); };
+  const LSEP = typeof SEP === 'string' ? SEP : '\\';
+  const ljoin = (a, b) => (/[\\/]$/.test(a) ? a + b : a + LSEP + b);
+  const lparent = p => { if (LSEP === '/') { if (!p || p === '/') return '/'; const i = p.replace(/\/+$/, '').lastIndexOf('/'); return i <= 0 ? '/' : p.slice(0, i); }
+    if (!p) return ''; if (/^[A-Za-z]:\\?$/.test(p)) return ''; const t = p.replace(/[\\/]+$/, ''); const i = t.lastIndexOf('\\'); return i < 0 ? '' : (i === 2 ? t.slice(0, 3) : t.slice(0, i)); };
   const shq = s => "'" + String(s).replace(/'/g, "'\\''") + "'";
 
   const X = {
@@ -200,7 +203,7 @@
       </div>`;
     document.getElementById('sshBody').appendChild(t.el);
     const term = new Terminal({
-      fontFamily: '"Cascadia Mono", "Cascadia Code", Consolas, monospace', fontSize: 13, lineHeight: 1.15,
+      fontFamily: MONO_FONT, fontSize: 13, lineHeight: 1.15,
       cursorBlink: true, scrollback: 10000, allowProposedApi: true, theme: termTheme(), linkHandler: typeof termLinkHandler !== 'undefined' ? termLinkHandler : undefined,
     });
     const fit = new FitAddon.FitAddon();
@@ -215,11 +218,11 @@
     term.attachCustomKeyEventHandler(e => {
       if (e.type !== 'keydown') return true;
       const k = e.key.toLowerCase();
-      if (e.ctrlKey && k === 'c' && (e.shiftKey || term.hasSelection())) {
+      if (!IS_MAC && e.ctrlKey && k === 'c' && (e.shiftKey || term.hasSelection())) {
         if (term.hasSelection()) { navigator.clipboard.writeText(term.getSelection()).catch(() => {}); term.clearSelection(); }
         return false;
       }
-      if (e.ctrlKey && k === 'v') return false; // the browser paste event delivers the text
+      if (!IS_MAC && e.ctrlKey && k === 'v') return false; // the browser paste event delivers the text
       return true;
     });
     // PuTTY habit: right click copies the selection, or pastes when nothing is selected
@@ -438,10 +441,10 @@
   function selectRow(t, side, i, e) {
     const p = P(t, side), rows = p.view || [], f = rows[i]; if (!f) return;
     if (e && e.shiftKey && p.anchor >= 0) {
-      if (!e.ctrlKey) p.sel.clear();
+      if (!modKey(e)) p.sel.clear();
       const [a, b] = [Math.min(p.anchor, i), Math.max(p.anchor, i)];
       for (let k = a; k <= b; k++) p.sel.add(rows[k].name);
-    } else if (e && e.ctrlKey) {
+    } else if (e && modKey(e)) {
       if (p.sel.has(f.name)) p.sel.delete(f.name); else p.sel.add(f.name);
       p.anchor = i;
     } else { p.sel = new Set([f.name]); p.anchor = i; }
@@ -637,7 +640,7 @@
         const mode = (typeof MODES !== 'undefined' && typeof extOf === 'function') ? MODES[extOf(fp)] || null : null;
         ed = CodeMirror(form.querySelector('[data-role=ed]'), {
           value: r.text.replace(/\r\n/g, '\n'), mode, theme: 'claudelot', lineNumbers: true, matchBrackets: true, styleActiveLine: true, indentUnit: 2, tabSize: 4,
-          extraKeys: { 'Ctrl-S': () => { save(); }, Tab: c => (c.somethingSelected() ? c.indentSelection('add') : c.replaceSelection('  ')) },
+          extraKeys: cmKeys({ 'Ctrl-S': () => { save(); }, Tab: c => (c.somethingSelected() ? c.indentSelection('add') : c.replaceSelection('  ')) }),
         });
         ed.on('change', () => { if (!dirty) { dirty = true; setTitle(); } });
         requestAnimationFrame(() => { ed.refresh(); ed.focus(); });
@@ -761,7 +764,9 @@
         <label class="db-ck full rdp-only"><input type="checkbox" name="fullscreen"${chk(v.fullscreen)}><span>Tam ekran aç</span></label>
         <label class="db-ck full rdp-only"><input type="checkbox" name="admin"${chk(v.admin)}><span>Yönetici oturumu (/admin)</span></label>
         <div class="db-f full"><span>Renk</span><div class="db-colors">${COLORS.map(([k, l]) => `<label title="${l}"><input type="radio" name="color" value="${k}"${chk((v.color || '') === k)}><span class="db-sw db-c-${k || 'none'}"></span></label>`).join('')}</div></div>
-        <p class="db-note full rdp-only"><i class="fa-solid fa-circle-info"></i>RDP bağlantısı Windows Uzak Masaüstü (mstsc) penceresinde açılır. Parola girersen Windows Kimlik Bilgileri Yöneticisi’ne kaydedilir.</p>
+        <p class="db-note full rdp-only"><i class="fa-solid fa-circle-info"></i>${IS_MAC
+          ? 'RDP bağlantısı Windows App (Microsoft Remote Desktop) ile açılır; App Store’dan kurulu olmalı. Parolayı orada girersin.'
+          : 'RDP bağlantısı Windows Uzak Masaüstü (mstsc) penceresinde açılır. Parola girersen Windows Kimlik Bilgileri Yöneticisi’ne kaydedilir.'}</p>
       </div>`;
     const parseTunnels = (txt, auto) => String(txt || '').split(/\n/).map(l => l.trim()).filter(Boolean).map(l => {
       const m = l.match(/^(?:L\s+)?(\d+)\s*[\s:>-]+\s*([^\s:]+):(\d+)$/i);
@@ -1064,11 +1069,11 @@
         else if (k === 'F2') { e.preventDefault(); rename(t, side); }
         else if (k === 'F5') { e.preventDefault(); (side === 'remote' ? download : upload)(t); }
         else if (k === 'F7') { e.preventDefault(); mkdir(t, side); }
-        else if (k === 'Tab' && !e.ctrlKey) { e.preventDefault(); paneEl(t, side === 'remote' ? 'local' : 'remote').querySelector('[data-role=list]').focus(); }
-        else if (e.ctrlKey && k.toLowerCase() === 'a') { e.preventDefault(); p.sel = new Set(p.view.map(f => f.name)); renderPane(t, side); }
-        else if (e.ctrlKey && k.toLowerCase() === 'r') { e.preventDefault(); loadPane(t, side, p.path, true); }
-        else if (e.ctrlKey && k.toLowerCase() === 'h') { e.preventDefault(); toggleHidden(); }
-        else if (k.length === 1 && !e.ctrlKey && !e.altKey) { // type to jump
+        else if (k === 'Tab' && !modKey(e)) { e.preventDefault(); paneEl(t, side === 'remote' ? 'local' : 'remote').querySelector('[data-role=list]').focus(); }
+        else if (modKey(e) && e.code === 'KeyA') { e.preventDefault(); p.sel = new Set(p.view.map(f => f.name)); renderPane(t, side); }
+        else if (modKey(e) && e.code === 'KeyR') { e.preventDefault(); loadPane(t, side, p.path, true); }
+        else if (modKey(e) && e.code === 'KeyH') { e.preventDefault(); toggleHidden(); }
+        else if (k.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey) { // type to jump
           const now = Date.now(); p.typed = (now - (p.typedAt || 0) < 800 ? p.typed || '' : '') + k.toLowerCase(); p.typedAt = now;
           const i = p.view.findIndex(f => f.name.toLowerCase().startsWith(p.typed));
           if (i >= 0) { selectRow(t, side, i, null); const row = paneEl(t, side).querySelector(`.ssh-row[data-i="${i}"]`); if (row) row.scrollIntoView({ block: 'nearest' }); }
@@ -1159,11 +1164,11 @@
     window.addEventListener('keydown', e => {
       if (view.hidden || !document.getElementById('sshModal').hidden) return;
       const k = e.key.toLowerCase(), t = curTab();
-      if (e.ctrlKey && e.altKey && k === 'n') { e.preventDefault(); editHost(); }
-      else if (e.ctrlKey && !e.shiftKey && !e.altKey && k === 'w' && t) { e.preventDefault(); e.stopPropagation(); closeTab(t.id); }
-      else if (e.ctrlKey && e.altKey && k === 't' && t) { e.preventDefault(); setView(t, t.view === 'term' ? 'split' : 'term'); }
-      else if (e.ctrlKey && e.altKey && k === 'f' && t) { e.preventDefault(); setView(t, t.view === 'files' ? 'split' : 'files'); }
-      else if (e.ctrlKey && (k === 'pagedown' || k === 'pageup')) { e.preventDefault(); e.stopPropagation(); cycleTab(k === 'pagedown' ? 1 : -1); }
+      if (modKey(e) && e.altKey && e.code === 'KeyN') { e.preventDefault(); editHost(); }
+      else if (modKey(e) && !e.shiftKey && !e.altKey && e.code === 'KeyW' && t) { e.preventDefault(); e.stopPropagation(); closeTab(t.id); }
+      else if (modKey(e) && e.altKey && e.code === 'KeyT' && t) { e.preventDefault(); setView(t, t.view === 'term' ? 'split' : 'term'); }
+      else if (modKey(e) && e.altKey && e.code === 'KeyF' && t) { e.preventDefault(); setView(t, t.view === 'files' ? 'split' : 'files'); }
+      else if (modKey(e) && (k === 'pagedown' || k === 'pageup')) { e.preventDefault(); e.stopPropagation(); cycleTab(k === 'pagedown' ? 1 : -1); }
     }, true);
   }
   function applyUi() {
@@ -1222,7 +1227,7 @@
         <button class="ssh-tb" data-act="termReopen" title="Kabuğu yeniden aç"><i class="fa-solid fa-rotate-right"></i>Yeniden aç</button></div>
       <div class="ssh-content" data-layout="term"><div class="ssh-term"><div class="ssh-termhost" data-role="term"></div></div></div>`;
     document.getElementById('sshBody').appendChild(t.el);
-    const term = new Terminal({ fontFamily: '"Cascadia Mono", "Cascadia Code", Consolas, monospace', fontSize: 13, lineHeight: 1.15, cursorBlink: true, scrollback: 10000, allowProposedApi: true, theme: termTheme(), linkHandler: typeof termLinkHandler !== 'undefined' ? termLinkHandler : undefined });
+    const term = new Terminal({ fontFamily: MONO_FONT, fontSize: 13, lineHeight: 1.15, cursorBlink: true, scrollback: 10000, allowProposedApi: true, theme: termTheme(), linkHandler: typeof termLinkHandler !== 'undefined' ? termLinkHandler : undefined });
     const fit = new FitAddon.FitAddon();
     term.loadAddon(fit); t.term = term; t.fit = fit;
     term.open(t.el.querySelector('[data-role=term]'));
@@ -1231,8 +1236,8 @@
     term.attachCustomKeyEventHandler(e => {
       if (e.type !== 'keydown') return true;
       const k = e.key.toLowerCase();
-      if (e.ctrlKey && k === 'c' && (e.shiftKey || term.hasSelection())) { if (term.hasSelection()) { navigator.clipboard.writeText(term.getSelection()).catch(() => {}); term.clearSelection(); } return false; }
-      if (e.ctrlKey && k === 'v') return false;
+      if (!IS_MAC && e.ctrlKey && k === 'c' && (e.shiftKey || term.hasSelection())) { if (term.hasSelection()) { navigator.clipboard.writeText(term.getSelection()).catch(() => {}); term.clearSelection(); } return false; }
+      if (!IS_MAC && e.ctrlKey && k === 'v') return false;
       return true;
     });
     t.el.querySelector('.ssh-term').addEventListener('contextmenu', async e => {
