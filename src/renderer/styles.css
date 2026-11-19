@@ -57,8 +57,8 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
 .win-ctl{display:flex}
 .tb-btn.close:hover{background:#c42b1c;color:#fff}
 .badge{position:absolute;top:6px;right:7px;min-width:16px;height:16px;border-radius:8px;background:var(--danger);color:#fff;font-size:10px;font-weight:600;display:grid;place-items:center;padding:0 4px}
-.mode-pill{display:inline-flex;background:var(--surface-2);border:1px solid var(--line);border-radius:999px;padding:2px;gap:2px;flex:none}
-.mode-pill button{border:0;background:none;border-radius:999px;padding:3px 14px;font-size:12px;font-weight:500;color:var(--muted);display:flex;align-items:center;gap:6px}
+.mode-pill{display:inline-flex;background:var(--surface-2);border:1px solid var(--line);border-radius:6px;padding:2px;gap:2px;flex:none;height:26px;box-sizing:border-box}
+.mode-pill button{border:0;background:none;border-radius:4px;padding:0 12px;font-size:12px;font-weight:500;color:var(--muted);display:flex;align-items:center;gap:6px}
 .mode-pill button:hover{color:var(--fg)}
 .mode-pill button.on{background:var(--accent);color:var(--on-accent)}
 .pill-b{background:var(--warn);color:#1a1205;border-radius:999px;font-size:10px;font-weight:700;padding:0 5px}
