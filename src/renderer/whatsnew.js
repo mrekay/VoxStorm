@@ -8,7 +8,7 @@
   // try: what the "Dene" button does (optional)
   const NOTES = [
     {
-      id: '2026-11-19', title: 'SSH, Docker ve IDE yenilikleri', date: '19 Kasım 2026',
+      id: '2026-11-19', title: 'Sürüm 0.7.0', date: '19 Kasım 2026',
       items: [
         { icon: 'fa-solid fa-server', title: 'SSH modu', text: 'PuTTY ve WinSCP bir arada: kayıtlı sunucular, terminal, iki panelli SFTP dosya yöneticisi (sürükle-bırak, klasör aktarımı, chmod, uzak dosyayı düzenleme), port yönlendirme tünelleri ve Uzak Masaüstü (RDP) kayıtları.', keys: 'Ctrl+4', try: () => setMode('ssh') },
         { icon: 'fa-brands fa-docker', title: 'Docker', text: 'Git düğmesinin yanındaki Docker panelinden bu bilgisayardaki konteynerleri yönet: başlat / durdur, canlı loglar, konteynerde terminal, compose projeleri, imajlar. SSH oturumlarında da sunucudaki Docker için ayrı bir görünüm var.', keys: 'Ctrl+Shift+Y', try: () => { const b = document.getElementById('dockerBtn'); if (b && !b.hidden) b.click(); else toast('Docker bulunamadı', 'Docker Desktop kurulu olmalı.'); } },
@@ -17,6 +17,7 @@
         { icon: 'fa-solid fa-up-right-from-square', title: 'Modlar ayrı pencerede', text: 'AI, IDE, DB ya da SSH’yi kendi penceresine al (örneğin ikinci monitöre). Mod düğmesine sağ tıkla ya da Ctrl+Shift+M; pencereyi kapatınca mod ana pencereye döner.', keys: 'Ctrl+Shift+M' },
         { icon: 'fa-solid fa-layer-group', title: 'Sekme grupları', text: 'Bir ya da birden çok projedeki Claude oturumlarını adlı, renkli gruplara al. Sekmeye sağ tıkla ya da Ctrl+tık ile seçip Ctrl+Shift+L. Kapalı grup, içinde karar bekleyen olursa yanıp söner.', keys: 'Ctrl+Shift+L', try: () => setMode('claude') },
         { icon: 'fa-solid fa-clock-rotate-left', title: 'Kapatılanı geri aç', text: 'Yanlışlıkla kapattığın Claude oturumu konuşmasıyla geri gelir. Sekme çubuğunda + yanındaki düğme sonuncuyu açar, ▾ ile proje adı ve zamanıyla listeden seçersin. Zaten açık olan oturumlar listede görünmez.', keys: 'Ctrl+Alt+T', try: () => setMode('claude') },
+        { icon: 'fa-brands fa-apple', title: 'macOS desteği', text: 'VoxStorm artık Mac’te de çalışıyor (Apple Silicon ve Intel). Kısayollar ⌘ ile, Claude Code ve terminaller aynı; güncellemeler Mac’te de uygulama içinden gelir.' },
         { icon: 'fa-solid fa-gift', title: 'Neler yeni', text: 'Bu ekran: yeni sürümün ilk açılışında bir kez çıkar, sağ alttaki düğmeden her zaman açılır.' },
       ],
       small: ['Oturum adları: senin verdiğin ad yoksa ilk mesaj yerine Claude’un oturuma verdiği başlık (terminal başlığındaki) kullanılıyor; açık sekmelerde de anında güncelleniyor.', 'Mod düğmeleri hap yerine Git düğmesi gibi köşeli.'],
