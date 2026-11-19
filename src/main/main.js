@@ -59,6 +59,15 @@ let hookPort = 0;
 let trayStats = { running: 0, pending: 0 };
 const ptys = new Map();
 const liveNotifications = new Set();
+/* detached modes: a mode (AI, IDE, DB, a plugin's mode) can live in its own window, e.g. on a
+   second monitor. Such a window loads the same page locked to that mode (index.html?only=<mode>). */
+const modeWins = new Map(); // mode -> its own BrowserWindow
+const ptyOwner = new Map(); // pty id -> webContents that shows it (null while it moves to another window)
+const ptyBuf = new Map();   // pty id -> recent output, replayed when the terminal moves to another window
+const ptyGone = new Map();  // pty id -> exit code of a terminal that ended while moving
+const mirrorOwner = new Map(); // mirror id -> webContents
+const handoff = new Map();  // webContents id -> terminals waiting to be taken by that window
+const trayByWc = new Map(), tabsByWc = new Map(); // per window: tray counts, open terminals (lastTabs)
 
 /* ---------------- config ---------------- */
 const DEFAULTS = {
@@ -78,6 +87,7 @@ const DEFAULTS = {
     ui: { side: true, queue: true, usage: true }, // IDE panels; AI mode side panels live in ui.dock (dock.js)
   },
   ide: { state: {}, ui: { ex: true, panel: true, size: 13 } },
+  windows: {}, // detached mode windows: { [mode]: { bounds, maximized, open } }
 };
 function merge(base, extra) {
   if (Array.isArray(base) || typeof base !== 'object' || base === null) return extra === undefined ? base : extra;
@@ -102,7 +112,12 @@ function saveConfigNow() {
 }
 
 /* ---------------- helpers ---------------- */
-const send = (ch, ...args) => { if (win && !win.isDestroyed()) win.webContents.send(ch, ...args); };
+const alive = w => !!w && !w.isDestroyed();
+const allWins = () => [win, ...modeWins.values()].filter(alive);
+const ownerWin = mode => (alive(modeWins.get(mode)) ? modeWins.get(mode) : win); // the window showing a mode
+const sendTo = (wc, ch, ...args) => { if (wc && !wc.isDestroyed()) wc.send(ch, ...args); };
+const send = (ch, ...args) => allWins().forEach(w => w.webContents.send(ch, ...args)); // every app window
+const sendMain = (ch, ...args) => { if (alive(win)) win.webContents.send(ch, ...args); };
 const encodeProjectDir = p => p.replace(/[^a-zA-Z0-9]/g, '-');
 const norm = p => path.resolve(p).toLowerCase();
 
@@ -550,13 +565,14 @@ function mirrorBinary() {
   mirrorBuild.catch(() => { mirrorBuild = null; });
   return mirrorBuild;
 }
-async function startMirror(sessionId) {
+async function startMirror(sessionId, owner) {
   const s = liveList.find(x => x.sessionId === sessionId);
   if (!s) throw new Error('Oturum artık açık değil.');
   const exe = await mirrorBinary();
   const id = crypto.randomUUID();
   const child = spawn(exe, [String(s.pid)], { windowsHide: true, stdio: ['pipe', 'pipe', 'ignore'] });
   mirrors.set(id, child);
+  mirrorOwner.set(id, owner || null);
   let buf = '';
   child.stdout.setEncoding('utf8');
   child.stdout.on('data', d => {
@@ -565,13 +581,13 @@ async function startMirror(sessionId) {
     while ((i = buf.indexOf('\n')) >= 0) {
       const line = buf.slice(0, i); buf = buf.slice(i + 1);
       const p = line.split(' ');
-      if (p[0] === 'F') send('mirror:frame', id, { cols: +p[1], rows: +p[2], cx: +p[3], cy: +p[4], vis: p[5] === '1', off: +p[6], max: +p[7], vt: Buffer.from(p[8] || '', 'base64').toString('utf8') });
-      else if (p[0] === 'E') send('mirror:error', id, 'Terminale bağlanılamadı (Windows hata kodu ' + p[1] + ').');
+      if (p[0] === 'F') sendTo(mirrorOwner.get(id), 'mirror:frame', id, { cols: +p[1], rows: +p[2], cx: +p[3], cy: +p[4], vis: p[5] === '1', off: +p[6], max: +p[7], vt: Buffer.from(p[8] || '', 'base64').toString('utf8') });
+      else if (p[0] === 'E') sendTo(mirrorOwner.get(id), 'mirror:error', id, 'Terminale bağlanılamadı (Windows hata kodu ' + p[1] + ').');
     }
   });
   child.stdin.on('error', () => {});
-  child.on('exit', () => { mirrors.delete(id); send('mirror:exit', id); });
-  child.on('error', e => { mirrors.delete(id); send('mirror:error', id, e.message); });
+  child.on('exit', () => { mirrors.delete(id); sendTo(mirrorOwner.get(id), 'mirror:exit', id); mirrorOwner.delete(id); });
+  child.on('error', e => { mirrors.delete(id); sendTo(mirrorOwner.get(id), 'mirror:error', id, e.message); mirrorOwner.delete(id); });
   return { id, pid: s.pid };
 }
 /* xterm sends VT text; the console wants key events: [virtual key, char, control state] */
@@ -609,7 +625,7 @@ function mirrorInput(id, data) {
   const keys = keysOf(data.slice(0, 100000));
   for (let i = 0; i < keys.length; i += 400) child.stdin.write('I ' + keys.slice(i, i + 400).map(k => k.join(' ')).join(' ') + '\n');
 }
-function stopMirror(id) { const c = mirrors.get(id); if (c) { try { c.kill(); } catch (_) {} mirrors.delete(id); } }
+function stopMirror(id) { const c = mirrors.get(id); if (c) { try { c.kill(); } catch (_) {} mirrors.delete(id); } mirrorOwner.delete(id); }
 
 /* ---------------- weekly usage (tokens from transcripts) ---------------- */
 /* API list prices, $ per million tokens (Anthropic first-party, Nov 2026).
@@ -784,10 +800,10 @@ ipcMain.handle('usage:plan', async (_e, force) => {
     return (planCache = { at: Date.now(), error: 'net', message: String(err && err.message || err) });
   }
 });
-ipcMain.handle('usage:exportCsv', async (_e, month) => {
+ipcMain.handle('usage:exportCsv', async (e, month) => {
   await computeUsage();
   const names = Object.fromEntries(config.projects.map(p => [encodeProjectDir(p.path), p.name]));
-  const r = await dialog.showSaveDialog(win, {
+  const r = await dialog.showSaveDialog(BrowserWindow.fromWebContents(e.sender) || win, {
     title: 'Kullanımı CSV olarak kaydet',
     defaultPath: path.join(app.getPath('documents'), `claude-kullanim-${month || 'tum'}.csv`),
     filters: [{ name: 'CSV', extensions: ['csv'] }],
@@ -907,7 +923,8 @@ function learnAddress(text) {
   const name = addressFromPrompt(text);
   if (name === null || name === (config.settings.name || '')) return;
   setAddress(name, true);
-  send('address-learned', name);
+  const aiWin = ownerWin('claude');
+  if (alive(aiWin)) sendTo(aiWin.webContents, 'address-learned', name);
 }
 
 /* ---------------- "how to address me" prompt ---------------- */
@@ -932,7 +949,7 @@ function writeAppendPrompt() {
 }
 
 /* ---------------- terminals ---------------- */
-function spawnTerminal(opts) {
+function spawnTerminal(opts, owner) {
   const id = crypto.randomUUID();
   let file, args = [], sessionId = null;
   const cwd = opts.cwd && fs.existsSync(opts.cwd) ? opts.cwd : os.homedir();
@@ -967,8 +984,21 @@ function spawnTerminal(opts) {
     cwd,
     env,
   });
-  p.onData(d => send('pty:data', id, d));
-  p.onExit(({ exitCode }) => { ptys.delete(id); send('pty:exit', id, exitCode); });
+  ptyOwner.set(id, owner || null);
+  ptyBuf.set(id, '');
+  p.onData(d => {
+    let b = (ptyBuf.get(id) || '') + d;
+    if (b.length > PTY_BUF * 1.25) { b = b.slice(-PTY_BUF); const nl = b.indexOf('\n'); if (nl >= 0 && nl < 4096) b = b.slice(nl + 1); }
+    ptyBuf.set(id, b);
+    sendTo(ptyOwner.get(id), 'pty:data', id, d);
+  });
+  p.onExit(({ exitCode }) => {
+    ptys.delete(id);
+    const wc = ptyOwner.get(id);
+    if (wc === null) { ptyGone.set(id, exitCode); return; } // moving between windows: the new one is told when it takes it
+    sendTo(wc, 'pty:exit', id, exitCode);
+    dropPty(id);
+  });
   ptys.set(id, p);
   return { id, sessionId };
 }
@@ -988,10 +1018,20 @@ function setupUpdater() {
   ipcMain.handle('update:download', () => U.download());
   ipcMain.handle('update:restart', () => U.restart());
 }
+const PTY_BUF = 256 * 1024;
+function dropPty(id) { ptyOwner.delete(id); ptyBuf.delete(id); ptyGone.delete(id); }
+function killPty(id) { const p = ptys.get(id); if (p) { try { p.kill(); } catch (_) {} ptys.delete(id); } dropPty(id); }
 function killAll() {
   for (const id of [...mirrors.keys()]) stopMirror(id);
   for (const p of ptys.values()) { try { p.kill(); } catch (_) {} }
   ptys.clear();
+  ptyOwner.clear(); ptyBuf.clear(); ptyGone.clear(); handoff.clear();
+}
+// a window reloads or goes away: end the terminals and console mirrors it showed
+function killOwned(wc, wcId, waiting) {
+  for (const [id, o] of [...ptyOwner]) if (o === wc) killPty(id);
+  for (const [id, o] of [...mirrorOwner]) if (o === wc) stopMirror(id);
+  if (waiting) { for (const t of handoff.get(wcId) || []) if (t.id) killPty(t.id); handoff.delete(wcId); }
 }
 
 /* ---------------- window / tray ---------------- */
@@ -1058,7 +1098,7 @@ function rebuildTrayMenu() {
   tray.setContextMenu(Menu.buildFromTemplate([
     { label: win && win.isVisible() ? 'Pencereyi gizle' : 'Pencereyi göster', click: () => (win.isVisible() ? win.hide() : showWindow()) },
     { label: 'Karşılama ekranı', click: () => showWelcome() },
-    { label: 'Ayarlar', click: () => { showWindow(); send('open-settings'); } },
+    { label: 'Ayarlar', click: () => { showWindow(); sendMain('open-settings'); } },
     { label: 'Rahatsız etme', type: 'checkbox', checked: !!config.settings.notif.quiet, click: m => { config.settings.notif.quiet = m.checked; saveConfig(); send('config-changed', config); } },
     { type: 'separator' },
     { label: `${running} çalışıyor · ${pending} karar bekliyor`, enabled: false },
@@ -1091,17 +1131,144 @@ function createWindow() {
   });
   win.on('show', rebuildTrayMenu);
   win.on('hide', rebuildTrayMenu);
-  win.on('maximize', () => send('win:state', { maximized: true }));
-  win.on('unmaximize', () => send('win:state', { maximized: false }));
-  win.webContents.setWindowOpenHandler(({ url }) => { if (/^https?:/.test(url)) shell.openExternal(url); return { action: 'deny' }; });
-  win.webContents.on('will-navigate', e => e.preventDefault());
+  win.once('show', reopenModeWindows); // detached modes come back with the main window
+  pageEvents(win);
+}
+/* what every app window (main or detached) does the same way */
+function pageEvents(w) {
+  const wc = w.webContents, wcId = wc.id;
+  w.on('maximize', () => sendTo(wc, 'win:state', { maximized: true }));
+  w.on('unmaximize', () => sendTo(wc, 'win:state', { maximized: false }));
+  wc.setWindowOpenHandler(({ url }) => { if (/^https?:/.test(url)) shell.openExternal(url); return { action: 'deny' }; });
+  wc.on('will-navigate', e => e.preventDefault());
   // if the UI reloads it loses its terminals, so don't leave orphan processes behind. Only for the page
   // itself: 'did-start-loading' also fires for every iframe (plugin panels), which killed all terminals.
-  win.webContents.on('did-start-navigation', (e, url, inPlace, isMain) => {
+  wc.on('did-start-navigation', (e, url, inPlace, isMain) => {
     const mainFrame = typeof e.isMainFrame === 'boolean' ? e.isMainFrame : isMain;
     const sameDoc = typeof e.isSameDocument === 'boolean' ? e.isSameDocument : inPlace;
-    if (mainFrame && !sameDoc) killAll();
+    if (mainFrame && !sameDoc) killOwned(wc, wcId, false);
   });
+}
+
+/* ---------------- detached mode windows ----------------
+   A mode moves to its own window (e.g. DB on a second monitor) and comes back when that window
+   closes. Terminals live with AI mode: detaching AI moves the main window's terminals along
+   (the processes keep running; the new window replays their recent output), and a detached
+   window that closes hands its terminals to whichever window shows AI mode. */
+const MODE_RE = /^[a-z][\w.:-]{0,139}$/i;
+const MODE_TITLES = { claude: 'AI', ide: 'IDE', db: 'DB', ssh: 'SSH' };
+const modeTitle = m => `VoxStorm · ${MODE_TITLES[m] || (String(m).startsWith('plugin:') ? 'Eklenti' : m)}`;
+function focusWin(w) {
+  if (!alive(w)) return;
+  if (w.isMinimized()) w.restore();
+  w.show(); w.focus();
+}
+function broadcastDetached() { send('win:detached', [...modeWins.keys()]); }
+function winPrefs(mode, patch) {
+  const all = config.windows || (config.windows = {});
+  all[mode] = Object.assign({}, all[mode], patch);
+  saveConfig();
+}
+function rememberBounds(mode, w) {
+  if (!alive(w)) return;
+  winPrefs(mode, { bounds: w.isMaximized() || w.isMinimized() ? w.getNormalBounds() : w.getBounds(), maximized: w.isMaximized() });
+}
+// saved bounds only if they still land on a connected screen
+function visibleBounds(b) {
+  if (!b || ![b.x, b.y, b.width, b.height].every(Number.isFinite)) return null;
+  const { screen } = require('electron');
+  const a = screen.getDisplayMatching(b).workArea;
+  const w = Math.min(b.x + b.width, a.x + a.width) - Math.max(b.x, a.x);
+  const h = Math.min(b.y + b.height, a.y + a.height) - Math.max(b.y, a.y);
+  return w >= 120 && h >= 80 ? { x: b.x, y: b.y, width: Math.max(720, b.width), height: Math.max(480, b.height) } : null;
+}
+function openModeWindow(mode, focus) {
+  const saved = (config.windows || {})[mode] || {};
+  const w = new BrowserWindow({
+    ...(visibleBounds(saved.bounds) || { width: 1280, height: 820 }), minWidth: 720, minHeight: 480,
+    frame: false, backgroundColor: '#0b0a12', show: false, title: modeTitle(mode),
+    icon: appIcon(64, 1),
+    webPreferences: { preload: path.join(__dirname, 'preload.js'), contextIsolation: true, nodeIntegration: false, sandbox: true },
+  });
+  const wc = w.webContents, wcId = wc.id;
+  w._vsMode = mode; w._vsTitle = modeTitle(mode);
+  modeWins.set(mode, w);
+  winPrefs(mode, { open: true });
+  w.loadFile(path.join(__dirname, '..', 'renderer', 'index.html'), { query: { only: mode } });
+  w.once('ready-to-show', () => {
+    if (saved.maximized) w.maximize();
+    if (focus) w.show(); else w.showInactive();
+  });
+  pageEvents(w);
+  // a page with unsaved files asked to stay; once the user agreed to close, let it go
+  wc.on('will-prevent-unload', e => { if (w._vsReleased && !isQuitting) e.preventDefault(); });
+  w.on('close', e => {
+    rememberBounds(mode, w);
+    if (isQuitting || w._vsReleased) return;
+    e.preventDefault();
+    if (!w._vsClosing) releaseModeWindow(mode, w);
+  });
+  w.on('closed', () => {
+    if (modeWins.get(mode) === w) modeWins.delete(mode);
+    killOwned(wc, wcId, true);
+    if (isQuitting) return; // keep lastTabs and the "open" flag: the window comes back next time
+    trayByWc.delete(wcId); sumTray();
+    tabsByWc.delete(wcId);
+    broadcastDetached();
+  });
+  broadcastDetached();
+  return w;
+}
+// closing a detached window: ask about unsaved files, hand its terminals over, show the mode in the main window
+async function releaseModeWindow(mode, w) {
+  w._vsClosing = true;
+  let ok = true;
+  try { ok = await w.webContents.executeJavaScript('window.vsCanClose ? window.vsCanClose() : true', true); } catch (_) {}
+  if (!ok) { w._vsClosing = false; return; }
+  if (modeWins.get(mode) === w) modeWins.delete(mode);
+  winPrefs(mode, { open: false });
+  broadcastDetached();
+  await moveTabs(w.webContents, ownerWin('claude'));
+  w._vsReleased = true;
+  if (alive(w)) w.close();
+  if (alive(win)) { showWindow(); sendMain('win:set-mode', mode); }
+}
+async function detachMode(mode) {
+  if (!MODE_RE.test(String(mode || ''))) return false;
+  if (alive(modeWins.get(mode))) { focusWin(modeWins.get(mode)); return true; }
+  const w = openModeWindow(mode, true);
+  if (mode === 'claude' && alive(win)) await moveTabs(win.webContents, w);
+  return true;
+}
+function attachMode(mode) {
+  const w = modeWins.get(mode);
+  if (alive(w)) w.close(); // the 'close' handler brings the mode back
+  else if (alive(win)) { showWindow(); sendMain('win:set-mode', mode); }
+}
+function reopenModeWindows() {
+  for (const [mode, st] of Object.entries(config.windows || {})) {
+    if (st && st.open && MODE_RE.test(mode) && !modeWins.has(mode)) openModeWindow(mode, false);
+  }
+}
+/* move the terminals of one window to another: the source lets go of them (its xterms close,
+   the processes keep running), the target takes them with their recent output */
+async function moveTabs(fromWc, toWin) {
+  let list = [];
+  try { list = await fromWc.executeJavaScript('window.vsReleaseTabs ? window.vsReleaseTabs() : []', true); } catch (_) {}
+  if (!Array.isArray(list)) return;
+  list = list.filter(t => t && typeof t === 'object' && (t.kind === 'watch' ? SID_RE.test(String(t.sessionId || '')) : ptys.has(t.id)));
+  if (!list.length) return;
+  if (!alive(toWin)) { list.forEach(t => t.id && killPty(t.id)); return; }
+  for (const t of list) if (t.id) ptyOwner.set(t.id, null);
+  const key = toWin.webContents.id;
+  handoff.set(key, [...(handoff.get(key) || []), ...list]);
+  sendTo(toWin.webContents, 'win:tabs'); // a window that is still loading takes them when it starts
+}
+function sumTray() {
+  let running = 0, pending = 0;
+  for (const s of trayByWc.values()) { running += +s.running || 0; pending += +s.pending || 0; }
+  trayStats = { running, pending };
+  rebuildTrayMenu();
 }
 function appMenu() {
   // keeps copy/paste shortcuts working, removes reload shortcuts that would wipe terminals
@@ -1115,8 +1282,11 @@ function appMenu() {
 /* ---------------- IPC ---------------- */
 function registerIpc() {
   ipcMain.handle('config:get', () => ({ config, info: { claude: findClaude(), hookPort, hookSettings: HOOK_SETTINGS, appendPrompt: APPEND_PROMPT, home: os.homedir() } }));
-  ipcMain.handle('config:set', (_e, patch) => {
+  ipcMain.handle('config:set', (e, patch) => {
+    // every window reports its own open terminals; lastTabs is all of them together
+    if (patch && Array.isArray(patch.lastTabs)) { tabsByWc.set(e.sender.id, patch.lastTabs); patch = { ...patch, lastTabs: [].concat(...tabsByWc.values()) }; }
     config = merge(config, patch);
+    for (const w of allWins()) if (w.webContents !== e.sender) w.webContents.send('config-changed', config);
     if (patch.settings && 'autostart' in patch.settings) {
       try { app.setLoginItemSettings({ openAtLogin: !!config.settings.autostart, args: ['--hidden'] }); } catch (_) {}
     }
@@ -1127,8 +1297,8 @@ function registerIpc() {
   ipcMain.handle('config:setIdeState', (_e, state) => { config.ide.state = state; saveConfig(); });
   ipcMain.handle('prompt:preview', () => buildAppendPrompt());
 
-  ipcMain.handle('project:add', async () => {
-    const r = await dialog.showOpenDialog(win, { title: 'Proje klasörü seç', properties: ['openDirectory'] });
+  ipcMain.handle('project:add', async e => {
+    const r = await dialog.showOpenDialog(BrowserWindow.fromWebContents(e.sender) || win, { title: 'Proje klasörü seç', properties: ['openDirectory'] });
     if (r.canceled || !r.filePaths[0]) return null;
     return addProject(r.filePaths[0]);
   });
@@ -1200,28 +1370,36 @@ function registerIpc() {
   ipcMain.handle('live:tail', (_e, sid, offset, agent) => tailTranscript(sid, offset, agent && typeof agent === 'object' ? { agentId: String(agent.agentId || ''), toolUseId: String(agent.toolUseId || '') } : null));
   ipcMain.handle('live:takeover', (_e, sid) => takeOver(sid));
   ipcMain.handle('workflow:state', (_e, sid, runId) => workflowState(sid, runId));
-  ipcMain.handle('mirror:start', (_e, sid) => startMirror(sid));
+  ipcMain.handle('mirror:start', (e, sid) => startMirror(sid, e.sender));
   ipcMain.on('mirror:input', (_e, id, data) => mirrorInput(id, data));
   ipcMain.on('mirror:stop', (_e, id) => stopMirror(id));
   ipcMain.on('mirror:scroll', (_e, id, n) => { const c = mirrors.get(id); if (c && Number.isFinite(n)) c.stdin.write('S ' + Math.max(0, Math.floor(n)) + '\n'); });
 
-  ipcMain.handle('pty:spawn', (_e, opts) => spawnTerminal(opts));
+  ipcMain.handle('pty:spawn', (e, opts) => spawnTerminal(opts, e.sender));
   ipcMain.on('pty:write', (_e, id, data) => { const p = ptys.get(id); if (p) p.write(data); });
   ipcMain.on('pty:resize', (_e, id, cols, rows) => { const p = ptys.get(id); if (p) { try { p.resize(Math.max(20, cols), Math.max(5, rows)); } catch (_) {} } });
-  ipcMain.on('pty:kill', (_e, id) => { const p = ptys.get(id); if (p) { try { p.kill(); } catch (_) {} ptys.delete(id); } });
+  ipcMain.on('pty:kill', (_e, id) => killPty(id));
 
-  ipcMain.on('notify', (_e, n) => {
+  ipcMain.on('notify', (e, n) => {
     if (!Notification.isSupported()) return;
     const note = new Notification({ title: n.title, body: n.body || '', silent: !config.settings.sound || config.settings.soundStyle !== 'windows', icon: appIcon(64, 1) });
     liveNotifications.add(note);
-    note.on('click', () => { showWindow(); if (n.tabId) send('focus-tab', n.tabId); });
+    const from = BrowserWindow.fromWebContents(e.sender) || win, wc = e.sender; // the window whose terminal it is
+    note.on('click', () => {
+      if (from === win || !alive(from)) showWindow(); else focusWin(from);
+      if (n.tabId) sendTo(alive(from) ? wc : win.webContents, 'focus-tab', n.tabId);
+    });
     // blink the taskbar button until the window is looked at
-    if (win && !win.isDestroyed() && !win.isFocused()) { win.flashFrame(true); win.once('focus', () => win.flashFrame(false)); }
+    if (alive(from) && !from.isFocused()) { from.flashFrame(true); from.once('focus', () => from.flashFrame(false)); }
     note.on('close', () => liveNotifications.delete(note));
     setTimeout(() => liveNotifications.delete(note), 60000);
     note.show();
   });
-  ipcMain.on('tray:update', (_e, stats) => { trayStats = stats; rebuildTrayMenu(); if (win) win.setTitle(stats.pending ? `(${stats.pending}) VoxStorm` : 'VoxStorm'); });
+  ipcMain.on('tray:update', (e, stats) => {
+    trayByWc.set(e.sender.id, stats || {}); sumTray();
+    const w = BrowserWindow.fromWebContents(e.sender), base = (w && w._vsTitle) || 'VoxStorm';
+    if (alive(w)) w.setTitle(stats && stats.pending ? `(${stats.pending}) ${base}` : base);
+  });
 
   ipcMain.handle('welcome:data', () => welcomeData());
   ipcMain.handle('welcome:addFolder', async () => {
@@ -1233,20 +1411,60 @@ function registerIpc() {
   });
   // action: 'select' | 'claude' | 'ide' | 'main' | 'settings'
   ipcMain.on('welcome:open', (_e, req) => {
-    if (req && req.action === 'settings') { showWindow(); send('open-settings'); closeWelcome(); return; }
+    if (req && req.action === 'settings') { showWindow(); sendMain('open-settings'); closeWelcome(); return; }
     pendingOpen = req && (req.projectId || req.action === 'restoreAll') ? req : null;
     showWindow();
-    if (pendingOpen) send('open-project', pendingOpen);
+    // AI or IDE may be in a window of its own: that one acts on it
+    const to = ownerWin(pendingOpen && pendingOpen.action === 'ide' ? 'ide' : 'claude');
+    if (to !== win) focusWin(to);
+    if (pendingOpen && alive(to)) sendTo(to.webContents, 'open-project', pendingOpen);
     closeWelcome();
   });
-  ipcMain.handle('app:takePendingOpen', () => { const p = pendingOpen; pendingOpen = null; return p; });
+  ipcMain.handle('app:takePendingOpen', e => {
+    const to = ownerWin(pendingOpen && pendingOpen.action === 'ide' ? 'ide' : 'claude');
+    if (!pendingOpen || !alive(to) || to.webContents !== e.sender) return null;
+    const p = pendingOpen; pendingOpen = null; return p;
+  });
   ipcMain.on('welcome:close', () => closeWelcome());
   ipcMain.on('app:welcome', () => showWelcome());
   ipcMain.on('welcome:min', () => welcome && welcome.minimize());
 
-  ipcMain.on('win:min', () => win.minimize());
-  ipcMain.on('win:max', () => (win.isMaximized() ? win.unmaximize() : win.maximize()));
-  ipcMain.on('win:close', () => win.close());
+  const senderWin = e => { const w = BrowserWindow.fromWebContents(e.sender); return alive(w) ? w : null; };
+  ipcMain.on('win:min', e => { const w = senderWin(e); if (w) w.minimize(); });
+  ipcMain.on('win:max', e => { const w = senderWin(e); if (w) (w.isMaximized() ? w.unmaximize() : w.maximize()); });
+  ipcMain.on('win:close', e => { const w = senderWin(e); if (w) w.close(); });
+  // detached mode windows
+  ipcMain.handle('win:detached', () => [...modeWins.keys()]);
+  ipcMain.handle('win:detach', (_e, mode) => detachMode(mode));
+  ipcMain.handle('win:attach', (e, mode) => { const w = senderWin(e); attachMode(mode || (w && w._vsMode)); return true; });
+  ipcMain.handle('win:takeTabs', e => {
+    const list = handoff.get(e.sender.id) || [];
+    handoff.delete(e.sender.id);
+    return list.map(t => {
+      if (t.kind === 'watch') return t;
+      const out = { ...t, buffer: ptyBuf.get(t.id) || '' };
+      if (ptys.has(t.id)) ptyOwner.set(t.id, e.sender);
+      else { out.exited = true; out.code = ptyGone.get(t.id) || 0; dropPty(t.id); }
+      return out;
+    });
+  });
+  // Ctrl+1/2/3 or a click on a mode that lives in another window: go there
+  ipcMain.on('win:focusMode', (_e, mode) => {
+    const w = modeWins.get(mode);
+    if (alive(w)) focusWin(w);
+    else if (alive(win) && MODE_RE.test(String(mode || ''))) { showWindow(); sendMain('win:set-mode', mode); }
+  });
+  ipcMain.on('win:modeMenu', (e, mode, canDetach) => {
+    if (!MODE_RE.test(String(mode || ''))) return;
+    const w = senderWin(e);
+    const out = alive(modeWins.get(mode));
+    Menu.buildFromTemplate(out ? [
+      { label: 'Ayrı pencereye geç', enabled: modeWins.get(mode) !== w, click: () => focusWin(modeWins.get(mode)) },
+      { label: 'Ana pencereye geri al', click: () => attachMode(mode) },
+    ] : [
+      { label: 'Ayrı pencerede aç', enabled: !!canDetach, click: () => detachMode(mode) },
+    ]).popup(w ? { window: w } : {});
+  });
   ipcMain.on('app:quit', () => quitFlow());
 
   // IDE file access — limited to registered project folders
@@ -1279,9 +1497,9 @@ function registerIpc() {
     return true;
   });
   // quick open, project search, rename / new folder / Recycle Bin, git colours, folder watcher
-  require('./ide')({ ipcMain, shell, insideProject, send, isProjectRoot: p => config.projects.some(pr => norm(pr.path) === norm(p)) });
+  require('./ide')({ ipcMain, shell, insideProject, send: (ch, ...a) => sendTo(ownerWin('ide') && ownerWin('ide').webContents, ch, ...a), isProjectRoot: p => config.projects.some(pr => norm(pr.path) === norm(p)) });
   // DB mode: connections, explorer, queries (closes its connections on quit)
-  require('./db')({ ipcMain, app, dialog, getWin: () => win, DATA, getProjects: () => config.projects });
+  require('./db')({ ipcMain, app, dialog, getWin: () => ownerWin('db'), DATA, getProjects: () => config.projects });
   pluginsModule({
     app, ipcMain, protocol, shell, dialog, getWin: () => win, DATA, insideProject, getProjects: () => config.projects,
     // the plugins folder as a project, under a readable name the first time it is added
@@ -1306,7 +1524,7 @@ function addProject(p, auto) {
 
 /* ---------------- start ---------------- */
 app.on('second-instance', () => showWindow());
-app.on('before-quit', () => { isQuitting = true; killAll(); saveConfigNow(); if (U) U.onQuit(); });
+app.on('before-quit', () => { isQuitting = true; for (const [m, w] of modeWins) rememberBounds(m, w); killAll(); saveConfigNow(); if (U) U.onQuit(); });
 app.on('window-all-closed', e => e.preventDefault());
 
 /* ---------------- Start Menu shortcuts (notification name, icon, click target) ---------------- */

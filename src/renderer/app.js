@@ -168,7 +168,8 @@ async function refreshUsage() {
 /* ---------------- terminals ---------------- */
 function tabIcon(t) { if (t.kind === 'agent') return `<span class="dot ${t.status}"></span><i class="fa-solid fa-robot watch-ic" title="Alt ajanın konuşması (salt okunur)"></i>`; if (t.kind === 'watch') return `<span class="dot ${t.status}"></span><i class="fa-solid fa-eye watch-ic" title="VoxStorm dışında açık, izleniyor"></i>`; return t.kind === 'shell' ? (SHELL_ICONS[t.shell] || '<i class="shi fa-solid fa-terminal"></i>') : `<span class="dot ${t.status}"></span>`; }
 
-async function openTerminal({ kind = 'claude', shell, projectId, resume, title, overrides }) {
+// adopt: a running terminal handed over by another window ({ id, sessionId, buffer, … }, see detached windows)
+async function openTerminal({ kind = 'claude', shell, projectId, resume, title, overrides, adopt }) {
   // already running in an outside terminal: follow it instead of starting a second copy
   if (resume && isExtLive(resume)) return openWatch(resume);
   const p = proj(projectId); if (!p) return null;
@@ -196,7 +197,8 @@ async function openTerminal({ kind = 'claude', shell, projectId, resume, title, 
   S.active = tab.id;
   S.collapsed[projectId] = false; // show the project that just got a terminal
   renderAll();
-  try {
+  if (adopt) adoptTerminal(tab, adopt);
+  else try {
     const res = await api.invoke('pty:spawn', { kind, shell, cwd: p.path, resume, overrides, rcName: `${p.name} · VoxStorm`, cols: term.cols, rows: term.rows });
     tab.id = res.id; tab.sessionId = res.sessionId;
     S.active = tab.id;
@@ -441,6 +443,7 @@ const pendingCount = () => S.pending.length + extWaiting().length;
 
 const liveWorked = new Set(); // outside sessions seen working since their last 'done'
 function setLive(list) {
+  if (!ownsAI()) list = []; // outside sessions are followed (and notified) only where AI mode is
   const prev = new Map(S.live.map(s => [s.sessionId, s.status]));
   S.live = (list || []).filter(s => !S.tabs.some(t => t.kind !== 'watch' && t.sessionId === s.sessionId));
   for (const s of S.live) {
@@ -1895,7 +1898,13 @@ function bindIde() {
 
 /* ---------------- mode ---------------- */
 function setMode(m, initial) {
+  // a mode in another window: go to that window (at start-up, show a mode that is here instead)
+  if (ONLY ? m !== ONLY : DETACHED.has(m)) {
+    if (!initial) { api.send('win:focusMode', m); return; }
+    m = ONLY || firstAttached();
+  }
   if (String(m).startsWith('plugin:') && !(window.pluginHost && pluginHost.hasMode(m))) m = 'claude';
+  if (!ONLY && DETACHED.has(m)) m = firstAttached();
   S.mode = m;
   $$('[data-mode]').forEach(b => b.classList.toggle('on', b.dataset.mode === m));
   $('#claudeView').hidden = m !== 'claude';
@@ -1917,11 +1926,142 @@ function setMode(m, initial) {
   } else if (!tabById(S.active) && S.tabs.length) S.active = S.tabs[S.tabs.length - 1].id;
   const t = tabById(S.active);
   $$('.term-pane').forEach(x => x.classList.toggle('on', !!t && x === t.el));
-  if (!initial) setCfg({ settings: { mode: m } });
+  if (!initial && !ONLY) setCfg({ settings: { mode: m } });
   renderAll();
   requestAnimationFrame(() => { fitActive(); if (m === 'ide') IDE.cm.refresh(); });
   // DB mode lives in db.js; it exposes window.dbMode = { show, hide }
   if (window.dbMode) { if (m === 'db') window.dbMode.show(); else window.dbMode.hide(); }
+}
+
+/* ---------------- detached mode windows ----------------
+   Any mode of the pill (AI, IDE, DB, a plugin's mode) can move to a window of its own, e.g. DB on a
+   second monitor. That window loads this page as index.html?only=<mode> and shows just that mode;
+   in the main window its pill button stays, marked, and takes you to the other window. Closing the
+   window brings the mode back. Terminals live where AI mode is: they move with it (see main.js). */
+const ONLY = new URLSearchParams(location.search).get('only') || '';
+let DETACHED = new Set(); // modes in a window of their own (main window only)
+const ownsAI = () => (ONLY ? ONLY === 'claude' : !DETACHED.has('claude'));
+const pillModes = () => $$('.mode-pill [data-mode]').map(b => b.dataset.mode);
+const firstAttached = () => pillModes().find(m => !DETACHED.has(m)) || 'claude';
+// the main window keeps at least one mode
+const canDetach = m => !ONLY && !DETACHED.has(m) && pillModes().filter(x => !DETACHED.has(x)).length > 1;
+async function detachMode(m) {
+  if (!canDetach(m)) { if (!ONLY) toast('Ayrı pencereye alınamaz', 'Ana pencerede en az bir mod kalmalı.'); return; }
+  if (m === 'ide' && Object.keys(IDE.files).some(isDirty)) {
+    uiAlert({ title: 'Kaydedilmemiş dosyalar var', message: 'IDE’yi ayrı pencereye almadan önce açık dosyaları kaydet.' });
+    return;
+  }
+  await api.invoke('win:detach', m);
+}
+function toggleDetach() { if (ONLY) api.invoke('win:attach', ONLY); else detachMode(S.mode); }
+function renderDetached() {
+  let st = document.getElementById('detachStyle');
+  if (!st) { st = document.createElement('style'); st.id = 'detachStyle'; document.head.appendChild(st); }
+  const sel = m => `.mode-pill [data-mode="${CSS.escape(m)}"]`;
+  st.textContent = ONLY ? `.mode-pill [data-mode]:not(${sel(ONLY)}){display:none}`
+    : [...DETACHED].map(m => `${sel(m)}{opacity:.6}${sel(m)}::after{content:"\\2197";font-size:10px;margin-left:-2px}`).join('');
+  $$('.mode-pill [data-mode]').forEach(b => {
+    if (b.dataset.t0 == null) b.dataset.t0 = b.title;
+    b.title = b.dataset.t0 + (ONLY ? ' · sağ tık: ana pencereye geri al'
+      : DETACHED.has(b.dataset.mode) ? ' · ayrı pencerede (tıkla: o pencereye geç · sağ tık: geri al)' : ' · sağ tık: ayrı pencerede aç');
+  });
+}
+function onDetached(list) {
+  if (ONLY) return;
+  const had = ownsAI();
+  DETACHED = new Set(list || []);
+  renderDetached();
+  if (DETACHED.has(S.mode)) setMode(firstAttached());
+  if (had !== ownsAI()) {
+    if (had) setLive([]);
+    else api.invoke('live:list').then(setLive).catch(() => {});
+  }
+}
+// main.js asks for this when the window closes or AI mode moves away: let go of every terminal
+// (the processes keep running) and say what they were, so another window can take them
+window.vsReleaseTabs = () => {
+  const out = [];
+  for (const t of S.tabs) {
+    if (t.kind === 'watch') { clearInterval(t.timer); if (t.mirror) api.send('mirror:stop', t.mirror); out.push({ kind: 'watch', sessionId: t.sessionId }); }
+    else if (t.kind === 'agent') clearInterval(t.timer);
+    else if (!t.exited && !String(t.id).startsWith('pending-')) {
+      out.push({ id: t.id, kind: t.kind, shell: t.shell || null, projectId: t.projectId, sessionId: t.sessionId, title: t.title, renamed: !!t.renamed, prompted: !!t.prompted, status: t.status, active: t.id === S.active });
+    }
+    if (t.term) t.term.dispose();
+    t.el.remove();
+  }
+  S.tabs = []; S.active = null; S.pending = []; S.agents = [];
+  saveOpenTabs();
+  renderAll();
+  return out;
+};
+// a detached window is closing: unsaved files in its IDE?
+window.vsCanClose = async () => {
+  if (!Object.keys(IDE.files).some(isDirty)) return true;
+  return uiConfirm({ title: 'Kaydedilmemiş dosyalar var', message: 'Pencere kapanırsa kaydedilmemiş değişiklikler kaybolur.', ok: 'Kaydetmeden kapat', danger: true });
+};
+function adoptTerminal(tab, a) {
+  tab.id = a.id; tab.sessionId = a.sessionId || null;
+  tab.prompted = !!a.prompted; tab.renamed = !!a.renamed;
+  if (STATUS_TEXT[a.status]) tab.status = a.status;
+  if (a.buffer) tab.term.write(a.buffer);
+  (early.get(a.id) || []).forEach(d => tab.term.write(d));
+  early.delete(a.id);
+  if (a.exited) {
+    tab.exited = true; tab.status = 'exited';
+    tab.term.write(`\r\n\x1b[90m[İşlem sona erdi${a.code ? ' · çıkış kodu ' + a.code : ''}. Sekmeyi kapatabilirsin.]\x1b[0m\r\n`);
+    return;
+  }
+  // the program redraws when its size changes; the replayed output alone may be cut off at the top
+  setTimeout(() => {
+    if (tab.exited) return;
+    const { cols, rows } = tab.term;
+    api.send('pty:resize', tab.id, Math.max(20, cols - 1), rows);
+    setTimeout(() => { if (!tab.exited) api.send('pty:resize', tab.id, tab.term.cols, tab.term.rows); }, 120);
+  }, 200);
+}
+async function adoptTabs() {
+  let list = [];
+  try { list = await api.invoke('win:takeTabs'); } catch (_) {}
+  if (!Array.isArray(list) || !list.length) return;
+  if (ownsAI()) { try { setLive(await api.invoke('live:list')); } catch (_) {} }
+  let act = null, n = 0;
+  for (const it of list) {
+    if (it.kind === 'watch') { if (isExtLive(it.sessionId)) { openWatch(it.sessionId); n++; } continue; }
+    if (!proj(it.projectId)) { api.send('pty:kill', it.id); continue; }
+    const t = await openTerminal({ kind: it.kind, shell: it.shell || undefined, projectId: it.projectId, title: it.title, adopt: it });
+    if (t) { n++; if (it.active) act = t.id; }
+  }
+  if (act) activate(act);
+  saveOpenTabs();
+  if (n) toast('Terminaller bu pencereye taşındı', n + ' terminal');
+}
+async function winInit() {
+  if (ONLY) {
+    document.documentElement.dataset.only = ONLY;
+    if (ONLY.startsWith('plugin:')) CFG.settings.mode = ONLY; // plugins.js opens it once the plugin has loaded
+    const b = document.createElement('button');
+    b.className = 'tb-btn'; b.id = 'attachBtn';
+    b.title = 'Ana pencereye geri al (Ctrl+Shift+M)'; b.setAttribute('aria-label', 'Ana pencereye geri al');
+    b.innerHTML = '<i class="fa-solid fa-right-to-bracket"></i>';
+    b.onclick = () => api.invoke('win:attach', ONLY);
+    $('.tb-right').prepend(b);
+    $('#closeBtn').title = 'Kapat (mod ana pencereye geri döner)';
+  } else {
+    try { DETACHED = new Set(await api.invoke('win:detached')); } catch (_) {}
+    if (!ownsAI()) setLive([]);
+  }
+  renderDetached();
+  // plugin mode buttons are added later and re-made on every change
+  new MutationObserver(() => renderDetached()).observe($('.mode-pill'), { childList: true });
+  api.on('win:detached', onDetached);
+  api.on('win:set-mode', m => { if (!ONLY) setMode(m); });
+  api.on('win:tabs', adoptTabs);
+  $('.mode-pill').addEventListener('contextmenu', e => {
+    const b = e.target.closest('[data-mode]'); if (!b) return;
+    e.preventDefault();
+    api.send('win:modeMenu', b.dataset.mode, canDetach(b.dataset.mode));
+  });
 }
 
 /* ---------------- menus ---------------- */
@@ -2359,7 +2499,7 @@ function bindEvents() {
   // the welcome window picked a project; take it (only once) and act on it
   api.on('open-project', async () => handleOpen(await api.invoke('app:takePendingOpen')));
   api.on('projects-changed', async list => { S.projects = list; CFG.projects = list; await refreshAllHistory(); renderAll(); });
-  api.on('config-changed', c => { CFG = c; renderSettings(); });
+  api.on('config-changed', c => { const skin = CFG && CFG.settings.skin; CFG = c; if (c.settings.skin !== skin) applySkin(c.settings.skin); renderSettings(); });
   $('#updBtn').onclick = () => openSettings('hakkinda');
   api.invoke('update:state').then(st => { UPD = st; renderUpdBtn(); }).catch(() => {});
   api.on('address-learned', n => toast('Hitap güncellendi', n ? `Bundan sonra “${n}” diye hitap edilecek.` : 'Bundan sonra hitap kullanılmayacak.'));
@@ -2528,6 +2668,7 @@ const SHORTCUTS = [
   { group: 'Genel', keys: 'Ctrl+1', label: 'AI modu (Claude oturumları)', run: () => setMode('claude') },
   { group: 'Genel', keys: 'Ctrl+2', label: 'IDE modu', run: () => setMode('ide') },
   { group: 'Genel', keys: 'Ctrl+3', label: 'Veritabanı (DB) modu', run: () => setMode('db') },
+  { group: 'Genel', keys: 'Ctrl+Shift+M', label: 'Modu ayrı pencerede aç / ana pencereye geri al (mod düğmesinde sağ tık da olur)', run: () => toggleDetach() },
   { group: 'Genel', keys: 'Ctrl+Shift+P', label: 'Proje Başlat paneli', run: () => showPanel('side').then(() => openStartPanel()) },
   { group: 'Genel', keys: 'Ctrl+Shift+O', label: 'Karşılama ekranı', run: () => api.send('app:welcome') },
   { group: 'Genel', keys: 'Ctrl+,', label: 'Ayarlar', run: () => openSettings() },
@@ -3089,6 +3230,7 @@ async function init() {
   await refreshAllHistory();
   api.on('live-sessions', setLive);
   try { setLive(await api.invoke('live:list')); } catch (_) {}
+  await winInit();
   setMode(['ide', 'db'].includes(CFG.settings.mode) ? CFG.settings.mode : 'claude', true);
   refreshUsage();
   setInterval(refreshUsage, 120000);
@@ -3096,5 +3238,6 @@ async function init() {
   setInterval(() => refreshAllHistory().then(renderSide), 180000);
   if (window.pluginHost) pluginHost.init();
   handleOpen(await api.invoke('app:takePendingOpen'));
+  adoptTabs(); // terminals another window handed over while this one was starting
 }
 init();
