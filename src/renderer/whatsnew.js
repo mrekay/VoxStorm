@@ -16,6 +16,7 @@
         { icon: 'fa-solid fa-database', title: 'IDE içinde veritabanı', text: 'Gezginde “DB” sekmesi: bağlantılar, tablolar, sütunlar. Seçili SQL’i ya da .sql dosyasında imleçteki deyimi Ctrl+Shift+Enter ile çalıştır; sonuçlar düzenleyicinin altındaki panelde.', keys: 'Ctrl+Shift+Enter', try: () => { setMode('ide'); const b = document.querySelector('[data-exview=db]'); if (b) b.click(); } },
         { icon: 'fa-solid fa-up-right-from-square', title: 'Modlar ayrı pencerede', text: 'AI, IDE, DB ya da SSH’yi kendi penceresine al (örneğin ikinci monitöre). Mod düğmesine sağ tıkla ya da Ctrl+Shift+M; pencereyi kapatınca mod ana pencereye döner.', keys: 'Ctrl+Shift+M' },
         { icon: 'fa-solid fa-layer-group', title: 'Sekme grupları', text: 'Bir ya da birden çok projedeki Claude oturumlarını adlı, renkli gruplara al. Sekmeye sağ tıkla ya da Ctrl+tık ile seçip Ctrl+Shift+L. Kapalı grup, içinde karar bekleyen olursa yanıp söner.', keys: 'Ctrl+Shift+L', try: () => setMode('claude') },
+        { icon: 'fa-solid fa-clock-rotate-left', title: 'Kapatılanı geri aç', text: 'Yanlışlıkla kapattığın Claude oturumu konuşmasıyla geri gelir. Sekme çubuğunda + yanındaki düğme sonuncuyu açar, ▾ ile proje adı ve zamanıyla listeden seçersin. Zaten açık olan oturumlar listede görünmez.', keys: 'Ctrl+Alt+T', try: () => setMode('claude') },
         { icon: 'fa-solid fa-gift', title: 'Neler yeni', text: 'Bu ekran: yeni sürümün ilk açılışında bir kez çıkar, sağ alttaki düğmeden her zaman açılır.' },
       ],
       small: ['Mod düğmeleri hap yerine Git düğmesi gibi köşeli.'],
