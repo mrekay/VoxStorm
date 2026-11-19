@@ -131,7 +131,9 @@
   }
   function closeTab(id) {
     const t = tab(id); if (!t) return;
-    if (t.sid) inv('ssh:disconnect', t.sid);
+    if (t.kind === 'term') { if (t.ch) api.send('ssh:closeShell', t.ch); }
+    else if (t.sid) inv('ssh:disconnect', t.sid);
+    if (t.dock) t.dock.destroy();
     if (t.ro) t.ro.disconnect();
     try { t.term.dispose(); } catch (_) {}
     t.el.remove();
@@ -171,6 +173,7 @@
           <button data-view="term" title="Yalnızca terminal (Ctrl+Alt+T)"><i class="fa-solid fa-terminal"></i>Terminal</button>
           <button data-view="split" title="Dosyalar ve terminal birlikte"><i class="fa-solid fa-table-columns fa-rotate-90"></i>İkisi</button>
           <button data-view="files" title="Yalnızca dosyalar (Ctrl+Alt+F)"><i class="fa-regular fa-folder-open"></i>Dosyalar</button>
+          <button data-view="docker" title="Sunucudaki Docker konteynerleri"><i class="fa-brands fa-docker"></i>Docker</button>
         </div>
         <span class="ssh-grow"></span>
         <button class="ssh-tb" data-act="tunnels" title="Port yönlendirme (tüneller)"><i class="fa-solid fa-route"></i>Tüneller<b class="ssh-cnt" data-role="tcount" hidden></b></button>
@@ -192,6 +195,7 @@
         </div>
         <div class="ssh-split-h" data-drag="split" title="Sürükleyerek boyutlandır"></div>
         <div class="ssh-term"><div class="ssh-termhost" data-role="term"></div></div>
+        <div class="ssh-dock" data-role="docker"></div>
         <div class="ssh-over" data-role="over"></div>
       </div>`;
     document.getElementById('sshBody').appendChild(t.el);
@@ -253,15 +257,26 @@
     </section>`;
   }
   function setView(t, v, quiet) {
+    if (t.kind === 'term') return;
     t.view = v;
     const c = t.el.querySelector('.ssh-content');
     c.dataset.layout = v;
     c.style.setProperty('--ssh-split', Math.round(X.ui.split * 100) + '%');
     t.el.querySelectorAll('[data-view]').forEach(b => b.classList.toggle('on', b.dataset.view === v));
-    if (!quiet) requestAnimationFrame(() => { fitTerm(t); if (v === 'term') t.term.focus(); else paneEl(t, 'remote').querySelector('[data-role=list]').focus(); });
+    if (v === 'docker') mountDocker(t);
+    if (!quiet) requestAnimationFrame(() => { fitTerm(t); if (v === 'term') t.term.focus(); else if (v !== 'docker') paneEl(t, 'remote').querySelector('[data-role=list]').focus(); });
+  }
+  // the session's Docker view: containers on that server, run over the SSH connection
+  function mountDocker(t) {
+    if (!window.DockerUI || !t.sid) return;
+    if (t.dock) { t.dock.setTarget(t.sid); return; }
+    t.dock = DockerUI.mount(t.el.querySelector('[data-role=docker]'), {
+      target: t.sid,
+      onTerminal: c => openDockerTerm({ ...c, host: hostLabel(host(t.hostId)) }),
+    });
   }
   function fitTerm(t) {
-    if (!t || t.view === 'files' || !t.el.offsetParent) return;
+    if (!t || t.view === 'files' || t.view === 'docker' || !t.el.offsetParent) return;
     try { t.fit.fit(); } catch (_) {}
   }
   function renderBar(t) {
@@ -309,6 +324,7 @@
     if (!t.remote.path || opts.reconnect !== true) t.remote.path = h.startDir || t.home;
     loadPane(t, 'remote', t.remote.path, true);
     loadPane(t, 'local', t.local.path, true);
+    if (t.dock || t.view === 'docker') mountDocker(t);
   }
   async function openShell(t) {
     if (t.ch || t.opening || !t.sid) return;
@@ -324,7 +340,7 @@
   function disconnect(t) {
     if (t.sid) inv('ssh:disconnect', t.sid);
   }
-  const tabBySid = sid => X.tabs.find(t => t.sid === sid);
+  const tabBySid = sid => X.tabs.find(t => t.sid === sid && t.kind !== 'term');
   const tabByCh = ch => X.tabs.find(t => t.ch === ch);
 
   /* ---------------- file panes ---------------- */
@@ -936,6 +952,7 @@
         else if (k === 'dupSess' && t) openSession(t.hostId, t.view);
         else if (k === 'tunnels' && t) tunnelsDialog(t);
         else if (k === 'editThisHost' && t) editHost(t.hostId).then(id => { if (id) { t.title = sameTitle(host(id)).replace(/ \(\d+\)$/, ''); renderTabs(); } });
+        else if (k === 'termReopen' && t) termReopen(t);
         else if (k === 'upload' && t) upload(t);
         else if (k === 'download' && t) download(t);
         else if (k === 'toggleHidden') toggleHidden();
@@ -1158,6 +1175,7 @@
   api.on('ssh:exit', (ch) => {
     const t = tabByCh(ch); if (!t) return;
     t.ch = null;
+    if (t.kind === 'term') { const d = t.el.querySelector('[data-role=dot]'); if (d) d.className = 'ssh-dot off'; }
     if (t.status === 'ok') t.term.write('\r\n\x1b[2m— kabuk kapandı · yeni kabuk için Enter —\x1b[0m\r\n');
   });
   api.on('ssh:closed', (sid, reason) => {
@@ -1190,7 +1208,66 @@
     );
   } catch (_) {}
 
+  /* ---------------- terminal-only tabs (docker exec into a container) ---------------- */
+  function openDockerTerm(c) {
+    const title = c.name + (c.target === 'local' ? '' : ' @ ' + (c.host || 'sunucu'));
+    const t = {
+      id: uid(), kind: 'term', hostId: null, title, status: 'ok', view: 'term', ch: null, sid: c.target === 'local' ? null : c.target,
+      docker: c, local: {}, remote: {}, hist: { local: [], remote: [] }, tunnels: [],
+    };
+    t.el = document.createElement('div');
+    t.el.className = 'ssh-sess ssh-termtab';
+    t.el.dataset.sess = t.id;
+    t.el.innerHTML = `<div class="ssh-bar"><span class="ssh-dot busy" data-role="dot"></span><i class="fa-brands fa-docker ssh-dki"></i><span class="ssh-addr">${esc(c.target === 'local' ? 'bu bilgisayar' : c.host || '')} · docker exec · <b>${esc(c.name)}</b></span><span class="ssh-grow"></span>
+        <button class="ssh-tb" data-act="termReopen" title="Kabuğu yeniden aç"><i class="fa-solid fa-rotate-right"></i>Yeniden aç</button></div>
+      <div class="ssh-content" data-layout="term"><div class="ssh-term"><div class="ssh-termhost" data-role="term"></div></div></div>`;
+    document.getElementById('sshBody').appendChild(t.el);
+    const term = new Terminal({ fontFamily: '"Cascadia Mono", "Cascadia Code", Consolas, monospace', fontSize: 13, lineHeight: 1.15, cursorBlink: true, scrollback: 10000, allowProposedApi: true, theme: termTheme() });
+    const fit = new FitAddon.FitAddon();
+    term.loadAddon(fit); t.term = term; t.fit = fit;
+    term.open(t.el.querySelector('[data-role=term]'));
+    term.onData(d => { if (t.ch) api.send('ssh:write', t.ch, d); else if (d === '\r') termReopen(t); });
+    term.onResize(({ cols, rows }) => { if (t.ch) api.send('ssh:resize', t.ch, cols, rows); });
+    term.attachCustomKeyEventHandler(e => {
+      if (e.type !== 'keydown') return true;
+      const k = e.key.toLowerCase();
+      if (e.ctrlKey && k === 'c' && (e.shiftKey || term.hasSelection())) { if (term.hasSelection()) { navigator.clipboard.writeText(term.getSelection()).catch(() => {}); term.clearSelection(); } return false; }
+      if (e.ctrlKey && k === 'v') return false;
+      return true;
+    });
+    t.el.querySelector('.ssh-term').addEventListener('contextmenu', async e => {
+      e.preventDefault();
+      if (term.hasSelection()) { navigator.clipboard.writeText(term.getSelection()).catch(() => {}); term.clearSelection(); }
+      else { try { const s = await navigator.clipboard.readText(); if (s && t.ch) term.paste(s); } catch (_) {} }
+    });
+    t.ro = new ResizeObserver(() => fitTerm(t));
+    t.ro.observe(t.el.querySelector('.ssh-term'));
+    X.tabs.push(t);
+    activate(t.id);
+    termReopen(t);
+    return t;
+  }
+  async function termReopen(t) {
+    if (t.ch || t.opening) return;
+    t.opening = true;
+    fitTerm(t);
+    t.el.querySelector('[data-role=dot]').className = 'ssh-dot busy';
+    const r = await inv('docker:term', t.docker.target, t.docker.id, t.term.cols, t.term.rows);
+    t.opening = false;
+    if (r.error) { t.term.write(`\r\n\x1b[31m${r.error}\x1b[0m\r\n`); t.el.querySelector('[data-role=dot]').className = 'ssh-dot off'; return; }
+    t.ch = r.ch;
+    t.el.querySelector('[data-role=dot]').className = 'ssh-dot ok';
+    t.term.focus();
+  }
+
   window.sshMode = {
+    openDockerTerm(c) {
+      // the SSH view may live in a window of its own; the tab has to open where it is seen
+      const elsewhere = (typeof ONLY !== 'undefined' && ONLY && ONLY !== 'ssh') || (typeof ONLY !== 'undefined' && !ONLY && typeof DETACHED !== 'undefined' && DETACHED.has('ssh'));
+      if (elsewhere) { toast('SSH modu ayrı pencerede', 'Konteyner terminali için o penceredeki Docker düğmesini kullan ya da SSH’yi bu pencereye geri al.'); return; }
+      if (S.mode !== 'ssh') setMode('ssh');
+      openDockerTerm(c);
+    },
     async show() {
       if (!X.built) {
         build();

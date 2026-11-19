@@ -1,0 +1,124 @@
+/* VoxStorm Docker UI (docker.js): title-bar panel and the SSH session's Docker view.
+   Scoped under .dk / dk- prefix; colours from theme tokens. */
+.dk-btn .fa-docker{font-size:14px;color:#1d91e6}
+.dk-btn.down .fa-docker{color:var(--muted)}
+.dk-btn .dk-n{background:color-mix(in srgb,#1d91e6 18%,transparent);color:#1d91e6}
+.dk-panel{width:600px;height:min(620px,calc(100% - 56px));max-height:none}
+.dkp-h{display:flex;align-items:center;gap:8px;padding:10px 14px 0;flex:none}
+.dkp-h .fa-docker{color:#1d91e6;font-size:16px}
+.dkp-h b{font-size:13px}
+.dkp-h small{color:var(--muted)}
+.dkp-body{flex:1;min-height:0;display:flex}
+
+.dk{position:relative;flex:1;min-width:0;min-height:0;display:flex;flex-direction:column;font-size:12.5px;color:var(--fg)}
+:where(.dk) :where(button:not(.btn)){font:inherit;color:inherit;background:none;border:0;cursor:pointer}
+.dk .dk-grow{flex:1}
+.dk .dk-muted{color:var(--muted)}
+.dk-h{display:flex;align-items:center;gap:4px;padding:8px 10px;flex:none}
+.dk-seg{display:flex;background:var(--surface-2);border:1px solid var(--line);border-radius:7px;padding:2px;gap:2px;flex:none}
+.dk-seg button{display:flex;align-items:center;gap:6px;padding:3px 10px;border-radius:5px;color:var(--muted);font-size:12px}
+.dk-seg button:hover{color:var(--fg)}
+.dk-seg button.on{background:var(--accent-soft);color:var(--fg)}
+.dk-search{flex:1;min-width:80px;display:flex;align-items:center;gap:6px;margin-left:6px;padding:0 8px;border:1px solid var(--line);border-radius:7px;background:var(--surface-2)}
+.dk-search.sm{flex:0 1 180px;margin:0 4px}
+.dk-search>i{color:var(--muted);font-size:11px}
+.dk-search input{flex:1;min-width:0;border:0;background:none;color:var(--fg);font:inherit;padding:4px 0;outline:none}
+.dk-search:focus-within{border-color:var(--accent)}
+.dk-ib{display:inline-grid;place-items:center;width:26px;height:26px;border-radius:6px;color:var(--muted);flex:none}
+.dk-ib:hover:not(:disabled){background:var(--hover);color:var(--fg)}
+.dk-ib:disabled{opacity:.35;cursor:default}
+.dk-ib.sm{width:24px;height:24px;font-size:11px}
+.dk-ib.on{color:var(--accent)}
+.dk-ib.spin i{animation:dkSpin 1s linear infinite}
+.dk-ib[hidden]{display:none}
+@keyframes dkSpin{to{transform:rotate(360deg)}}
+.dk-body{flex:1;min-height:0;overflow:auto;padding:0 6px 10px}
+.dk.has-detail .dk-body,.dk.has-detail .dk-h{display:none}
+
+.dk-grp{display:flex;align-items:center;gap:7px;padding:8px 6px 4px;cursor:pointer;user-select:none;border-radius:6px}
+.dk-grp:hover{background:var(--hover)}
+.dk-car{font-size:9px;width:10px;color:var(--muted)}
+.dk-gi{color:#1d91e6;font-size:12px}
+.dk-grp b{font-weight:600}
+.dk-gn{color:var(--muted);font-size:11px}
+.dk-grp .dk-acts{margin-left:auto}
+.dk-row{display:flex;align-items:center;gap:9px;padding:6px 6px;border-radius:7px;min-height:38px}
+.dk-row.in-grp{padding-left:22px}
+.dk-row:hover{background:var(--hover)}
+.dk-row.busy{opacity:.6}
+.dk-dot{width:9px;height:9px;border-radius:50%;flex:none;background:var(--muted)}
+.dk-dot.ok{background:var(--ok);box-shadow:0 0 0 3px var(--ok-soft)}
+.dk-dot.warn{background:var(--warn)}
+.dk-dot.bad{background:var(--danger)}
+.dk-dot.off{background:transparent;border:2px solid var(--muted);width:9px;height:9px;box-sizing:border-box}
+.dk-dot.busy{background:var(--warn);animation:dkPulse 1s infinite}
+@keyframes dkPulse{50%{opacity:.3}}
+.dk-main{flex:1;min-width:0;display:grid;line-height:1.35}
+.dk-main>b{font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.dk-main small{color:var(--muted);font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.dk-cn{font-family:var(--f-mono);font-size:10.5px!important}
+.dk-img{font-family:var(--f-mono);font-size:10.5px}
+.dk-h-healthy{color:var(--ok)}
+.dk-h-unhealthy{color:var(--danger)}
+.dk-meta{display:flex;flex-wrap:wrap;gap:4px;margin-top:3px}
+.dk-port{display:inline-flex;align-items:center;gap:4px;font-family:var(--f-mono);font-size:10.5px;padding:1px 6px;border-radius:4px;border:1px solid var(--line);background:var(--surface-2);color:var(--fg)}
+.dk-port i{font-size:8px;color:var(--muted)}
+button.dk-port:hover{border-color:#1d91e6;color:#1d91e6}
+.dk-port.raw{color:var(--muted)}
+.dk-st{font-family:var(--f-mono);font-size:10.5px;color:var(--muted);padding:1px 4px}
+.dk-row .dk-acts{display:flex;gap:1px;opacity:.55}
+.dk-row:hover .dk-acts,.dk-grp:hover .dk-acts{opacity:1}
+.dk-grp .dk-acts{display:flex;gap:1px;opacity:0}
+.dk-ii{color:var(--muted);width:14px;text-align:center}
+.dk-tag{margin-left:6px;font-family:var(--f-mono);font-size:10.5px;font-weight:500;padding:0 5px;border-radius:4px;background:var(--accent-soft);color:var(--fg)}
+.dk-pull{display:flex;gap:6px;padding:4px 4px 8px}
+.dk-pull input{flex:1;min-width:0;font:inherit;color:var(--fg);background:var(--surface-2);border:1px solid var(--line);border-radius:7px;padding:5px 9px;outline:none}
+.dk-pull input:focus{border-color:var(--accent)}
+.dk-empty{display:grid;justify-items:center;gap:7px;text-align:center;padding:40px 20px;color:var(--muted)}
+.dk-empty>i{font-size:28px;opacity:.6}
+.dk-empty .fa-docker{color:#1d91e6;opacity:.8}
+.dk-empty b{color:var(--fg);font-size:14px}
+.dk-empty.bad span{color:var(--danger)}
+.dk-eb{display:flex;gap:8px;margin-top:6px}
+
+/* detail: logs / inspect */
+.dk-detail{flex:1;min-height:0;display:flex;flex-direction:column}
+.dk-detail[hidden]{display:none}
+.dk-dh{display:flex;align-items:center;gap:6px;padding:8px 10px;border-bottom:1px solid var(--line);flex:none}
+.dk-dh b{font-weight:600}
+.dk-log{flex:1;min-height:0;margin:0;overflow:auto;padding:8px 12px;background:var(--term-bg);color:var(--term-fg);font-family:var(--f-mono);font-size:12px;line-height:1.45;white-space:pre;tab-size:4}
+.dk-log.wrap{white-space:pre-wrap;word-break:break-word}
+.dk-lf{flex:none;padding:3px 12px;font-size:11px;color:var(--muted);border-top:1px solid var(--line)}
+.dk-insp{flex:1;min-height:0;overflow:auto;padding:10px 14px 16px}
+.dk-insp h4{margin:14px 0 6px;font-size:12px}
+.dk-insp h4 small{color:var(--muted);font-weight:400}
+.dk-kv{display:grid;grid-template-columns:max-content 1fr;gap:5px 14px;margin:0}
+.dk-kv dt{color:var(--muted)}
+.dk-kv dd{margin:0;word-break:break-word}
+.dk-insp code{font-family:var(--f-mono);font-size:11px}
+.dk-tbl{display:grid;gap:4px;font-size:11.5px}
+.dk-tagx{font-size:10px;padding:0 5px;border-radius:4px;background:var(--surface-2);border:1px solid var(--line);color:var(--muted);margin-right:4px}
+.dk-env{display:grid;gap:2px;font-family:var(--f-mono);font-size:11px;word-break:break-all}
+.dk-env b{font-weight:600;color:var(--accent)}
+.dk-secret{filter:blur(4px);cursor:pointer}
+.dk-secret.show{filter:none}
+.dk-insp details{margin-top:14px}
+.dk-insp summary{cursor:pointer;color:var(--muted)}
+.dk-json{font-family:var(--f-mono);font-size:11px;background:var(--surface-2);border:1px solid var(--line);border-radius:7px;padding:8px;overflow:auto;max-height:400px}
+
+/* confirm inside the component */
+.dk-ask{position:absolute;inset:0;z-index:5;display:grid;place-items:center;background:color-mix(in srgb,var(--surface) 70%,transparent);border-radius:inherit}
+.dk-ask[hidden]{display:none}
+.dk-askbox{width:min(360px,90%);padding:14px 16px;border-radius:10px;background:var(--surface);border:1px solid var(--line);box-shadow:var(--shadow);display:grid;gap:8px}
+.dk-askbox p{margin:0;color:var(--muted);line-height:1.45}
+.dk-askbox div{display:flex;justify-content:flex-end;gap:8px}
+.dk-askbox .btn{padding:5px 12px}
+.btn.dk-danger{background:var(--danger);border-color:var(--danger);color:#fff}
+.dk-ctx{z-index:90}
+
+/* inside an SSH session */
+.ssh-dock{min-height:0;display:none;background:var(--surface)}
+.ssh-content[data-layout=docker]{grid-template-rows:1fr}
+.ssh-content[data-layout=docker] .ssh-files,.ssh-content[data-layout=docker] .ssh-split-h,.ssh-content[data-layout=docker] .ssh-term{display:none}
+.ssh-content[data-layout=docker] .ssh-dock{display:flex}
+.ssh-dki{color:#1d91e6}

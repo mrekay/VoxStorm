@@ -151,7 +151,7 @@ module.exports = function registerSsh({ ipcMain, dialog, getWin, send, sendTo, D
   /* ---------------- connections ---------------- */
   // sid -> { id, hostId, client, shells: Map, sftp, sftpWait, tunnels: [], closed }
   const sessions = new Map();
-  const shells = new Map(); // chId -> { stream, sid }
+  const shells = new Map(); // chId -> { sid, wc, write, resize, close }
   let seq = 0;
   const knownKey = h => `${h.host.toLowerCase()}:${h.port || 22}`;
 
@@ -269,7 +269,7 @@ module.exports = function registerSsh({ ipcMain, dialog, getWin, send, sendTo, D
     const s = sessions.get(sid); if (!s || s.closed) return;
     s.closed = true;
     sessions.delete(sid);
-    for (const [ch, x] of shells) if (x.sid === sid) { shells.delete(ch); out(s.wc, 'ssh:exit', ch, reason || ''); }
+    for (const [ch, x] of shells) if (x.sid === sid) { shells.delete(ch); out(x.wc, 'ssh:exit', ch, reason || ''); }
     for (const t of s.tunnels) { try { t.server.close(); } catch (_) {} }
     for (const j of jobs.values()) if (j.sid === sid && !j.finished) cancelJob(j, 'Bağlantı kapandı.');
     try { s.client.end(); } catch (_) {}
@@ -277,23 +277,81 @@ module.exports = function registerSsh({ ipcMain, dialog, getWin, send, sendTo, D
   }
   ipcMain.handle('ssh:disconnect', (_e, sid) => { closeSession(sid, ''); return true; });
 
-  /* ---------------- shells ---------------- */
+  /* ---------------- shells ----------------
+     A channel is anything the window types into and reads from: an SSH shell, a command run on
+     the server with a pty (docker exec), or a local pty handed in by docker.js (addChannel). */
+  function addChannel(wc, sid, impl) {
+    const ch = 'c' + (++seq);
+    shells.set(ch, { sid, wc, ...impl });
+    return {
+      ch,
+      data: d => out(wc, 'ssh:data', ch, d),
+      exit: why => { if (shells.delete(ch)) out(wc, 'ssh:exit', ch, why || ''); },
+    };
+  }
+  function streamChannel(s, stream) {
+    const c = addChannel(s.wc, s.id, {
+      write: d => stream.write(d),
+      resize: (cols, rows) => stream.setWindow(rows, cols, 0, 0),
+      close: () => stream.end(),
+    });
+    const dec = new StringDecoder('utf8'), dec2 = new StringDecoder('utf8');
+    stream.on('data', d => c.data(dec.write(d)));
+    if (stream.stderr) stream.stderr.on('data', d => c.data(dec2.write(d)));
+    stream.on('close', () => c.exit(''));
+    return c.ch;
+  }
   ipcMain.handle('ssh:shell', (_e, sid, cols, rows) => new Promise(resolve => {
     const s = sessions.get(sid); if (!s) { resolve({ error: 'Bağlantı yok.' }); return; }
     s.client.shell({ term: 'xterm-256color', cols: cols || 80, rows: rows || 24 }, { env: { LANG: 'en_US.UTF-8' } }, (err, stream) => {
       if (err) { resolve({ error: err.message }); return; }
-      const ch = 'c' + (++seq);
-      shells.set(ch, { stream, sid });
-      const dec = new StringDecoder('utf8'), dec2 = new StringDecoder('utf8');
-      stream.on('data', d => out(s.wc, 'ssh:data', ch, dec.write(d)));
-      stream.stderr.on('data', d => out(s.wc, 'ssh:data', ch, dec2.write(d)));
-      stream.on('close', () => { if (shells.delete(ch)) out(s.wc, 'ssh:exit', ch, ''); });
-      resolve({ ch });
+      resolve({ ch: streamChannel(s, stream) });
     });
   }));
-  ipcMain.on('ssh:write', (_e, ch, d) => { const x = shells.get(ch); if (x) { try { x.stream.write(d); } catch (_) {} } });
-  ipcMain.on('ssh:resize', (_e, ch, cols, rows) => { const x = shells.get(ch); if (x && cols > 0 && rows > 0) { try { x.stream.setWindow(rows, cols, 0, 0); } catch (_) {} } });
-  ipcMain.on('ssh:closeShell', (_e, ch) => { const x = shells.get(ch); if (x) { shells.delete(ch); try { x.stream.end(); } catch (_) {} } });
+  // run a command on the server with a terminal (e.g. docker exec -it); its output is a channel
+  function execPty(sid, cmd, cols, rows) {
+    return new Promise(resolve => {
+      const s = sessions.get(sid); if (!s) { resolve({ error: 'Bağlantı kapalı.' }); return; }
+      s.client.exec(cmd, { pty: { term: 'xterm-256color', cols: cols || 80, rows: rows || 24 } }, (err, stream) => {
+        if (err) { resolve({ error: err.message }); return; }
+        resolve({ ch: streamChannel(s, stream) });
+      });
+    });
+  }
+  // run a command on the server and collect its output (no terminal)
+  function execOut(sid, cmd, { timeout = 30000, maxBytes = 8 * 1024 * 1024 } = {}) {
+    return new Promise(resolve => {
+      const s = sessions.get(sid); if (!s) { resolve({ code: -1, stdout: '', stderr: 'Bağlantı kapalı.' }); return; }
+      s.client.exec(cmd, (err, stream) => {
+        if (err) { resolve({ code: -1, stdout: '', stderr: err.message }); return; }
+        const out1 = [], out2 = []; let n = 0, done = false;
+        const fin = code => { if (done) return; done = true; clearTimeout(t); resolve({ code, stdout: Buffer.concat(out1).toString('utf8'), stderr: Buffer.concat(out2).toString('utf8') }); };
+        const t = setTimeout(() => { try { stream.close(); } catch (_) {} fin(-2); }, timeout);
+        stream.on('data', d => { n += d.length; if (n <= maxBytes) out1.push(d); });
+        stream.stderr.on('data', d => out2.push(d));
+        stream.on('exit', code => { stream.exitCode = code; });
+        stream.on('close', () => fin(stream.exitCode == null ? 0 : stream.exitCode));
+      });
+    });
+  }
+  // a streaming command (docker logs -f): calls onData until stopped; returns stop()
+  function execStream(sid, cmd, onData, onEnd) {
+    const s = sessions.get(sid); if (!s) { onEnd('Bağlantı kapalı.'); return () => {}; }
+    let stream = null, stopped = false;
+    s.client.exec(cmd, (err, st) => {
+      if (err) { onEnd(err.message); return; }
+      stream = st;
+      if (stopped) { try { st.close(); } catch (_) {} return; }
+      const dec = new StringDecoder('utf8'), dec2 = new StringDecoder('utf8');
+      st.on('data', d => onData(dec.write(d)));
+      st.stderr.on('data', d => onData(dec2.write(d)));
+      st.on('close', () => onEnd(''));
+    });
+    return () => { stopped = true; if (stream) { try { stream.close(); } catch (_) {} } };
+  }
+  ipcMain.on('ssh:write', (_e, ch, d) => { const x = shells.get(ch); if (x) { try { x.write(d); } catch (_) {} } });
+  ipcMain.on('ssh:resize', (_e, ch, cols, rows) => { const x = shells.get(ch); if (x && cols > 0 && rows > 0) { try { x.resize(cols, rows); } catch (_) {} } });
+  ipcMain.on('ssh:closeShell', (_e, ch) => { const x = shells.get(ch); if (x) { shells.delete(ch); try { x.close(); } catch (_) {} } });
 
   /* ---------------- SFTP ---------------- */
   function openSftp(s) {
@@ -629,6 +687,10 @@ module.exports = function registerSsh({ ipcMain, dialog, getWin, send, sendTo, D
   });
 
   return {
+    addChannel, execPty, execOut, execStream,
+    hasSession: sid => sessions.has(sid),
+    sessionWc: sid => (sessions.get(sid) || {}).wc,
+    hostLabel: sid => { const x = sessions.get(sid); const h = x && hostById(x.hostId); return h ? label(h) : ''; },
     shutdown() { for (const sid of [...sessions.keys()]) closeSession(sid, ''); writeNow('state'); },
   };
 };

@@ -1005,6 +1005,7 @@ function spawnTerminal(opts, owner) {
 /* ---------------- updates (GitHub Releases) ---------------- */
 let U = null;
 let SSH = null;
+let DOCKER = null;
 function setupUpdater() {
   const { net } = require('electron');
   U = require('./updater')({
@@ -1503,6 +1504,8 @@ function registerIpc() {
   require('./db')({ ipcMain, app, dialog, getWin: () => ownerWin('db'), DATA, getProjects: () => config.projects });
   // SSH mode: terminal + SFTP (PuTTY / WinSCP), tunnels, Remote Desktop launcher
   SSH = require('./ssh')({ ipcMain, dialog, getWin: () => ownerWin('ssh'), sendTo, DATA });
+  // Docker: containers on this computer and on open SSH sessions
+  DOCKER = require('./docker')({ ipcMain, shell, getSsh: () => SSH });
   pluginsModule({
     app, ipcMain, protocol, shell, dialog, getWin: () => win, DATA, insideProject, getProjects: () => config.projects,
     // the plugins folder as a project, under a readable name the first time it is added
@@ -1527,7 +1530,7 @@ function addProject(p, auto) {
 
 /* ---------------- start ---------------- */
 app.on('second-instance', () => showWindow());
-app.on('before-quit', () => { isQuitting = true; for (const [m, w] of modeWins) rememberBounds(m, w); killAll(); saveConfigNow(); if (U) U.onQuit(); if (SSH) SSH.shutdown(); });
+app.on('before-quit', () => { isQuitting = true; for (const [m, w] of modeWins) rememberBounds(m, w); killAll(); saveConfigNow(); if (U) U.onQuit(); if (SSH) SSH.shutdown(); if (DOCKER) DOCKER.shutdown(); });
 app.on('window-all-closed', e => e.preventDefault());
 
 /* ---------------- Start Menu shortcuts (notification name, icon, click target) ---------------- */
