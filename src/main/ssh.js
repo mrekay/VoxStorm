@@ -18,7 +18,9 @@ const MAX_EDIT = 5 * 1024 * 1024; // bytes of a remote file opened in the editor
 let ssh2Lib = null;
 const ssh2 = () => ssh2Lib || (ssh2Lib = require('ssh2'));
 
-module.exports = function registerSsh({ ipcMain, dialog, getWin, send, DATA }) {
+module.exports = function registerSsh({ ipcMain, dialog, getWin, send, sendTo, DATA }) {
+  // events go to the window that opened the session (SSH mode may live in a window of its own)
+  const out = (wc, ch, ...a) => { if (sendTo) sendTo(wc, ch, ...a); else if (send) send(ch, ...a); };
   const FILES = {
     hosts: path.join(DATA, 'ssh-hosts.json'),
     known: path.join(DATA, 'ssh-known-hosts.json'),
@@ -246,15 +248,16 @@ module.exports = function registerSsh({ ipcMain, dialog, getWin, send, DATA }) {
     return msg;
   }
 
-  ipcMain.handle('ssh:connect', async (_e, hostId, opts = {}) => {
+  ipcMain.handle('ssh:connect', async (e, hostId, opts = {}) => {
     const h = hostById(hostId);
     if (!h) return { error: 'Bağlantı bulunamadı.' };
     if (h.kind !== 'ssh') return { error: 'Bu bir RDP bağlantısı.' };
     const sid = 's' + (++seq) + crypto.randomBytes(3).toString('hex');
     const r = await connectClient(h, opts, () => closeSession(sid, 'Bağlantı kapandı.'));
     if (!r.client) return r;
-    const s = { id: sid, hostId, client: r.client, sftp: null, sftpWait: null, tunnels: [], closed: false };
+    const s = { id: sid, hostId, client: r.client, sftp: null, sftpWait: null, tunnels: [], closed: false, wc: e && e.sender };
     sessions.set(sid, s);
+    if (s.wc && s.wc.once) s.wc.once('destroyed', () => closeSession(sid, ''));
     r.client.on('error', () => {});
     const tunnelErrors = [];
     for (const t of h.tunnels || []) if (t.auto) { const e = await openTunnel(s, t); if (e) tunnelErrors.push(e); }
@@ -266,11 +269,11 @@ module.exports = function registerSsh({ ipcMain, dialog, getWin, send, DATA }) {
     const s = sessions.get(sid); if (!s || s.closed) return;
     s.closed = true;
     sessions.delete(sid);
-    for (const [ch, x] of shells) if (x.sid === sid) { shells.delete(ch); send('ssh:exit', ch, reason || ''); }
+    for (const [ch, x] of shells) if (x.sid === sid) { shells.delete(ch); out(s.wc, 'ssh:exit', ch, reason || ''); }
     for (const t of s.tunnels) { try { t.server.close(); } catch (_) {} }
     for (const j of jobs.values()) if (j.sid === sid && !j.finished) cancelJob(j, 'Bağlantı kapandı.');
     try { s.client.end(); } catch (_) {}
-    send('ssh:closed', sid, reason || '');
+    out(s.wc, 'ssh:closed', sid, reason || '');
   }
   ipcMain.handle('ssh:disconnect', (_e, sid) => { closeSession(sid, ''); return true; });
 
@@ -282,9 +285,9 @@ module.exports = function registerSsh({ ipcMain, dialog, getWin, send, DATA }) {
       const ch = 'c' + (++seq);
       shells.set(ch, { stream, sid });
       const dec = new StringDecoder('utf8'), dec2 = new StringDecoder('utf8');
-      stream.on('data', d => send('ssh:data', ch, dec.write(d)));
-      stream.stderr.on('data', d => send('ssh:data', ch, dec2.write(d)));
-      stream.on('close', () => { if (shells.delete(ch)) send('ssh:exit', ch, ''); });
+      stream.on('data', d => out(s.wc, 'ssh:data', ch, dec.write(d)));
+      stream.stderr.on('data', d => out(s.wc, 'ssh:data', ch, dec2.write(d)));
+      stream.on('close', () => { if (shells.delete(ch)) out(s.wc, 'ssh:exit', ch, ''); });
       resolve({ ch });
     });
   }));
@@ -442,7 +445,7 @@ module.exports = function registerSsh({ ipcMain, dialog, getWin, send, DATA }) {
      channel. Cancel ends that channel, which makes the running fastGet / fastPut fail at once. */
   const jobs = new Map();
   function emitJob(j) {
-    send('ssh:xfer', { id: j.id, sid: j.sid, dir: j.dir, name: j.name, target: j.target, total: j.total, done: j.done, files: j.files, filesDone: j.filesDone, current: j.current, state: j.state, error: j.error || '', speed: j.speed || 0, started: j.started, skipped: j.skipped || 0 });
+    out(j.wc, 'ssh:xfer', { id: j.id, sid: j.sid, dir: j.dir, name: j.name, target: j.target, total: j.total, done: j.done, files: j.files, filesDone: j.filesDone, current: j.current, state: j.state, error: j.error || '', speed: j.speed || 0, started: j.started, skipped: j.skipped || 0 });
   }
   function cancelJob(j, why) {
     if (j.finished) return;
@@ -486,7 +489,7 @@ module.exports = function registerSsh({ ipcMain, dialog, getWin, send, DATA }) {
     if (!Array.isArray(paths) || !paths.length) return { error: 'Seçili öğe yok.' };
     const id = 'x' + (++seq);
     const name = paths.length === 1 ? (dir === 'up' ? path.basename(paths[0]) : paths[0].split('/').pop()) : `${paths.length} öğe`;
-    const j = { id, sid, dir, name, target, total: 0, done: 0, files: 0, filesDone: 0, current: '', state: 'preparing', started: Date.now(), overwrite: opts.overwrite || 'ask' };
+    const j = { id, sid, wc: s.wc, dir, name, target, total: 0, done: 0, files: 0, filesDone: 0, current: '', state: 'preparing', started: Date.now(), overwrite: opts.overwrite || 'ask' };
     jobs.set(id, j);
     emitJob(j);
     runJob(s, j, paths).catch(() => {});
@@ -518,7 +521,7 @@ module.exports = function registerSsh({ ipcMain, dialog, getWin, send, DATA }) {
           let ans = j.overwrite;
           if (ans === 'ask') {
             j.state = 'ask'; j.current = dest;
-            send('ssh:xferAsk', { id: j.id, file: dest, src: { size: it.size, mtime: it.mtime }, dst: ex });
+            out(j.wc, 'ssh:xferAsk', { id: j.id, file: dest, src: { size: it.size, mtime: it.mtime }, dst: ex });
             ans = await new Promise(r => { j.resolveAsk = r; });
             j.resolveAsk = null;
             if (ans === 'cancel') { cancelJob(j, ''); break; }
@@ -574,15 +577,15 @@ module.exports = function registerSsh({ ipcMain, dialog, getWin, send, DATA }) {
           if (err) {
             sock.destroy();
             rec.error = /prohibited|denied/i.test(err.message) ? 'Sunucu port yönlendirmeye izin vermiyor (sshd_config: AllowTcpForwarding).' : 'Hedefe bağlanılamadı: ' + err.message;
-            send('ssh:tunnels', s.id, tunnelList(s));
+            out(s.wc, 'ssh:tunnels', s.id, tunnelList(s));
             return;
           }
           rec.error = '';
-          rec.conns++; send('ssh:tunnels', s.id, tunnelList(s));
+          rec.conns++; out(s.wc, 'ssh:tunnels', s.id, tunnelList(s));
           sock.pipe(stream).pipe(sock);
           const end = () => { sock.destroy(); try { stream.close(); } catch (_) {} };
           sock.on('error', end); stream.on('error', end);
-          stream.on('close', () => { sock.destroy(); rec.conns = Math.max(0, rec.conns - 1); send('ssh:tunnels', s.id, tunnelList(s)); });
+          stream.on('close', () => { sock.destroy(); rec.conns = Math.max(0, rec.conns - 1); out(s.wc, 'ssh:tunnels', s.id, tunnelList(s)); });
         });
       });
       server.once('error', e => resolve(e.code === 'EADDRINUSE' ? `Yerel port ${t.localPort} kullanımda.` : e.message));
