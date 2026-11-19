@@ -168,7 +168,7 @@ async function refreshUsage() {
 /* ---------------- terminals ---------------- */
 function tabIcon(t) { if (t.kind === 'agent') return `<span class="dot ${t.status}"></span><i class="fa-solid fa-robot watch-ic" title="Alt ajanın konuşması (salt okunur)"></i>`; if (t.kind === 'watch') return `<span class="dot ${t.status}"></span><i class="fa-solid fa-eye watch-ic" title="VoxStorm dışında açık, izleniyor"></i>`; return t.kind === 'shell' ? (SHELL_ICONS[t.shell] || '<i class="shi fa-solid fa-terminal"></i>') : `<span class="dot ${t.status}"></span>`; }
 
-async function openTerminal({ kind = 'claude', shell, projectId, resume, title, overrides }) {
+async function openTerminal({ kind = 'claude', shell, projectId, resume, title, overrides, group }) {
   // already running in an outside terminal: follow it instead of starting a second copy
   if (resume && isExtLive(resume)) return openWatch(resume);
   const p = proj(projectId); if (!p) return null;
@@ -191,6 +191,7 @@ async function openTerminal({ kind = 'claude', shell, projectId, resume, title, 
     title: title || (kind === 'claude' ? 'Yeni oturum' : SHELLS[shell].name + numberSuffix(projectId, shell)),
     status: kind === 'claude' ? 'idle' : 'shell',
     prompted: !!resume, // a brand-new session has nothing to resume until the first message
+    group: group || null, // tab group id (tabgroups.js)
   };
   S.tabs.push(tab);
   S.active = tab.id;
@@ -798,7 +799,7 @@ function extRow(s, showDir) {
 function renderTabs() {
   const tabHTML = t => `<div class="tab ${t.id === S.active ? 'active' : ''}${attnCls(t.attn)}" role="tab"><button data-tab="${t.id}" title="${esc((proj(t.projectId) || {}).name)} · ${esc(t.title)} · ${STATUS_TEXT[t.status]}"><span class="tab-p">${esc((proj(t.projectId) || {}).name || '')}</span>${tabIcon(t)}<span class="tab-t">${esc(t.title)}</span></button><button class="tab-x" data-close="${t.id}" aria-label="Terminali kapat" title="Kapat">×</button></div>`;
   $('#tabs').innerHTML = S.tabs.length
-    ? S.tabs.map(tabHTML).join('') + '<button class="tabs-add" data-startnew="1" title="Yeni oturum (Ctrl+Shift+P)" aria-label="Yeni oturum aç"><i class="fa-solid fa-plus"></i></button>'
+    ? tabStripHTML(tabHTML) + '<button class="tabs-add" data-startnew="1" title="Yeni oturum (Ctrl+Shift+P)" aria-label="Yeni oturum aç"><i class="fa-solid fa-plus"></i></button>'
     : '<span class="tabs-empty">Açık terminal yok</span><button class="tabs-add wide" data-startnew="1" title="Bir projede oturum başlat (Ctrl+Shift+P)"><i class="fa-solid fa-plus"></i> Oturum aç</button>';
   // IDE bottom panel: only the selected project's terminals
   const pt = S.tabs.filter(t => t.projectId === IDE.project);
@@ -2420,9 +2421,10 @@ async function renameSessionUi(el) {
 function saveOpenTabs() {
   const list = S.tabs
     .filter(t => !t.exited && (t.kind === 'shell' || (t.sessionId && t.prompted)))
-    .map(t => ({ projectId: t.projectId, kind: t.kind, shell: t.shell || null, sessionId: t.kind === 'claude' ? t.sessionId : null, title: t.title }));
-  CFG.lastTabs = list;
-  api.invoke('config:set', { lastTabs: list });
+    .map(t => ({ projectId: t.projectId, kind: t.kind, shell: t.shell || null, sessionId: t.kind === 'claude' ? t.sessionId : null, title: t.title, group: t.group || null }));
+  const tabGroups = S.groups.filter(g => list.some(x => x.group === g.id));
+  CFG.lastTabs = list; CFG.tabGroups = tabGroups;
+  api.invoke('config:set', { lastTabs: list, tabGroups });
 }
 async function restoreTabs(pid) {
   const list = (CFG.lastTabs || []).filter(t => proj(t.projectId) && (!pid || t.projectId === pid));
@@ -2433,11 +2435,13 @@ async function restoreTabs(pid) {
     else toast('Geri yüklenecek oturum yok');
     return;
   }
+  const groupDefs = CFG.tabGroups || [];
   for (const t of list) {
+    const group = restoreGroup(groupDefs.find(g => g.id === t.group));
     if (t.kind === 'shell') {
       if (S.tabs.some(x => x.projectId === t.projectId && x.shell === t.shell && !x.exited)) continue;
-      await openTerminal({ kind: 'shell', shell: t.shell, projectId: t.projectId });
-    } else await openTerminal({ kind: 'claude', projectId: t.projectId, resume: t.sessionId, title: t.title });
+      await openTerminal({ kind: 'shell', shell: t.shell, projectId: t.projectId, group });
+    } else await openTerminal({ kind: 'claude', projectId: t.projectId, resume: t.sessionId, title: t.title, group });
   }
   toast('Oturumlar geri yüklendi', list.length + ' terminal');
 }

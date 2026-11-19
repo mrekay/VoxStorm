@@ -1,0 +1,30 @@
+/* Tab groups in the AI mode tab bar (tabgroups.js). --g is the group colour. */
+.tgroup{display:flex;flex:none;position:relative}
+.tgroup .tab.in-group::after{content:"";position:absolute;inset:auto 0 0;height:2px;background:var(--g)}
+.tgroup .tab.in-group.attn::after{background:var(--ok)}
+.tgroup .tab.in-group.attn-ask::after{background:var(--warn)}
+.tg-chip{flex:none;align-self:center;display:flex;align-items:center;gap:6px;height:24px;margin:0 4px 0 6px;padding:0 9px;border-radius:7px;font-size:12px;font-weight:600;
+  border:1px solid color-mix(in srgb,var(--g) 55%,var(--line));background:color-mix(in srgb,var(--g) 18%,var(--surface));color:var(--fg);max-width:200px;cursor:pointer}
+.tg-chip:hover{background:color-mix(in srgb,var(--g) 30%,var(--surface))}
+.tg-chip:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+.tg-chip::before{content:"";width:8px;height:8px;border-radius:50%;background:var(--g);flex:none}
+.tgroup.collapsed .tg-chip{background:var(--g);color:#fff;border-color:var(--g)}
+.tgroup.collapsed .tg-chip::before{background:#fff}
+.tg-name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+.tg-b{display:inline-flex;align-items:center;gap:3px;font-size:10.5px;font-weight:600;padding:0 5px;height:16px;border-radius:8px;flex:none;background:color-mix(in srgb,var(--surface) 70%,transparent);color:var(--fg)}
+.tg-b.wait{background:var(--warn);color:#1a1205}
+.tg-b.wait i{font-size:9px}
+.tg-b .dot{width:6px;height:6px}
+.tgroup.collapsed .tg-b.n,.tgroup.collapsed .tg-b.run{background:rgba(0,0,0,.22);color:#fff}
+.tgroup.collapsed .tg-b .dot.running{background:#fff}
+.tg-chip.drop-in{outline:2px dashed var(--g);outline-offset:2px}
+#tabs .tab.tsel{background:color-mix(in srgb,var(--accent) 14%,transparent);color:var(--fg)}
+#tabs .tab.dragging{opacity:.45}
+#tabs .tab.drop-before{box-shadow:inset 3px 0 0 var(--accent)}
+#tabs .tab.drop-after{box-shadow:inset -3px 0 0 var(--accent)}
+.tg-sw{display:inline-block;width:10px;height:10px;border-radius:50%;background:var(--g);flex:none;margin-right:8px;vertical-align:middle}
+.ide-menu .tg-colors{display:flex;flex-wrap:wrap;gap:6px;padding:6px 10px 4px}
+.ide-menu .tg-colors .tg-sw{width:18px;height:18px;padding:0;margin:0;border:2px solid transparent;border-radius:50%;background:var(--g);display:block}
+.ide-menu .tg-colors .tg-sw:hover{background:var(--g);transform:scale(1.12)}
+.ide-menu .tg-colors .tg-sw.on{border-color:var(--fg);box-shadow:0 0 0 2px var(--surface) inset}
+.ide-menu .tg-hint{text-transform:none;letter-spacing:0;font-weight:400;padding-top:4px}
