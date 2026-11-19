@@ -201,7 +201,7 @@
     document.getElementById('sshBody').appendChild(t.el);
     const term = new Terminal({
       fontFamily: '"Cascadia Mono", "Cascadia Code", Consolas, monospace', fontSize: 13, lineHeight: 1.15,
-      cursorBlink: true, scrollback: 10000, allowProposedApi: true, theme: termTheme(),
+      cursorBlink: true, scrollback: 10000, allowProposedApi: true, theme: termTheme(), linkHandler: typeof termLinkHandler !== 'undefined' ? termLinkHandler : undefined,
     });
     const fit = new FitAddon.FitAddon();
     term.loadAddon(fit);
@@ -1222,7 +1222,7 @@
         <button class="ssh-tb" data-act="termReopen" title="Kabuğu yeniden aç"><i class="fa-solid fa-rotate-right"></i>Yeniden aç</button></div>
       <div class="ssh-content" data-layout="term"><div class="ssh-term"><div class="ssh-termhost" data-role="term"></div></div></div>`;
     document.getElementById('sshBody').appendChild(t.el);
-    const term = new Terminal({ fontFamily: '"Cascadia Mono", "Cascadia Code", Consolas, monospace', fontSize: 13, lineHeight: 1.15, cursorBlink: true, scrollback: 10000, allowProposedApi: true, theme: termTheme() });
+    const term = new Terminal({ fontFamily: '"Cascadia Mono", "Cascadia Code", Consolas, monospace', fontSize: 13, lineHeight: 1.15, cursorBlink: true, scrollback: 10000, allowProposedApi: true, theme: termTheme(), linkHandler: typeof termLinkHandler !== 'undefined' ? termLinkHandler : undefined });
     const fit = new FitAddon.FitAddon();
     term.loadAddon(fit); t.term = term; t.fit = fit;
     term.open(t.el.querySelector('[data-role=term]'));

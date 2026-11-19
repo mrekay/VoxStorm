@@ -1367,6 +1367,13 @@ function registerIpc() {
   ipcMain.handle('git:diff', (_e, p, kind, f) => G.diff(p, kind, f));
   ipcMain.handle('git:stash', (_e, p, ref) => G.stash(p, ref));
   ipcMain.handle('github:info', (_e, p, force) => G.github(p, force));
+  // a link clicked in terminal output (the window already asked the user)
+  ipcMain.handle('shell:openLink', async (_e, url) => {
+    url = String(url || '');
+    if (/^(https?|mailto):/i.test(url)) { await shell.openExternal(url); return true; }
+    if (/^file:/i.test(url)) { const r = await shell.openPath(require('url').fileURLToPath(url)); return r ? { error: r } : true; }
+    return false;
+  });
   ipcMain.handle('shell:openGithub', (_e, url) => { if (/^https:\/\/github\.com\//i.test(String(url))) shell.openExternal(url); });
 
   ipcMain.handle('history:list', (_e, projectPath) => listSessions(projectPath));

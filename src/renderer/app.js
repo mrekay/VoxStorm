@@ -179,7 +179,7 @@ async function openTerminal({ kind = 'claude', shell, projectId, resume, title, 
   $('#termHost').appendChild(el);
   const term = new Terminal({
     fontFamily: '"Cascadia Mono", "Cascadia Code", Consolas, monospace', fontSize: 13, lineHeight: 1.15,
-    cursorBlink: true, scrollback: 8000, allowProposedApi: true, theme: termTheme(),
+    cursorBlink: true, scrollback: 8000, allowProposedApi: true, theme: termTheme(), linkHandler: termLinkHandler,
   });
   const fit = new FitAddon.FitAddon();
   term.loadAddon(fit);
@@ -227,6 +227,40 @@ async function openTerminal({ kind = 'claude', shell, projectId, resume, title, 
   activate(tab.id);
   return tab;
 }
+/* Links in terminal output (OSC 8: Claude Code links files and web pages). xterm's own handler
+   asks with the browser's plain confirm(); this one asks in VoxStorm's style and knows each kind:
+   a file in a project opens in the IDE, a web page in the browser (Ctrl+click: without asking). */
+const termLinkHandler = {
+  allowNonHttpProtocols: true,
+  async activate(e, uri) {
+    let u; try { u = new URL(uri); } catch (_) { return; }
+    if (u.protocol === 'file:') {
+      const fp = decodeURIComponent(u.pathname).replace(/^\/([A-Za-z]:)/, '$1').replace(/\//g, '\\');
+      const line = (/^#L?(\d+)/i.exec(u.hash) || [])[1];
+      const p = S.projects.find(x => fp.toLowerCase().startsWith(x.path.toLowerCase().replace(/[\\/]+$/, '') + '\\'));
+      if (p) {
+        if (S.mode !== 'ide') setMode('ide');
+        if (IDE.project !== p.id) switchIdeProject(p.id);
+        openFile(fp, line ? { line: +line } : undefined); // gotoPos counts lines from 1, like #L5
+        return;
+      }
+      if (await uiConfirm({ title: 'Dosyayı aç', icon: 'fa-file', message: fp, detail: 'Bu dosya projelerinin dışında. Windows’un varsayılan uygulamasıyla açılsın mı?', ok: 'Aç' })) api.invoke('shell:openLink', uri);
+      return;
+    }
+    if (u.protocol === 'http:' || u.protocol === 'https:' || u.protocol === 'mailto:') {
+      const web = u.protocol !== 'mailto:';
+      if (e && e.ctrlKey) { api.invoke('shell:openLink', uri); return; }
+      if (await uiConfirm({
+        title: web ? 'Bağlantıyı aç' : 'E-posta bağlantısı', icon: web ? 'fa-arrow-up-right-from-square' : 'fa-envelope',
+        message: uri, detail: web ? `Tarayıcıda açılacak: ${u.host}
+Terminal bağlantılarının görünen yazısı gerçek adresten farklı olabilir; adresi kontrol et. Ctrl+tık sormadan açar.` : 'Varsayılan e-posta uygulamasında açılacak.',
+        ok: web ? 'Tarayıcıda aç' : 'Aç',
+      })) api.invoke('shell:openLink', uri);
+      return;
+    }
+    uiAlert({ title: 'Bağlantı açılamadı', message: uri, detail: `“${u.protocol.replace(':', '')}” türündeki bağlantılar güvenlik nedeniyle açılmıyor.` });
+  },
+};
 // "✳ Fix the login bug" / "⠂ Fix the login bug" -> "Fix the login bug"; the bare app name is no title
 function claudeTermTitle(raw) {
   const s = String(raw || '').replace(/[⠀-⣿]/g, '').replace(/^[\s•·*✱-❋⏺●○◆◇★☆-]+/u, '').replace(/\s+/g, ' ').trim();
@@ -580,7 +614,7 @@ function mirrorTerm(t) {
   box.innerHTML = '';
   const term = new Terminal({
     fontFamily: '"Cascadia Mono", "Cascadia Code", Consolas, monospace', fontSize: t.fontSize, lineHeight: 1.15,
-    cursorBlink: true, scrollback: 0, allowProposedApi: true, theme: termTheme(),
+    cursorBlink: true, scrollback: 0, allowProposedApi: true, theme: termTheme(), linkHandler: termLinkHandler,
   });
   term.open(box);
   term.onData(d => { if (t.mirror) { if (t.sReq) mirrorScroll(t, 0); api.send('mirror:input', t.mirror, d); } });
