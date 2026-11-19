@@ -19,7 +19,7 @@
         { icon: 'fa-solid fa-clock-rotate-left', title: 'Kapatılanı geri aç', text: 'Yanlışlıkla kapattığın Claude oturumu konuşmasıyla geri gelir. Sekme çubuğunda + yanındaki düğme sonuncuyu açar, ▾ ile proje adı ve zamanıyla listeden seçersin. Zaten açık olan oturumlar listede görünmez.', keys: 'Ctrl+Alt+T', try: () => setMode('claude') },
         { icon: 'fa-solid fa-gift', title: 'Neler yeni', text: 'Bu ekran: yeni sürümün ilk açılışında bir kez çıkar, sağ alttaki düğmeden her zaman açılır.' },
       ],
-      small: ['Mod düğmeleri hap yerine Git düğmesi gibi köşeli.'],
+      small: ['Oturum adları: senin verdiğin ad yoksa ilk mesaj yerine Claude’un oturuma verdiği başlık (terminal başlığındaki) kullanılıyor; açık sekmelerde de anında güncelleniyor.', 'Mod düğmeleri hap yerine Git düğmesi gibi köşeli.'],
     },
     {
       id: '2026-11-16', title: 'Sürüm 0.6.0', date: '16 Kasım 2026',

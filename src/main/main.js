@@ -238,34 +238,38 @@ const titleCache = new Map(); // file -> {mtime, title, cwd}
 async function sessionMeta(file, mtimeMs) {
   const c = titleCache.get(file);
   if (c && c.mtime === mtimeMs) return c;
-  let title = '', cwd = '', custom = '';
+  // name order: custom-title (a rename: Claude Code's /rename or ours), then ai-title (the title
+  // Claude Code gives the session, the same one it shows in the terminal title bar), then the first message
+  let title = '', cwd = '', custom = '', ai = '';
+  const scan = (text, pick) => {
+    for (const line of text.split('\n')) {
+      if (!line.includes('"custom-title"') && !line.includes('"ai-title"')) continue;
+      try {
+        const o = JSON.parse(line);
+        if (o.type === 'custom-title' && typeof o.customTitle === 'string' && (pick.custom || !custom)) custom = o.customTitle;
+        else if (o.type === 'ai-title' && o.aiTitle && (pick.ai || !ai)) ai = o.aiTitle;
+      } catch (_) {}
+    }
+  };
   try {
     const head = await readHead(file, 256 * 1024);
     for (const line of head.split('\n')) {
       if (!line.trim()) continue;
       let o; try { o = JSON.parse(line); } catch (_) { continue; }
       if (!cwd && o.cwd) cwd = o.cwd;
-      if (o.type === 'custom-title' && o.customTitle) custom = o.customTitle;
       if (!title && o.type === 'user' && !o.isSidechain && !o.isMeta && o.message) {
         const t = textOf(o.message.content).trim();
         if (t && !t.startsWith('<') && !t.startsWith('Caveat:')) title = t;
       }
       if (title && cwd) break;
     }
-    // a rename (Claude Code's /rename or ours) is appended, so the newest one is near the end
+    // both records are appended as the session goes on: the newest one is near the end
     const st = await fsp.stat(file);
-    if (st.size > 256 * 1024) custom = '';
     const tail = st.size > 256 * 1024 ? await readTail(file, 128 * 1024) : head;
-    for (const line of tail.split('\n')) {
-      if (!line.includes('"custom-title"')) continue;
-      try { const o = JSON.parse(line); if (o.type === 'custom-title' && typeof o.customTitle === 'string') custom = o.customTitle; } catch (_) {}
-    }
-    if (!custom && st.size > 256 * 1024) for (const line of head.split('\n')) {
-      if (!line.includes('"custom-title"')) continue;
-      try { const o = JSON.parse(line); if (o.type === 'custom-title' && o.customTitle) custom = o.customTitle; } catch (_) {}
-    }
+    scan(tail, { custom: true, ai: true });
+    if (st.size > 256 * 1024 && (!custom || !ai)) scan(head, { custom: !custom, ai: !ai }); // older ones, only if the tail had none
   } catch (_) {}
-  const meta = { mtime: mtimeMs, title: (custom || title || 'Adsız oturum').replace(/\s+/g, ' ').slice(0, 120), cwd };
+  const meta = { mtime: mtimeMs, title: (custom || ai || title || 'Adsız oturum').replace(/\s+/g, ' ').slice(0, 120), cwd };
   titleCache.set(file, meta);
   return meta;
 }

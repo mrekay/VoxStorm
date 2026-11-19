@@ -212,6 +212,8 @@ async function openTerminal({ kind = 'claude', shell, projectId, resume, title, 
   }
   term.onData(d => { if (!tab.exited) api.send('pty:write', tab.id, d); });
   term.onResize(({ cols, rows }) => { if (!tab.exited) api.send('pty:resize', tab.id, cols, rows); });
+  // Claude Code puts the session's title in the terminal title bar: use it unless the user named the tab
+  if (kind === 'claude') term.onTitleChange(raw => applyClaudeTitle(tab, raw));
   term.attachCustomKeyEventHandler(e => {
     if (e.type !== 'keydown') return true;
     const k = e.key.toLowerCase();
@@ -224,6 +226,22 @@ async function openTerminal({ kind = 'claude', shell, projectId, resume, title, 
   });
   activate(tab.id);
   return tab;
+}
+// "✳ Fix the login bug" / "⠂ Fix the login bug" -> "Fix the login bug"; the bare app name is no title
+function claudeTermTitle(raw) {
+  const s = String(raw || '').replace(/[⠀-⣿]/g, '').replace(/^[\s•·*✱-❋⏺●○◆◇★☆-]+/u, '').replace(/\s+/g, ' ').trim();
+  return !s || /^claude( code)?$/i.test(s) ? '' : s;
+}
+let titleTimer = null;
+function applyClaudeTitle(tab, raw) {
+  if (tab.renamed) return;
+  const v = claudeTermTitle(raw);
+  if (!v) return;
+  const t = shorten(v, 48);
+  if (t === tab.title) return;
+  tab.title = t;
+  clearTimeout(titleTimer);
+  titleTimer = setTimeout(() => { renderAll(); saveOpenTabs(); }, 300);
 }
 function numberSuffix(pid, shell) {
   const n = S.tabs.filter(t => t.projectId === pid && t.shell === shell).length;
