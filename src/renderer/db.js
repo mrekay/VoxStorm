@@ -76,6 +76,19 @@
     }, 600);
   }
 
+  /* dialogs and menus live outside #dbView, so the IDE's DB panel can use them while DB mode is hidden */
+  function layer(id) {
+    let el = document.getElementById(id);
+    if (!el) {
+      el = document.createElement('div');
+      el.id = id; el.hidden = true;
+      if (id === 'dbModal') el.className = 'db db-modal';
+      else { el.className = 'db-ctx'; el.setAttribute('role', 'menu'); }
+      (document.getElementById('win') || document.body).appendChild(el);
+    }
+    return el;
+  }
+
   /* ---------------- build ---------------- */
   function build() {
     view.innerHTML = `
@@ -116,9 +129,8 @@
           <div class="db-rbody" id="dbRBody"></div>
         </section>
         <div class="db-status" id="dbStatus"></div>
-      </main>
-      <div class="db-modal" id="dbModal" hidden></div>
-      <div class="db-ctx" id="dbCtx" hidden role="menu"></div>`;
+      </main>`;
+    layer('dbModal'); layer('dbCtx');
     cm = CodeMirror(document.getElementById('dbEd'), {
       theme: 'claudelot', mode: 'text/x-sql', lineNumbers: true, matchBrackets: true, autoCloseBrackets: true, styleActiveLine: true,
       indentUnit: 2, tabSize: 2, value: '',
@@ -355,13 +367,18 @@
     const i = s.toLowerCase().indexOf(f);
     return i < 0 ? esc(s) : esc(s.slice(0, i)) + '<mark>' + esc(s.slice(i, i + f.length)) + '</mark>' + esc(s.slice(i + f.length));
   }
+  // other views of the same tree (the IDE's DB panel) re-render with it
+  const treeWatchers = new Set();
   function renderTree() {
-    const el = document.getElementById('dbTree'); if (!el) return;
+    const el = document.getElementById('dbTree');
+    if (el) el.innerHTML = treeHtml(D.filter);
+    for (const fn of treeWatchers) { try { fn(); } catch (_) {} }
+  }
+  function treeHtml(filter) {
     if (!D.conns.length) {
-      el.innerHTML = `<div class="db-hello"><i class="fa-solid fa-database"></i><b>Henüz bağlantı yok</b><span>MSSQL, PostgreSQL, MySQL ya da MariaDB sunucusu ekle.</span><button class="btn primary" data-act="newConn"><i class="fa-solid fa-plus"></i> Bağlantı ekle</button></div>`;
-      return;
+      return `<div class="db-hello"><i class="fa-solid fa-database"></i><b>Henüz bağlantı yok</b><span>MSSQL, PostgreSQL, MySQL ya da MariaDB sunucusu ekle.</span><button class="btn primary" data-act="newConn"><i class="fa-solid fa-plus"></i> Bağlantı ekle</button></div>`;
     }
-    const f = D.filter.trim().toLowerCase();
+    const f = String(filter || '').trim().toLowerCase();
     const out = [];
     for (const c of D.conns) {
       const key = 'c:' + c.id, live = D.live[c.id] || {};
@@ -380,7 +397,7 @@
       if (opened && live.status === 'error') out.push(`<div class="db-node err" style="padding-left:36px" title="${esc(live.error)}"><i class="fa-solid fa-triangle-exclamation"></i><span class="db-nm">${esc(live.error)}</span></div>`);
       out.push(...sub);
     }
-    el.innerHTML = out.join('') || '<div class="db-none">Eşleşme yok. Arama yalnızca açılmış düğümlerin içine bakar.</div>';
+    return out.join('') || '<div class="db-none">Eşleşme yok. Arama yalnızca açılmış düğümlerin içine bakar.</div>';
   }
 
   /* ---------------- side views: history and saved queries ---------------- */
@@ -486,8 +503,8 @@
 
   /* ---------------- running queries ---------------- */
   // statement under the cursor: text between blank lines / semicolons around the cursor
-  function statementAt() {
-    const doc = cm.getDoc(), line = doc.getCursor().line, last = doc.lastLine();
+  function statementAt(ed = cm) {
+    const doc = ed.getDoc(), line = doc.getCursor().line, last = doc.lastLine();
     const blank = l => !doc.getLine(l).trim();
     if (blank(line)) {
       let up = line; while (up > 0 && blank(up)) up--;
@@ -741,7 +758,7 @@
   /* ---------------- modal dialogs ---------------- */
   let modalDone = null;
   function modal({ title, body, buttons, icon, danger, wide, focus, onOpen, onAction }) {
-    const el = document.getElementById('dbModal');
+    const el = layer('dbModal');
     if (modalDone) modalDone(null);
     return new Promise(resolve => {
       el.innerHTML = `<form class="db-dlg${wide ? ' wide' : ''}${danger ? ' danger' : ''}" novalidate role="dialog" aria-modal="true" aria-label="${esc(title)}">
@@ -900,7 +917,7 @@
 
   /* ---------------- context menus ---------------- */
   function menu(x, y, items) {
-    const el = document.getElementById('dbCtx');
+    const el = layer('dbCtx');
     el.innerHTML = items.map(it => (it === '-' ? '<div class="db-sep"></div>' : `<button role="menuitem" data-mi="${it[0]}"${it[3] ? ' disabled' : ''}><i class="fa-solid ${it[2] || 'fa-blank'}"></i><span>${esc(it[1])}</span>${it[4] ? `<kbd>${esc(it[4])}</kbd>` : ''}</button>`)).join('');
     el.hidden = false;
     const w = el.offsetWidth, h = el.offsetHeight;
@@ -1240,7 +1257,7 @@
     // shortcuts while DB mode is on (capture: before CodeMirror and the grid)
     window.addEventListener('keydown', e => {
       if (S.mode !== 'db' || !D.built) return;
-      if (!document.getElementById('dbModal').hidden) return;
+      if (!layer('dbModal').hidden) return;
       if (document.querySelector('#settings:not([hidden]),#report:not([hidden]),#discover:not([hidden])')) return;
       const k = (e.ctrlKey ? 'C' : '') + (e.shiftKey ? 'S' : '') + (e.altKey ? 'A' : '') + '+' + e.key;
       const map = {
@@ -1318,25 +1335,110 @@
     );
   } catch (_) {}
 
+  /* ---------------- shared with the IDE's DB panel (idedb.js) ---------------- */
+  // result grid events for a grid rendered outside #dbView (same behaviour as the handlers in bind())
+  function bindGrid(root) {
+    root.addEventListener('mousedown', e => {
+      const rz = e.target.closest('[data-rz]'); if (rz && e.detail === 1) { resizeCol(e, +rz.dataset.rz); return; }
+      if (e.button !== 0) return;
+      const grid = e.target.closest('.db-grid'); if (!grid || !grid._r) return;
+      const r = grid._r;
+      const hc = e.target.closest('.db-hc');
+      if (hc) { const j = +hc.dataset.col; r.sel = e.shiftKey && r.sel ? { ...r.sel, c1: j, r0: 0, r1: r.shown - 1 } : { r0: 0, r1: r.shown - 1, c0: j, c1: j }; paintRows(grid); updateSelInfo(grid); return; }
+      const row = e.target.closest('.db-gr'); if (!row) return;
+      const i = +row.dataset.r, cellEl = e.target.closest('.db-c');
+      if (!cellEl) r.sel = e.shiftKey && r.sel ? { ...r.sel, r1: i, c0: 0, c1: r.columns.length - 1 } : { r0: i, r1: i, c0: 0, c1: r.columns.length - 1 };
+      else { const j = +cellEl.dataset.c; r.sel = e.shiftKey && r.sel ? { ...r.sel, r1: i, c1: j } : { r0: i, r1: i, c0: j, c1: j }; }
+      paintRows(grid); updateSelInfo(grid);
+      grid.focus({ preventScroll: true });
+    });
+    root.addEventListener('keydown', e => { const grid = e.target.closest && e.target.closest('.db-grid'); if (grid && grid._r) gridKey(grid, e); });
+    root.addEventListener('dblclick', e => {
+      const cell = e.target.closest('.db-c'); if (cell) { const grid = cell.closest('.db-grid'); viewCell(grid._r, +cell.parentElement.dataset.r, +cell.dataset.c); return; }
+      const rz = e.target.closest('[data-rz]'); if (rz) autoFit(rz.closest('.db-grid'), +rz.dataset.rz);
+    });
+    root.addEventListener('contextmenu', async e => {
+      const cell = e.target.closest('.db-c'); if (!cell) return;
+      e.preventDefault();
+      const grid = cell.closest('.db-grid'), r = grid._r, i = +cell.parentElement.dataset.r, j = +cell.dataset.c;
+      const s = selRange(r);
+      if (!s || i < s.r0 || i > s.r1 || j < s.c0 || j > s.c1) { r.sel = { r0: i, r1: i, c0: j, c1: j }; paintRows(grid); updateSelInfo(grid); }
+      const a = await menu(e.clientX, e.clientY, [
+        ['cell', 'Kopyala', 'fa-copy', false, 'Ctrl+C'], ['cellh', 'Başlıklarla kopyala', 'fa-copy'], ['json', 'JSON olarak kopyala', 'fa-code'], ['ins', 'INSERT olarak kopyala', 'fa-plus'],
+        '-', ['view', 'Değeri görüntüle', 'fa-expand'], ['col', 'Sütun adını kopyala', 'fa-heading'], ['fit', 'Sütunu sığdır', 'fa-arrows-left-right'],
+      ]);
+      const rows = fn => { const sv = r.sel, x = selRange(r); r.sel = { r0: x.r0, r1: x.r1, c0: 0, c1: r.columns.length - 1 }; fn(); r.sel = sv; };
+      if (a === 'cell') copySel(r, false);
+      else if (a === 'cellh') copySel(r, true);
+      else if (a === 'json') rows(() => copyRowsJson(r));
+      else if (a === 'ins') rows(() => copyRowsInsert(r, grid._t));
+      else if (a === 'view') viewCell(r, i, j);
+      else if (a === 'col') copyText(r.columns[j].name, 'Sütun adı kopyalandı');
+      else if (a === 'fit') autoFit(grid, j);
+    });
+  }
+  async function fetchMore(r, all) {
+    const want = all ? r.fetched : Math.min(r.fetched, r.shown + SHOW_STEP);
+    while (r.rows.length < want) {
+      const res = await inv('db:rows', r.id, r.rows.length, Math.min(20000, want - r.rows.length));
+      if (res.error) { toast('Satırlar alınamadı', res.error); break; }
+      if (!res.rows.length) break;
+      for (const row of res.rows) r.rows.push(row);
+    }
+    r.shown = Math.min(want, r.rows.length);
+  }
+  async function exportResult(r, sep, name) {
+    const res = await inv('db:exportCsv', r.id, { sep, name });
+    if (res.canceled) return;
+    if (res.error) { toast('Dışa aktarılamadı', res.error); return; }
+    toast('CSV kaydedildi', `${fmtN(res.rows)} satır${res.truncated ? ` (toplam ${fmtN(res.total)}; bellek sınırı nedeniyle tamamı değil)` : ''} · ${res.file}`);
+  }
+  // DB mode with this node (or this SQL) in front
+  async function openInDbMode(o = {}) {
+    setMode('db');
+    if (window.dbMode) await window.dbMode.show();
+    if (o.sql != null) { openSql(o.sql, o.connId, o.db, o.title || "IDE'den"); return; }
+    if (!o.key) return;
+    const n = parseKey(o.key);
+    if (n.t === 'o' && (n.kind === 'tables' || n.kind === 'views') && o.key.split(':').length <= 6) { await nodeAction('top', o.key); return; }
+    if (n.t === 'c' && !(D.live[n.id] && D.live[n.id].status === 'ok')) await connect(n.id);
+    else { const t = addTab({ connId: n.id, db: n.db || undefined, silent: true }); activateTab(t.id); }
+  }
+  window.dbApi = {
+    TYPE_NAME, CM_MODE, isMy, qi, full, topSql, selectSql, execSql, parseKey,
+    conns: () => D.conns, conn, live: id => D.live[id] || null,
+    setLive(id, patch) { D.live[id] = Object.assign(D.live[id] || {}, patch); renderTree(); },
+    async load() { await loadConns(); renderTree(); return D.conns; },
+    connect, toggle, columnsOf, nodeAction: (a, key) => (a === 'refresh' || a === 'connect' || a === 'disconnect' || a === 'edit' ? nodeAction(a, key) : null),
+    isOpen: key => D.open.has(key), treeHtml, watchTree(fn) { treeWatchers.add(fn); return () => treeWatchers.delete(fn); },
+    editConn, menu, modal, askPassword, statementAt, copyText, copySel,
+    renderGrid, bindGrid, fetchMore, exportResult, openInDbMode,
+  };
+
+  let initP = null;
   window.dbMode = {
     async show() {
-      if (!D.built) {
-        build();
-        await loadConns();
-        await loadState();
-        applyUi();
-        setSide(D.side);
-        renderTree();
-        activateTab(D.active);
-        const t = cur(); const c = t && conn(t.connId);
-        if (c) connect(c.id, true);
-      } else {
-        requestAnimationFrame(() => { cm.refresh(); const g = view.querySelector('.db-grid'); if (g) paintRows(g); });
-        loadConns().then(() => { renderConn(); renderTabs(); });
+      if (!initP) {
+        initP = (async () => {
+          build();
+          await loadConns();
+          await loadState();
+          applyUi();
+          setSide(D.side);
+          renderTree();
+          activateTab(D.active);
+          const t = cur(); const c = t && conn(t.connId);
+          if (c) connect(c.id, true);
+        })();
+        return initP;
       }
+      await initP;
+      requestAnimationFrame(() => { cm.refresh(); const g = view.querySelector('.db-grid'); if (g) paintRows(g); });
+      loadConns().then(() => { renderConn(); renderTabs(); });
     },
     hide() {
       const m = document.getElementById('dbCtx'); if (m) m.hidden = true;
+      if (modalDone) modalDone(null); // the dialog layer sits outside #dbView now
       saveState();
     },
   };
