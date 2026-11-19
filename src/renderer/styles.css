@@ -958,6 +958,47 @@ kbd{font:10.5px var(--f-mono);opacity:.75;margin-left:4px}
 .ide-menu .accent,.ide-menu .accent .mic{color:var(--accent)}
 .ide-menu .danger .mic{color:var(--danger)}
 
+/* menu strip (Dosya, Düzen, …) + slim icon toolbar */
+.ide .itool{gap:4px 8px;padding:3px 8px}
+.ide .itool .tb span{display:none}
+.ide .itool .tb.accent span{display:inline}
+.imbar{display:flex;align-items:center;gap:1px;padding-right:8px;margin-right:2px;border-right:1px solid var(--line)}
+.imb{border:0;background:none;border-radius:5px;padding:4px 9px;font-size:12.5px;color:var(--fg);cursor:default}
+.imb:hover,.imb.on{background:var(--hover)}
+.imb:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
+.im-drop{width:310px;overflow-y:auto;z-index:45}
+.im-drop button{padding:5px 10px;cursor:default}
+.im-drop button:focus,.im-drop button:focus-visible{outline:none;background:var(--hover)}
+.im-drop button:disabled{opacity:.4;background:none}
+.im-drop .mi{min-width:0;flex:0 1 auto;white-space:nowrap}
+.im-drop .mic{width:16px}
+.im-drop .mic.off{visibility:hidden}
+.im-drop .mic.fa-check{color:var(--accent)}
+.im-drop .fic{width:16px;text-align:center;font-size:12px;color:var(--c)}
+.im-drop code.ell{max-width:120px}
+.im-drop .lbl{padding:6px 10px 3px}
+
+/* find & replace bar */
+.findbar{display:flex;align-items:flex-start;gap:4px;padding:5px 10px 5px 4px;border-bottom:1px solid var(--line);background:var(--surface-2);flex:none}
+.fb-rows{display:grid;gap:4px;min-width:0;flex:1}
+.fb-row{display:flex;align-items:center;gap:4px;flex-wrap:wrap}
+.fb-box{display:flex;align-items:center;gap:4px;background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:1px 3px 1px 8px;width:300px;max-width:100%}
+.fb-box:focus-within{border-color:var(--accent)}
+.fb-box input{flex:1;min-width:0;border:0;background:none;color:var(--fg);font:12.5px var(--f-mono);outline:none;padding:3px 0}
+.fb-n{font-size:11.5px;color:var(--muted);min-width:70px;padding:0 4px;white-space:nowrap}
+.findbar.no-hit .fb-n{color:var(--danger)}
+.findbar.no-hit .fb-box:first-child{border-color:var(--danger)}
+.fb-row .ghost{font-size:12px}
+.fb-tog{align-self:flex-start;margin-top:2px}
+.cm-s-claudelot .cm-matchhighlight{background:color-mix(in srgb,var(--accent) 16%,transparent);border-radius:2px}
+.cm-s-claudelot .CodeMirror-foldgutter{width:14px}
+.cm-s-claudelot .CodeMirror-foldgutter-open,.cm-s-claudelot .CodeMirror-foldgutter-folded{color:var(--muted);cursor:pointer}
+.cm-s-claudelot .CodeMirror-foldgutter-open:after{content:"\25BE"}
+.cm-s-claudelot .CodeMirror-foldgutter-folded:after{content:"\25B8"}
+.cm-s-claudelot .CodeMirror-foldmarker{color:var(--accent);background:var(--accent-soft);border-radius:3px;padding:0 4px;font-family:inherit;text-shadow:none;cursor:pointer}
+.cm-s-claudelot .im-ruler{border-left:1px dashed color-mix(in srgb,var(--fg) 14%,transparent)}
+.CodeMirror-search-match.im-scroll-hit,.im-scroll-hit{background:var(--warn);opacity:.6}
+
 /* ---------------- themed tooltip (ui.js) ---------------- */
 .ui-tip{position:fixed;z-index:10000;max-width:340px;pointer-events:none;background:var(--surface);color:var(--fg);border:1px solid var(--line);border-radius:7px;padding:5px 9px;font-size:12px;line-height:1.45;box-shadow:0 8px 24px -8px rgba(0,0,0,.55);white-space:pre-line;overflow-wrap:anywhere;opacity:0;transform:translateY(-3px);transition:opacity .12s,transform .12s}
 .ui-tip.above{transform:translateY(3px)}

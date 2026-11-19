@@ -1062,7 +1062,7 @@ function setupEditor() {
     indentUnit: 2, tabSize: 2, value: '', lineWrapping: !!IDE.ui.wrap,
     extraKeys: {
       'Ctrl-S': () => saveFile(),
-      'Ctrl-F': () => { const sel = IDE.cm.somethingSelected() && IDE.cm.getSelection(); if (sel && !sel.includes('\n')) $('#findIn').value = sel; $('#findIn').focus(); $('#findIn').select(); },
+      'Ctrl-F': () => imFind(false),
       Tab: cm => (cm.somethingSelected() ? cm.indentSelection('add') : cm.replaceSelection('  ')),
       'Shift-Tab': cm => cm.indentSelection('subtract'),
     },
@@ -1093,6 +1093,7 @@ async function openFile(fp, at) {
   const pid = IDE.project;
   const ok = await ensureLoaded(fp);
   const s = IDE.state[pid] || (IDE.state[pid] = { tabs: [], file: null });
+  imNoteOpened(s, fp, ok);
   if (!ok) {
     s.tabs = s.tabs.filter(x => x !== fp);
     if (s.file === fp) s.file = s.tabs[s.tabs.length - 1] || null;
@@ -1147,6 +1148,7 @@ async function closeFiles(list) {
     detail: 'Yine de kapatılsın mı?',
   }))) return false;
   const s = ist(), drop = new Set(list);
+  imNoteClosed(list);
   const idx = s.tabs.indexOf(s.file);
   s.tabs = s.tabs.filter(x => !drop.has(x));
   if (drop.has(s.file)) s.file = s.tabs[Math.min(Math.max(idx, 0), s.tabs.length - 1)] || null; // the neighbour, not the last tab
@@ -1405,22 +1407,6 @@ function applyIdeUi() {
 }
 function saveIdeUi() { applyIdeUi(); setCfg({ ide: { ui: IDE.ui } }); }
 function toggleWrap() { IDE.ui.wrap = !IDE.ui.wrap; saveIdeUi(); }
-function findNext(q, back) {
-  const cm = IDE.cm;
-  if (!q || cm.getWrapperElement().hidden) { $('#findN').textContent = ''; return; }
-  let count = 0;
-  const all = cm.getSearchCursor(q, CodeMirror.Pos(0, 0), { caseFold: true });
-  while (all.findNext() && count < 9999) count++;
-  $('#findN').textContent = count ? count + ' eşleşme' : 'Bulunamadı';
-  if (!count) return;
-  let cur = cm.getSearchCursor(q, cm.getCursor(back ? 'from' : 'to'), { caseFold: true });
-  if (!(back ? cur.findPrevious() : cur.findNext())) {
-    cur = cm.getSearchCursor(q, back ? CodeMirror.Pos(cm.lastLine()) : CodeMirror.Pos(0, 0), { caseFold: true });
-    if (back) cur.findPrevious(); else cur.findNext();
-  }
-  cm.setSelection(cur.from(), cur.to());
-  cm.scrollIntoView({ from: cur.from(), to: cur.to() }, 80);
-}
 /* puts "@path" (and the selected lines) into the project's Claude session */
 async function askClaude(target, targetIsDir) {
   const p = proj(IDE.project);
@@ -1885,12 +1871,6 @@ function bindIde() {
   });
   $('#qoList').addEventListener('click', e => { const b = e.target.closest('[data-qoi]'); if (b) pickPalette(+b.dataset.qoi); });
   $('#qoBg').addEventListener('mousedown', e => { if (e.target.id === 'qoBg') closePalette(); });
-  // find in file: Enter next, Shift+Enter previous
-  $('#findIn').addEventListener('keydown', e => {
-    if (e.key === 'Enter') { e.preventDefault(); findNext(e.target.value, e.shiftKey); }
-    if (e.key === 'Escape') { $('#findN').textContent = ''; if (!IDE.cm.getWrapperElement().hidden) IDE.cm.focus(); }
-  });
-  $('#findIn').addEventListener('input', () => { $('#findN').textContent = ''; });
 }
 
 /* ---------------- mode ---------------- */
@@ -2551,7 +2531,29 @@ const SHORTCUTS = [
   { group: 'IDE', keys: 'Ctrl+W', label: 'Açık dosyayı kapat', ide: true, run: () => { const fp = ist().file; if (fp) closeFile(fp); } },
   { group: 'IDE', keys: 'Alt+Z', label: 'Satır sarmayı aç / kapat', ide: true, run: () => toggleWrap() },
   { group: 'IDE', keys: 'Ctrl+S', label: 'Dosyayı kaydet' },
-  { group: 'IDE', keys: 'Ctrl+F', label: 'Dosyada ara (Enter: sonraki, Shift+Enter: önceki)' },
+  { group: 'IDE', keys: 'Ctrl+N', label: 'Yeni dosya', ide: true, run: () => newEntry(projRoot(), false) },
+  { group: 'IDE', keys: 'Ctrl+Shift+S', label: 'Farklı kaydet', ide: true, run: () => imSaveAs() },
+  { group: 'IDE', keys: 'Ctrl+F', label: 'Dosyada bul (Enter: sonraki, Shift+Enter: önceki)', ide: true, run: () => imFind(false) },
+  { group: 'IDE', keys: 'Ctrl+H', label: 'Bul ve değiştir', ide: true, run: () => imFind(true) },
+  { group: 'IDE', keys: 'F3 / Shift+F3', label: 'Sonrakini / öncekini bul' },
+  { group: 'IDE', keys: 'F3', label: 'Sonrakini bul', ide: true, hide: true, run: () => imFindStep(false) },
+  { group: 'IDE', keys: 'Shift+F3', label: 'Öncekini bul', ide: true, hide: true, run: () => imFindStep(true) },
+  { group: 'IDE', keys: 'Alt / F10', label: 'Menü çubuğuna geç (oklarla gezin, Esc: geri dön)' },
+  { group: 'IDE', keys: 'F10', label: 'Menü çubuğuna geç', ide: true, hide: true, run: () => imFocusBar() },
+  { group: 'IDE', keys: 'Ctrl+/ / Ctrl+7', label: 'Satır yorumunu aç / kapat' },
+  { group: 'IDE', keys: 'Shift+Alt+A', label: 'Blok yorumunu aç / kapat' },
+  { group: 'IDE', keys: 'Alt+↑ / Alt+↓', label: 'Satırı yukarı / aşağı taşı' },
+  { group: 'IDE', keys: 'Shift+Alt+↑ / Shift+Alt+↓', label: 'Satırı yukarı / aşağı çoğalt' },
+  { group: 'IDE', keys: 'Ctrl+Shift+K', label: 'Satırı sil' },
+  { group: 'IDE', keys: 'Ctrl+J', label: 'Satırları birleştir' },
+  { group: 'IDE', keys: 'Ctrl+Enter / Ctrl+Shift+Enter', label: 'Alta / üste yeni satır ekle' },
+  { group: 'IDE', keys: 'Ctrl+D', label: 'Sonraki eşleşmeyi de seç (çoklu imleç)' },
+  { group: 'IDE', keys: 'Ctrl+Shift+L', label: 'Tüm eşleşmeleri seç' },
+  { group: 'IDE', keys: 'Ctrl+L', label: 'Satırı seç' },
+  { group: 'IDE', keys: 'Ctrl+Alt+↑ / Ctrl+Alt+↓', label: 'Üste / alta imleç ekle' },
+  { group: 'IDE', keys: 'Ctrl+M', label: 'Eşleşen paranteze git' },
+  { group: 'IDE', keys: 'Ctrl+Q', label: 'Bulunduğu bloğu katla / aç' },
+  { group: 'IDE', keys: 'Shift+Alt+F', label: 'JSON biçimlendir' },
   { group: 'IDE', keys: 'Ctrl+Z / Ctrl+Y', label: 'Geri al / yinele' },
   { group: 'IDE', keys: 'F2', label: 'Gezginde seçili öğeyi yeniden adlandır' },
   { group: 'IDE', keys: 'Delete', label: 'Gezginde seçili öğeyi Geri Dönüşüm Kutusu’na taşı' },
@@ -2559,7 +2561,7 @@ const SHORTCUTS = [
 
 function kisayolHTML() {
   const groups = [...new Set(SHORTCUTS.map(s => s.group))];
-  return groups.map(g => `<h4>${g}</h4><table class="kbd-t">${SHORTCUTS.filter(s => s.group === g).map(s => `<tr><td>${s.label}</td><td class="n">${s.keys.split(' / ').map(k => k.split('+').map(x => `<kbd>${x}</kbd>`).join('+')).join(' / ')}</td></tr>`).join('')}</table>`).join('')
+  return groups.map(g => `<h4>${g}</h4><table class="kbd-t">${SHORTCUTS.filter(s => s.group === g && !s.hide).map(s => `<tr><td>${s.label}</td><td class="n">${s.keys.split(' / ').map(k => k.split('+').map(x => `<kbd>${x}</kbd>`).join('+')).join(' / ')}</td></tr>`).join('')}</table>`).join('')
     + '<p class="set-note">Uygulama kısayolları terminal ve kod düzenleyici açıkken de çalışır. Claude Code\'un kendi kısayolları (Ctrl+B, Ctrl+R, Shift+Tab vb.) terminale gitmeye devam eder.</p>';
 }
 
@@ -3084,6 +3086,7 @@ async function init() {
   bindEvents();
   initGit();
   bindIde();
+  setupIdeMenu();
   applyPanels();
   renderUsage();
   await refreshAllHistory();
