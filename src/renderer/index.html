@@ -9,6 +9,7 @@
 <link rel="stylesheet" href="../../node_modules/codemirror/lib/codemirror.css">
 <link rel="stylesheet" href="styles.css">
 <link rel="stylesheet" href="db.css">
+<link rel="stylesheet" href="ssh.css">
 </head>
 <body>
 <div class="window" id="win">
@@ -21,6 +22,7 @@
       <button role="tab" data-mode="claude" class="on" title="AI modu: Claude oturumları (Ctrl+1)"><i class="fa-solid fa-robot"></i>AI<span class="pill-b" id="pillBadge" hidden>0</span></button>
       <button role="tab" data-mode="ide" title="IDE modu (Ctrl+2)"><i class="fa-solid fa-code"></i>IDE</button>
       <button role="tab" data-mode="db" title="Veritabanı modu (Ctrl+3)"><i class="fa-solid fa-database"></i>DB</button>
+      <button role="tab" data-mode="ssh" title="SSH modu: terminal, SFTP dosya yöneticisi, tüneller ve Uzak Masaüstü (Ctrl+4)"><i class="fa-solid fa-server"></i>SSH</button>
     </div>
     <div class="tb-right">
       <span class="plug-tb" id="plugTb"></span>
@@ -142,6 +144,8 @@
 
   <!-- DB MODE: filled by db.js -->
   <div class="db" id="dbView" hidden></div>
+  <!-- SSH MODE: filled by ssh.js -->
+  <div class="ssh" id="sshView" hidden></div>
   <div class="plug-view" id="plugView" hidden></div>
   <aside class="plug-drawer" id="plugDrawer" hidden aria-label="Eklenti paneli"><div class="pd-h"><span class="pd-t"></span><button class="ghost icon" data-plclose="1" title="Kapat (Esc)" aria-label="Paneli kapat"><i class="fa-solid fa-xmark"></i></button></div><div class="pd-body"></div></aside>
 
@@ -233,6 +237,7 @@
 <script src="dock.js"></script>
 <script src="app.js"></script>
 <script src="db.js"></script>
+<script src="ssh.js"></script>
 <script src="plugins.js"></script>
 </body>
 </html>

@@ -1901,6 +1901,7 @@ function setMode(m, initial) {
   $('#claudeView').hidden = m !== 'claude';
   $('#ideView').hidden = m !== 'ide';
   $('#dbView').hidden = m !== 'db';
+  $('#sshView').hidden = m !== 'ssh';
   if (window.pluginHost) pluginHost.onMode(m);
   const host = $('#termHost');
   (m === 'ide' ? $('#ideSlot') : $('#centerSlot')).appendChild(host);
@@ -1922,6 +1923,7 @@ function setMode(m, initial) {
   requestAnimationFrame(() => { fitActive(); if (m === 'ide') IDE.cm.refresh(); });
   // DB mode lives in db.js; it exposes window.dbMode = { show, hide }
   if (window.dbMode) { if (m === 'db') window.dbMode.show(); else window.dbMode.hide(); }
+  if (window.sshMode) { if (m === 'ssh') window.sshMode.show(); else window.sshMode.hide(); }
 }
 
 /* ---------------- menus ---------------- */
@@ -2528,6 +2530,7 @@ const SHORTCUTS = [
   { group: 'Genel', keys: 'Ctrl+1', label: 'AI modu (Claude oturumları)', run: () => setMode('claude') },
   { group: 'Genel', keys: 'Ctrl+2', label: 'IDE modu', run: () => setMode('ide') },
   { group: 'Genel', keys: 'Ctrl+3', label: 'Veritabanı (DB) modu', run: () => setMode('db') },
+  { group: 'Genel', keys: 'Ctrl+4', label: 'SSH modu (terminal, SFTP, RDP)', run: () => setMode('ssh') },
   { group: 'Genel', keys: 'Ctrl+Shift+P', label: 'Proje Başlat paneli', run: () => showPanel('side').then(() => openStartPanel()) },
   { group: 'Genel', keys: 'Ctrl+Shift+O', label: 'Karşılama ekranı', run: () => api.send('app:welcome') },
   { group: 'Genel', keys: 'Ctrl+,', label: 'Ayarlar', run: () => openSettings() },
@@ -3089,7 +3092,7 @@ async function init() {
   await refreshAllHistory();
   api.on('live-sessions', setLive);
   try { setLive(await api.invoke('live:list')); } catch (_) {}
-  setMode(['ide', 'db'].includes(CFG.settings.mode) ? CFG.settings.mode : 'claude', true);
+  setMode(['ide', 'db', 'ssh'].includes(CFG.settings.mode) ? CFG.settings.mode : 'claude', true);
   refreshUsage();
   setInterval(refreshUsage, 120000);
   setInterval(renderSide, 60000);

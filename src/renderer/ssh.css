@@ -1,0 +1,215 @@
+/* VoxStorm SSH mode. Scoped under .ssh / ssh- prefix; colours from theme tokens so every skin works.
+   Dialogs and the context menu reuse the DB mode look (.db-modal, .db-dlg, .db-ctx from db.css). */
+.ssh{display:flex;flex:1;min-height:0;background:var(--surface);position:relative;font-size:12.5px}
+:where(.ssh) :where(button:not(.btn)){font:inherit;color:inherit;background:none;border:0;cursor:pointer}
+.ssh .ssh-grow{flex:1}
+.ssh-mono{font-family:var(--f-mono);font-size:11.5px;word-break:break-all}
+.ssh .db-c-red,.db-modal .db-c-red{--dbc:#e5484d}
+.ssh .db-c-orange{--dbc:#f76b15}
+.ssh .db-c-yellow{--dbc:#e2b42b}
+.ssh .db-c-green{--dbc:#30a46c}
+.ssh .db-c-blue{--dbc:#3e8cf0}
+.ssh .db-c-purple{--dbc:#a26bdb}
+.ssh .db-c-gray{--dbc:#8b8d98}
+.ssh .db-c-none{--dbc:transparent}
+.ssh-ib{display:inline-grid;place-items:center;width:26px;height:26px;border-radius:6px;color:var(--muted);flex:none}
+.ssh-ib:hover:not(:disabled){background:var(--hover);color:var(--fg)}
+.ssh-ib:disabled{opacity:.4;cursor:default}
+.ssh-ib.sm{width:22px;height:22px;font-size:11px}
+.ssh-tb{display:inline-flex;align-items:center;gap:6px;padding:4px 9px;border-radius:6px;color:var(--muted);white-space:nowrap}
+.ssh-tb:hover{background:var(--hover);color:var(--fg)}
+.ssh-tb.danger:hover{color:var(--danger)}
+.ssh-tb[hidden]{display:none}
+.ssh-cnt{font-size:10.5px;background:var(--accent);color:var(--on-accent);border-radius:8px;padding:0 5px;font-weight:600}
+
+/* ---------- host list ---------- */
+.ssh-side{display:flex;flex-direction:column;width:250px;min-width:180px;background:var(--surface-2);border-right:1px solid var(--line)}
+.ssh-side-h{display:flex;align-items:center;gap:6px;padding:9px 8px 6px 12px}
+.ssh-side-h b{font-size:12px;text-transform:uppercase;letter-spacing:.04em;color:var(--muted)}
+.ssh-search{display:flex;align-items:center;gap:6px;margin:0 8px 6px;padding:0 4px 0 8px;border:1px solid var(--line);border-radius:7px;background:var(--surface)}
+.ssh-search>i{color:var(--muted);font-size:11px}
+.ssh-search input{flex:1;min-width:0;border:0;background:none;color:var(--fg);font:inherit;padding:5px 0;outline:none}
+.ssh-search:focus-within{border-color:var(--accent)}
+.ssh-hosts{flex:1;overflow:auto;padding:2px 0 10px;outline:none}
+.ssh-grp{display:flex;align-items:center;gap:7px;padding:8px 12px 3px;font-size:11px;font-weight:600;color:var(--muted);cursor:pointer;user-select:none;text-transform:uppercase;letter-spacing:.03em}
+.ssh-grp i{font-size:9px;width:10px}
+.ssh-grp span{margin-left:auto;font-weight:400}
+.ssh-host{display:flex;align-items:center;gap:8px;padding:5px 6px 5px 12px;cursor:pointer;position:relative;user-select:none}
+.ssh-host.in-grp{padding-left:22px}
+.ssh-host::before{content:"";position:absolute;left:4px;top:7px;bottom:7px;width:3px;border-radius:2px;background:var(--dbc)}
+.ssh-host:hover{background:var(--hover)}
+.ssh-host.cur{background:var(--accent-soft)}
+.ssh-hosts:focus .ssh-host.cur{box-shadow:inset 0 0 0 1px var(--accent)}
+.ssh-hi{width:16px;text-align:center;color:var(--muted);font-size:12px}
+.ssh-hn{display:grid;min-width:0;flex:1;line-height:1.3}
+.ssh-hn b{font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ssh-hn small{color:var(--muted);font-family:var(--f-mono);font-size:10.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ssh-live{font-size:10.5px;background:var(--ok-soft);color:var(--ok);border-radius:8px;padding:0 6px;font-weight:600}
+.ssh-host [data-hostmenu]{opacity:0}
+.ssh-host:hover [data-hostmenu],.ssh-host.cur [data-hostmenu]{opacity:1}
+.ssh-hempty{display:grid;justify-items:center;gap:7px;text-align:center;padding:30px 16px;color:var(--muted)}
+.ssh-hempty>i{font-size:26px;opacity:.6}
+.ssh-hempty b{color:var(--fg)}
+.ssh-hnone{padding:14px;color:var(--muted);text-align:center}
+.ssh-split-v{width:4px;margin-left:-2px;margin-right:-2px;cursor:col-resize;z-index:2;flex:none}
+.ssh-split-v:hover{background:var(--accent)}
+
+/* ---------- tabs & session ---------- */
+.ssh-main{flex:1;min-width:0;display:flex;flex-direction:column}
+.ssh-tabs{display:flex;align-items:stretch;gap:1px;height:34px;background:var(--surface-2);border-bottom:1px solid var(--line);overflow-x:auto;overflow-y:hidden;scrollbar-width:none;flex:none}
+.ssh-tab{display:flex;align-items:center;gap:7px;padding:0 6px 0 12px;max-width:220px;cursor:pointer;color:var(--muted);border-right:1px solid var(--line);position:relative;white-space:nowrap}
+.ssh-tab::after{content:"";position:absolute;left:0;right:0;top:0;height:2px;background:var(--dbc)}
+.ssh-tab:hover{color:var(--fg);background:var(--hover)}
+.ssh-tab.on{background:var(--surface);color:var(--fg)}
+.ssh-tab.on.db-c-none::after{background:var(--accent)}
+.ssh-tt{overflow:hidden;text-overflow:ellipsis}
+.ssh-tx{width:20px;height:20px;border-radius:5px;display:grid;place-items:center;font-size:10.5px;opacity:.6}
+.ssh-tx:hover{background:var(--hover);opacity:1}
+.ssh-tadd{width:32px;color:var(--muted);flex:none}
+.ssh-tadd:hover{color:var(--fg);background:var(--hover)}
+.ssh-dot{width:8px;height:8px;border-radius:50%;background:var(--muted);flex:none}
+.ssh-dot.ok{background:var(--ok);box-shadow:0 0 0 3px var(--ok-soft)}
+.ssh-dot.busy{background:var(--warn);animation:sshPulse 1s infinite}
+.ssh-dot.off{background:var(--danger)}
+@keyframes sshPulse{50%{opacity:.35}}
+.ssh-body{flex:1;min-height:0;position:relative;display:flex}
+.ssh-empty{margin:auto;display:grid;justify-items:center;gap:6px;color:var(--muted);text-align:center;padding:20px}
+.ssh-empty>i{font-size:30px;opacity:.6}
+.ssh-empty b{color:var(--fg);font-size:15px}
+.ssh-empty .en-keys{margin:10px 0 0;display:grid;grid-template-columns:auto auto;gap:6px 16px;align-items:center;text-align:left}
+.ssh-empty .en-keys dt{color:var(--muted)}
+.ssh-empty .en-keys dd{margin:0;display:flex;gap:3px;align-items:center;color:var(--muted)}
+.ssh-empty kbd,.ssh kbd{font-family:var(--f-mono);font-size:11px;border:1px solid var(--line);border-bottom-width:2px;border-radius:4px;padding:0 5px;background:var(--surface-2);color:var(--fg)}
+.ssh-sess{flex:1;min-width:0;display:flex;flex-direction:column}
+.ssh-sess[hidden]{display:none}
+.ssh-bar{display:flex;align-items:center;gap:8px;padding:5px 8px;border-bottom:1px solid var(--line);flex:none}
+.ssh-addr{font-family:var(--f-mono);font-size:11.5px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:40px}
+.ssh-vseg{flex:none;display:flex;background:var(--surface-2);border:1px solid var(--line);border-radius:7px;padding:2px;gap:2px;margin-left:6px}
+.ssh-vseg button{display:flex;align-items:center;gap:5px;padding:3px 9px;border-radius:5px;color:var(--muted);font-size:12px}
+.ssh-vseg button:hover{color:var(--fg)}
+.ssh-vseg button.on{background:var(--accent-soft);color:var(--fg)}
+.ssh-content{flex:1;min-height:0;display:grid;position:relative;--ssh-split:50%}
+.ssh-content[data-layout=split]{grid-template-rows:minmax(120px,var(--ssh-split)) 5px minmax(80px,1fr)}
+.ssh-content[data-layout=term]{grid-template-rows:1fr}
+.ssh-content[data-layout=files]{grid-template-rows:1fr}
+.ssh-content[data-layout=term] .ssh-files,.ssh-content[data-layout=term] .ssh-split-h{display:none}
+.ssh-content[data-layout=files] .ssh-term,.ssh-content[data-layout=files] .ssh-split-h{display:none}
+.ssh-split-h{cursor:row-resize;background:var(--line);opacity:.6}
+.ssh-split-h:hover{background:var(--accent);opacity:1}
+.ssh-term{min-height:0;background:var(--term-bg);padding:4px 0 2px 8px;display:flex}
+.ssh-termhost{flex:1;min-width:0;min-height:0}
+.ssh-termhost .xterm{height:100%}
+.ssh-over{position:absolute;inset:0;display:grid;place-items:center;background:color-mix(in srgb,var(--surface) 82%,transparent);z-index:5}
+.ssh-over[hidden]{display:none}
+.ssh-ob{display:grid;justify-items:center;gap:8px;text-align:center;max-width:460px;padding:24px;border-radius:12px;background:var(--surface);border:1px solid var(--line);box-shadow:var(--shadow)}
+.ssh-ob>i{font-size:26px;color:var(--accent)}
+.ssh-ob.bad>i{color:var(--danger)}
+.ssh-ob b{font-size:14px}
+.ssh-ob span{color:var(--muted);word-break:break-word}
+.ssh-obb{display:flex;gap:8px;margin-top:6px}
+
+/* ---------- file panes ---------- */
+.ssh-files{min-height:0;display:flex;flex-direction:column}
+.ssh-panes{flex:1;min-height:0;display:grid;grid-template-columns:minmax(0,1fr) 34px minmax(0,1fr)}
+.ssh-mid{display:flex;flex-direction:column;justify-content:center;align-items:center;gap:6px;background:var(--surface-2);border-left:1px solid var(--line);border-right:1px solid var(--line)}
+.ssh-mid .ssh-ib{border:1px solid var(--line);background:var(--surface)}
+.ssh-mid .ssh-ib:hover{border-color:var(--accent);color:var(--accent)}
+.ssh-pane{display:flex;flex-direction:column;min-width:0;min-height:0}
+.ssh-ph{display:flex;align-items:center;gap:3px;padding:5px 6px;border-bottom:1px solid var(--line)}
+.ssh-pt{display:flex;align-items:center;gap:6px;font-size:11px;font-weight:600;color:var(--muted);margin-right:4px;white-space:nowrap;text-transform:uppercase;letter-spacing:.03em}
+.ssh-path{flex:1;min-width:60px;font-family:var(--f-mono);font-size:11.5px;color:var(--fg);background:var(--surface-2);border:1px solid var(--line);border-radius:6px;padding:3px 7px;outline:none}
+.ssh-path:focus{border-color:var(--accent)}
+.ssh-lh,.ssh-row{display:grid;grid-template-columns:minmax(120px,1fr) 78px 118px;column-gap:8px;align-items:center;padding:0 8px}
+.ssh-lh.rem,.ssh-list.rem .ssh-row{grid-template-columns:minmax(120px,1fr) 70px 112px 82px 64px}
+.ssh-lh{height:24px;border-bottom:1px solid var(--line);font-size:11px;color:var(--muted);user-select:none;flex:none}
+.ssh-lh span{cursor:pointer;overflow:hidden;white-space:nowrap}
+.ssh-lh span:hover{color:var(--fg)}
+.ssh-lh span.on{color:var(--fg);font-weight:600}
+.ssh-lh span.on::after{content:" ▲";font-size:8px}
+.ssh-lh span.on[data-dir=desc]::after{content:" ▼"}
+.ssh-lh span:nth-child(2),.ssh-row .ssh-fs{text-align:right}
+.ssh-list{flex:1;overflow:auto;outline:none;padding-bottom:20px;position:relative}
+.ssh-pane.loading .ssh-list{opacity:.55}
+.ssh-row{height:23px;cursor:default;user-select:none;white-space:nowrap}
+.ssh-row:hover{background:var(--hover)}
+.ssh-row.sel{background:var(--accent-soft)}
+.ssh-list:focus .ssh-row.foc{box-shadow:inset 0 0 0 1px var(--accent)}
+.ssh-row.drop,.ssh-list.drop{background:color-mix(in srgb,var(--accent) 22%,transparent);outline:1px dashed var(--accent);outline-offset:-2px}
+.ssh-row.dot{opacity:.7}
+.ssh-fn{display:flex;align-items:center;gap:7px;overflow:hidden;text-overflow:ellipsis}
+.ssh-fn>i:first-child{width:14px;text-align:center;color:var(--muted);font-size:12px;flex:none}
+.ssh-row.dir .ssh-fn>i:first-child{color:var(--warn)}
+.ssh-row.up .ssh-fn{color:var(--muted)}
+.ssh-lnk{font-size:9px;color:var(--muted)}
+.ssh-lnk.bad{color:var(--danger)}
+.ssh-fs,.ssh-fd,.ssh-fp,.ssh-fo{font-size:11px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;font-variant-numeric:tabular-nums}
+.ssh-fp{font-family:var(--f-mono);font-size:10.5px}
+.ssh-lerr{display:flex;gap:8px;align-items:flex-start;margin:10px;padding:8px 10px;border-radius:7px;background:color-mix(in srgb,var(--danger) 14%,transparent);color:var(--danger);word-break:break-word}
+.ssh-lempty{padding:16px;text-align:center;color:var(--muted);font-style:italic}
+.ssh-pf{display:flex;align-items:center;justify-content:space-between;gap:8px;height:24px;padding:0 6px 0 10px;border-top:1px solid var(--line);font-size:11px;color:var(--muted);flex:none}
+.ssh-hid{display:inline-flex;align-items:center;gap:5px;padding:1px 7px;border-radius:5px}
+.ssh-hid:hover{background:var(--hover);color:var(--fg)}
+.ssh-hid.on{color:var(--accent)}
+
+/* ---------- transfers ---------- */
+.ssh-xfers{border-top:1px solid var(--line);background:var(--surface-2);max-height:150px;display:flex;flex-direction:column;flex:none}
+.ssh-xfers[hidden]{display:none}
+.ssh-xh{display:flex;align-items:center;gap:8px;padding:3px 6px 3px 10px;font-size:11.5px}
+.ssh-xh span{color:var(--muted)}
+.ssh-xl{overflow:auto}
+.ssh-x{display:grid;grid-template-columns:16px minmax(80px,1.4fr) minmax(60px,1fr) minmax(110px,auto) 22px;gap:8px;align-items:center;padding:2px 6px 2px 10px;font-size:11.5px}
+.ssh-xd{color:var(--accent);text-align:center}
+.ssh-xn{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ssh-xn small{color:var(--muted)}
+.ssh-xb{height:6px;border-radius:3px;background:var(--line);overflow:hidden}
+.ssh-xb i{display:block;height:100%;background:var(--accent);transition:width .2s}
+.ssh-xs{color:var(--muted);font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-variant-numeric:tabular-nums}
+.ssh-x.done .ssh-xb i{background:var(--ok)}
+.ssh-x.done .ssh-xd{color:var(--ok)}
+.ssh-x.error .ssh-xb i,.ssh-x.canceled .ssh-xb i{background:var(--danger)}
+.ssh-x.error .ssh-xs{color:var(--danger)}
+.ssh-x.ask .ssh-xs{color:var(--warn)}
+
+/* ---------- dialogs (inside the shared .db-modal) ---------- */
+.db-dlg .rdp-only{display:none}
+.db-dlg.k-rdp .rdp-only{display:grid}
+.db-dlg.k-rdp label.db-ck.rdp-only,.db-dlg.k-rdp p.db-note.rdp-only{display:flex}
+.db-dlg.k-rdp .ssh-only{display:none}
+.db-dlg .key-only{display:none}
+.db-dlg.a-key .key-only{display:grid}
+.db-dlg .pw-only{display:none}
+.db-dlg.a-pw .pw-only{display:grid}
+.db-dlg.a-agent .pwk-only{display:none!important}
+.db-dlg .db-typesel i{margin-right:4px}
+.db-dlg code{font-family:var(--f-mono);font-size:11px;padding:0 4px;border-radius:4px;background:var(--surface-2);border:1px solid var(--line)}
+.ssh-keyrow{display:flex;gap:6px}
+.ssh-keyrow input{flex:1}
+.ssh-fpbox{padding:8px 10px;border-radius:7px;background:var(--surface-2);border:1px solid var(--line);margin:0}
+.ssh-cmp{display:grid;grid-template-columns:auto 1fr;gap:4px 12px;padding:8px 10px;border-radius:7px;background:var(--surface-2)}
+.ssh-cmp span{color:var(--muted)}
+.ssh-perm{border-collapse:collapse;width:100%}
+.ssh-perm th{font-weight:600;color:var(--muted);font-size:11.5px;padding:3px 6px}
+.ssh-perm td{text-align:center;padding:3px 6px}
+.ssh-perm td:first-child{text-align:left}
+.ssh-perm input{accent-color:var(--accent)}
+.ssh-pick{display:grid;gap:4px;max-height:50vh;overflow:auto}
+.ssh-pk{display:flex;align-items:center;gap:10px;padding:7px 10px;border:1px solid var(--line);border-radius:8px;background:var(--surface-2);color:var(--fg);font:inherit;text-align:left;cursor:pointer;border-left:3px solid var(--dbc)}
+.ssh-pk:hover{border-color:var(--accent)}
+.ssh-pk i{color:var(--muted);width:16px;text-align:center}
+.ssh-pk span{display:grid;line-height:1.3}
+.ssh-pk small{color:var(--muted);font-family:var(--f-mono);font-size:10.5px}
+.db-modal .ssh-pk.db-c-red{--dbc:#e5484d}.db-modal .ssh-pk.db-c-none{--dbc:var(--line)}
+.ssh-tuns{display:grid;gap:4px}
+.ssh-tun{display:flex;align-items:center;gap:8px;padding:5px 6px 5px 10px;border-radius:7px;background:var(--surface-2)}
+.ssh-tun i{color:var(--accent)}
+.ssh-tun small{margin-left:auto;color:var(--muted)}
+.ssh-tunadd{display:grid;grid-template-columns:90px 1fr 90px auto;gap:8px;align-items:end}
+.db-dlg.ssh-editor{width:min(1100px,96vw);height:calc(100vh - 60px)}
+.db-dlg.ssh-editor .db-db{flex:1;min-height:0;display:flex;flex-direction:column;gap:6px;padding:8px 10px}
+.ssh-epath{color:var(--muted)}
+.ssh-ed{flex:1;min-height:0;border:1px solid var(--line);border-radius:7px;overflow:hidden}
+.ssh-ed .CodeMirror{height:100%;font-family:var(--f-mono);font-size:13px;line-height:1.55;background:var(--surface);color:var(--fg)}
+.ssh-confirm{display:flex;align-items:center;gap:8px;padding:10px 16px;border-top:1px solid var(--line);background:var(--warn-soft);color:var(--fg)}
+.ssh-confirm span{flex:1}
+.ssh-confirm .btn.db-bdanger{background:var(--danger);border-color:var(--danger);color:#fff}
+.ssh-tun small.bad{color:var(--danger)}

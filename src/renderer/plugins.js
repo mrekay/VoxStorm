@@ -86,7 +86,7 @@
   const API = {
     hello: (st, p, frame) => ({ id: st.info.id, name: st.info.name, version: st.info.version, permissions: st.info.permissions, theme: theme(), state: appState(), panel: frame.dataset.panel || null, place: frame.dataset.panel ? ((st.panels.get(frame.dataset.panel) || {}).place || null) : null }),
     'app.state': () => appState(),
-    'app.setMode': (st, p) => { const m = String(p && p.mode || ''); if (['claude', 'ide', 'db'].includes(m)) setMode(m); return true; },
+    'app.setMode': (st, p) => { const m = String(p && p.mode || ''); if (['claude', 'ide', 'db', 'ssh'].includes(m)) setMode(m); return true; },
     'app.openUrl': (st, p) => { const u = String(p && p.url || ''); if (!/^https:\/\//i.test(u)) throw new Error('Yalnızca https:// adresleri açılabilir'); window.open(u, '_blank'); return true; },
 
     'ui.toast': (st, p) => { toast(str(p && p.title, 120), str(p && p.body, 300)); return true; },

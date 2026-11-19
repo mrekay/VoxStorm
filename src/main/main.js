@@ -974,6 +974,7 @@ function spawnTerminal(opts) {
 }
 /* ---------------- updates (GitHub Releases) ---------------- */
 let U = null;
+let SSH = null;
 function setupUpdater() {
   const { net } = require('electron');
   U = require('./updater')({
@@ -1282,6 +1283,8 @@ function registerIpc() {
   require('./ide')({ ipcMain, shell, insideProject, send, isProjectRoot: p => config.projects.some(pr => norm(pr.path) === norm(p)) });
   // DB mode: connections, explorer, queries (closes its connections on quit)
   require('./db')({ ipcMain, app, dialog, getWin: () => win, DATA, getProjects: () => config.projects });
+  // SSH mode: terminal + SFTP (PuTTY / WinSCP), tunnels, Remote Desktop launcher
+  SSH = require('./ssh')({ ipcMain, dialog, getWin: () => win, send, DATA });
   pluginsModule({
     app, ipcMain, protocol, shell, dialog, getWin: () => win, DATA, insideProject, getProjects: () => config.projects,
     // the plugins folder as a project, under a readable name the first time it is added
@@ -1306,7 +1309,7 @@ function addProject(p, auto) {
 
 /* ---------------- start ---------------- */
 app.on('second-instance', () => showWindow());
-app.on('before-quit', () => { isQuitting = true; killAll(); saveConfigNow(); if (U) U.onQuit(); });
+app.on('before-quit', () => { isQuitting = true; killAll(); saveConfigNow(); if (U) U.onQuit(); if (SSH) SSH.shutdown(); });
 app.on('window-all-closed', e => e.preventDefault());
 
 /* ---------------- Start Menu shortcuts (notification name, icon, click target) ---------------- */
