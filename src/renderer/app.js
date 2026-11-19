@@ -1439,6 +1439,7 @@ function setExView(v) {
   $('#tree').hidden = v !== 'files';
   $('#psearch').hidden = v !== 'search';
   $('#exFileActs').hidden = v !== 'files';
+  if (window.ideDb) ideDb.showSide(v === 'db');
   if (v === 'search') { renderSearch(); requestAnimationFrame(() => { $('#psIn').focus(); $('#psIn').select(); }); }
 }
 function openProjectSearch() {
