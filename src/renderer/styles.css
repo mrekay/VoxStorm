@@ -1258,3 +1258,11 @@ html.is-mac.is-fullscreen .titlebar .tb-left{padding-left:10px}
 .set-sec-b h4{margin:10px 0 0;font-size:11.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
 .set-sec-b h4:first-child{margin-top:0}
 .set-body>.set-sec+.set-sec{margin-top:4px}
+/* usage view: Claude or Codex (one at a time) */
+.usage-ai{display:inline-flex;border:1px solid var(--line);border-radius:6px;overflow:hidden;margin-right:2px}
+.usage-ai button{border-radius:0;padding:0 6px;min-width:24px;color:var(--muted)}
+.usage-ai button+button{border-left:1px solid var(--line)}
+.usage-ai button.on{color:var(--fg);background:var(--accent-soft)}
+.days.codex .day i{background:color-mix(in srgb,#10a37f 45%,var(--line))}
+.days.codex .day.today i{background:#10a37f}
+.plan-src{margin-top:6px;font-size:11.5px}

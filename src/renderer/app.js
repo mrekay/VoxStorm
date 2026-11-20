@@ -994,6 +994,8 @@ function renderQueue() {
 /* The usage view has two modes: tokens counted from the session logs on this machine, or the plan
    limits as Claude Code's /usage shows them (percent of the weekly allowance, when it resets). */
 const usageMode = () => ((CFG && CFG.settings.usageMode) === 'plan' ? 'plan' : 'tokens');
+// whose usage the view shows: Claude or Codex, one at a time (settings.usageAgent)
+const usageAgent = () => ((CFG && CFG.settings.usageAgent) === 'codex' ? 'codex' : 'claude');
 const PLAN = { data: null, loading: false };
 function loadPlan(force) {
   if (PLAN.loading) return;
@@ -1023,7 +1025,10 @@ function renderPlanUsage() {
     return;
   }
   if (!d.rows.length) { body.innerHTML = '<div class="usage-note">Bu hesapta gösterilecek bir plan limiti yok.</div>'; return; }
-  body.innerHTML = `<div class="plan-rows">${d.rows.map(r => {
+  body.innerHTML = planRowsHtml(d.rows);
+}
+function planRowsHtml(rows) {
+  return `<div class="plan-rows">${rows.map(r => {
     const p = Math.max(0, Math.min(100, Math.round(r.percent)));
     const lvl = r.severity && r.severity !== 'normal' ? 'hot' : p >= 90 ? 'hot' : p >= 70 ? 'warm' : '';
     return `<div class="plan-row ${lvl}" title="${esc(r.title)}: %${p} kullanıldı${r.resetsAt ? '\n' + esc(planResetText(r.resetsAt)) : ''}">`
@@ -1032,23 +1037,35 @@ function renderPlanUsage() {
       + (r.resetsAt ? `<div class="plan-reset">${esc(planResetText(r.resetsAt))}</div>` : '') + '</div>';
   }).join('')}</div>`;
 }
+/* Codex's limits: what it last reported in its session files (no request is made) */
+function renderCodexPlan(cx) {
+  const body = $('#usageBody');
+  if (!cx) { body.innerHTML = '<div class="usage-note">Hesaplanıyor…</div>'; return; }
+  const p = cx.plan;
+  if (!p || !p.rows.length) { body.innerHTML = `<div class="usage-note">${cx.installed ? 'Codex henüz bir limit bilgisi yazmadı; bir Codex oturumunda ilk yanıttan sonra görünür.' : 'Codex CLI kurulu değil.'}</div>`; return; }
+  body.innerHTML = planRowsHtml(p.rows)
+    + `<div class="usage-note plan-src" title="Codex limitleri her yanıtta oturum dosyasına yazar; VoxStorm en sonuncuyu gösterir. Sıfırlanma saati geçen pencere %0 sayılır.">${p.plan ? esc(p.plan[0].toUpperCase() + p.plan.slice(1)) + ' planı · ' : ''}son bilgi ${esc((r => /^\d/.test(r) ? r + ' önce' : r)(rel(p.at)))}${p.reached ? ' · <b>limite ulaşıldı</b>' : ''}</div>`;
+}
 function renderUsage() { renderUsageView(); if (typeof dockFit === 'function') dockFit(); } // the dock keeps the group as tall as its content
 function renderUsageView() {
   const mb = document.querySelector('[data-usagemode]');
   if (mb) {
     const plan = usageMode() === 'plan';
     mb.classList.toggle('on', plan);
-    mb.title = plan ? 'Token görünümüne geç' : 'Plan limitlerini göster (Claude Code /usage gibi)';
+    mb.title = plan ? 'Token görünümüne geç' : usageAgent() === 'codex' ? 'Codex plan limitlerini göster (5 saat / hafta)' : 'Plan limitlerini göster (Claude Code /usage gibi)';
     mb.setAttribute('aria-pressed', String(plan));
   }
-  if (usageMode() === 'plan') return renderPlanUsage();
-  const u = S.usage;
+  const ag = usageAgent();
+  document.querySelectorAll('[data-usageai]').forEach(b => { const on = b.dataset.usageai === ag; b.classList.toggle('on', on); b.setAttribute('aria-pressed', String(on)); });
+  const cxu = S.usage && S.usage.codex;
+  if (usageMode() === 'plan') return ag === 'codex' ? renderCodexPlan(cxu) : renderPlanUsage();
+  const u = ag === 'codex' ? cxu : S.usage;
   if (!u) { $('#usageBody').innerHTML = '<div class="usage-note">Hesaplanıyor…</div>'; return; }
   const max = Math.max(...u.days, 1), names = ['Pzt', 'Sal', 'Çar', 'Per', 'Cum', 'Cmt', 'Paz'];
-  const dc = u.dayCost || [];
-  $('#usageBody').innerHTML = `<div class="days">${u.days.map((v, i) => `<div class="day ${i > u.today ? 'future' : ''} ${i === u.today ? 'today' : ''}" title="${names[i]}: ${i > u.today ? 'henüz yok' : fmtTok(v) + ' token · ≈ ' + fmtUsd(dc[i] || 0)}"><i style="${i > u.today ? '' : `height:${Math.max(3, v / max * 42)}px`}"></i><span>${names[i]}</span></div>`).join('')}</div>`
+  const dc = u.dayCost || [], money = u.cost != null;
+  $('#usageBody').innerHTML = `<div class="days ${ag}">${u.days.map((v, i) => `<div class="day ${i > u.today ? 'future' : ''} ${i === u.today ? 'today' : ''}" title="${names[i]}: ${i > u.today ? 'henüz yok' : fmtTok(v) + ' token' + (money ? ' · ≈ ' + fmtUsd(dc[i] || 0) : '')}"><i style="${i > u.today ? '' : `height:${Math.max(3, v / max * 42)}px`}"></i><span>${names[i]}</span></div>`).join('')}</div>`
     + `<div class="usage-stats">${[
-      ['Son 5 saat', u.last5h ? u.last5h.t : 0, u.last5h ? u.last5h.c : null, 'Son 5 saatte harcanan token (Claude oturum limitleri 5 saatlik pencereyle sayılır)'],
+      ['Son 5 saat', u.last5h ? u.last5h.t : 0, u.last5h ? u.last5h.c : null, `Son 5 saatte harcanan token (${ag === 'codex' ? 'Codex' : 'Claude'} oturum limitleri 5 saatlik pencereyle sayılır)`],
       ['Bugün', u.days[u.today], dc[u.today] || 0, 'Bugün harcanan token'],
       ['Bu hafta', u.total, u.cost, 'Pazartesiden bu yana harcanan token'],
     ].map(([l, t, c, tip]) => `<div class="us" title="${tip}"><small>${l}</small><b>${fmtTok(t)}</b>${u.cost != null && c != null ? `<span>≈ ${fmtUsd(c)}</span>` : ''}</div>`).join('')}</div>`;
@@ -2566,6 +2583,7 @@ function bindEvents() {
     else if (d.mdmode) { const fp = ist().file; if (d.mdmode === 'view') IDE.mdView.add(fp); else IDE.mdView.delete(fp); showFile(); if (d.mdmode === 'src') IDE.cm.focus(); }
     else if (d.tb) toolbar(d.tb);
     else if (d.report) openReport();
+    else if (d.usageai) { setCfg({ settings: { usageAgent: d.usageai } }).then(renderUsage); }
     else if ('usagemode' in d) { setCfg({ settings: { usageMode: usageMode() === 'plan' ? 'tokens' : 'plan' } }).then(renderUsage); }
     else if (d.planretry) { PLAN.data = null; loadPlan(true); renderUsage(); }
     else if (d.repmonth) { REP.month = d.repmonth; renderReport(); }

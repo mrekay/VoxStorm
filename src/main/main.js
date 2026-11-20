@@ -753,8 +753,14 @@ async function scanUsage() {
   for (const k of [...fileCache.keys()]) if (!seen.has(k)) fileCache.delete(k);
 
   // last line per message id wins (streaming writes the same message more than once)
-  const msgs = new Map();
-  for (const f of fileCache.values()) for (const e of f.entries) msgs.set(e.id, e);
+  // Claude and Codex are counted apart (the usage view shows one of them); only Claude's days go to
+  // usage-history.json (Claude Code deletes old transcripts, Codex keeps its rollouts)
+  const msgs = new Map(), cx = new Map();
+  let cxLimits = null;
+  for (const f of fileCache.values()) {
+    for (const e of f.entries) (e.id.startsWith('codex:') ? cx : msgs).set(e.id, e);
+    if (f.entries.limits && (!cxLimits || f.entries.limits.at > cxLimits.at)) cxLimits = f.entries.limits;
+  }
   const fresh = {};
   for (const e of msgs.values()) {
     const k = dayKey(e.ts);
@@ -774,9 +780,11 @@ async function scanUsage() {
   const monday = new Date(now); monday.setHours(0, 0, 0, 0);
   monday.setDate(monday.getDate() - ((monday.getDay() + 6) % 7));
   const days = [0, 0, 0, 0, 0, 0, 0], dayCost = [0, 0, 0, 0, 0, 0, 0];
+  const weekKeys = [];
   for (let i = 0; i < 7; i++) {
     const d = new Date(monday); d.setDate(monday.getDate() + i);
-    const rec = usageHistory[dayKey(d.getTime())];
+    weekKeys.push(dayKey(d.getTime()));
+    const rec = usageHistory[weekKeys[i]];
     if (rec) { days[i] = rec.t; dayCost[i] = rec.c; }
   }
   const keys = Object.keys(usageHistory).sort();
@@ -789,6 +797,18 @@ async function scanUsage() {
     days, dayCost, total: days.reduce((a, b) => a + b, 0), cost: dayCost.reduce((a, b) => a + b, 0),
     today: (now.getDay() + 6) % 7, weekStart: monday.getTime(), at: Date.now(),
     firstDay: keys[0] || null,
+  };
+  // Codex: the same week straight from its rollouts (no money: a ChatGPT plan is not billed per token)
+  const cxDays = [0, 0, 0, 0, 0, 0, 0], cx5h = { t: 0, c: null };
+  for (const e of cx.values()) {
+    const i = weekKeys.indexOf(dayKey(e.ts));
+    if (i >= 0) cxDays[i] += e.t;
+    if (e.ts >= since) cx5h.t += e.t;
+  }
+  usageCache.codex = {
+    last5h: cx5h, days: cxDays, dayCost: null, total: cxDays.reduce((a, b) => a + b, 0), cost: null,
+    today: usageCache.today, weekStart: usageCache.weekStart, at: usageCache.at,
+    installed: CODEX.installed(), plan: CODEX.planRows(cxLimits),
   };
   return usageCache;
 }

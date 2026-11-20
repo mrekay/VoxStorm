@@ -210,6 +210,8 @@ module.exports = function setupCodex({ config, hookPort, buildPrompt, encodeProj
     await walk(SESSIONS(), 0);
     return out;
   }
+  // token entries of one rollout; entries.limits = the plan limits Codex last reported in it
+  // (token_count events carry rate_limits: primary = 5 hours, secondary = week, used_percent, resets_at)
   async function parseRollout(fp) {
     const entries = [];
     let text; try { text = await fsp.readFile(fp, 'utf8'); } catch (_) { return entries; }
@@ -217,6 +219,13 @@ module.exports = function setupCodex({ config, hookPort, buildPrompt, encodeProj
     for (const line of text.split('\n')) {
       if (!cwd && line.includes('"session_meta"')) { try { cwd = cleanPath(JSON.parse(line).payload.cwd); } catch (_) {} continue; }
       if (line.includes('"turn_context"')) { try { const o = JSON.parse(line); if (o.type === 'turn_context' && o.payload.model) model = o.payload.model; } catch (_) {} continue; }
+      if (line.includes('"rate_limits"')) {
+        try {
+          const o = JSON.parse(line), rl = o.payload && o.payload.rate_limits, ts = Date.parse(o.timestamp);
+          if (rl && ts && (!entries.limits || ts >= entries.limits.at)) entries.limits = { at: ts, rl };
+        } catch (_) {}
+        continue;
+      }
       if (!line.includes('"token_usage_record"')) continue;
       let o; try { o = JSON.parse(line); } catch (_) { continue; }
       if (o.type !== 'token_usage_record' || !o.payload || !o.payload.usage) continue;
@@ -227,5 +236,23 @@ module.exports = function setupCodex({ config, hookPort, buildPrompt, encodeProj
     return entries;
   }
 
-  return { launch, listSessions, rename, rollouts, parseRollout, summary, installed: () => !!launcher() };
+  // the newest limits of all rollouts as rows like Claude's plan view; a window whose reset time
+  // has passed counts as unused (Codex only reports them with its next answer)
+  function planRows(latest) {
+    if (!latest) return null;
+    const rl = latest.rl, now = Date.now(), rows = [];
+    const win = (w, fallback) => {
+      if (!w || w.used_percent == null) return;
+      const resetMs = w.resets_at ? w.resets_at * 1000 : 0;
+      const past = resetMs && resetMs <= now;
+      const mins = w.window_minutes || 0;
+      const title = mins === 300 ? 'Bu oturum (5 saat)' : mins === 10080 ? 'Bu hafta' : mins ? (mins % 1440 === 0 ? `${mins / 1440} günlük` : `${Math.round(mins / 60)} saatlik`) + ' pencere' : fallback;
+      rows.push({ title, percent: past ? 0 : w.used_percent, resetsAt: past ? null : resetMs ? new Date(resetMs).toISOString() : null, severity: 'normal' });
+    };
+    win(rl.primary, 'Kısa pencere');
+    win(rl.secondary, 'Uzun pencere');
+    return { at: latest.at, plan: rl.plan_type || null, reached: rl.rate_limit_reached_type || null, rows };
+  }
+
+  return { launch, listSessions, rename, rollouts, parseRollout, planRows, summary, installed: () => !!launcher() };
 };
