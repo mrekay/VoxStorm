@@ -56,6 +56,13 @@
     tipTimer = setTimeout(() => showTip(el), Date.now() - tipWarm < 400 ? 40 : 450);
   }, true);
   document.addEventListener('mouseout', e => { if (tipFor && !(e.relatedTarget && tipFor.contains(e.relatedTarget))) hideTip(); }, true);
+  // a bubble for something that is not an element of this page (a plugin frame's element): rect in window coordinates
+  window.uiTipAt = (rect, text) => {
+    hideTip();
+    if (!text) return;
+    showTip({ isConnected: true, dataset: { tip: String(text).slice(0, 1000) }, getBoundingClientRect: () => rect, contains: () => false });
+  };
+  window.uiHideTip = hideTip;
   for (const ev of ['mousedown', 'keydown', 'wheel', 'blur']) window.addEventListener(ev, hideTip, true);
   window.addEventListener('scroll', hideTip, true);
   // a title written while the bubble is showing (e.g. a toggled button) updates it

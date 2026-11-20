@@ -111,7 +111,7 @@
     </div>
     <aside class="explorer" aria-label="Dosya gezgini">
       <div class="panel-h">Projeler</div>
-      <div class="ex-proj" id="exProj"><select id="ideProjSel" aria-label="Proje"></select><div class="ex-path" id="ideProjPath"></div></div>
+      <div class="ex-proj" id="exProj"><div class="ex-proj-row"><select id="ideProjSel" aria-label="Proje"></select><button class="ex-add" id="ideAddProj" title="Proje ekle" aria-label="Proje ekle"><i class="fa-solid fa-plus"></i></button></div><div class="ex-path" id="ideProjPath"></div></div>
       <div class="ex-bar">
         <div class="ex-views" role="tablist" aria-label="Gezgin görünümü"><button role="tab" data-exview="files" class="on" aria-selected="true"><i class="fa-regular fa-folder"></i>Dosyalar</button><button role="tab" data-exview="search" aria-selected="false" title="Projede ara (Ctrl+Shift+F)"><i class="fa-solid fa-magnifying-glass"></i>Ara</button><button role="tab" data-exview="db" aria-selected="false" title="Veritabanı bağlantıları"><i class="fa-solid fa-database"></i>DB</button></div>
         <span class="ex-acts" id="exFileActs"><button class="ghost icon" id="exNewFile" title="Yeni dosya" aria-label="Yeni dosya"><i class="fa-solid fa-file-circle-plus"></i></button><button class="ghost icon" id="exNewDir" title="Yeni klasör" aria-label="Yeni klasör"><i class="fa-solid fa-folder-plus"></i></button><button class="ghost icon" id="exCollapse" title="Tümünü daralt" aria-label="Tüm klasörleri daralt"><i class="fa-solid fa-angles-up"></i></button><button class="ghost icon" id="refreshTree" title="Yenile" aria-label="Dosya listesini yenile"><i class="fa-solid fa-arrows-rotate"></i></button></span>
@@ -224,8 +224,8 @@
   </div>
   <div class="discover-bg" id="discover" hidden>
     <div class="settings discover" role="dialog" aria-modal="true" aria-labelledby="discTitle">
-      <div class="set-h"><span id="discTitle">Proje ekle</span><button class="ghost" id="discClose">Kapat <i class="fa-solid fa-xmark"></i></button></div>
-      <div class="set-body" id="discBody"></div>
+      <div class="set-h ad-head"><span class="ad-title"><i class="fa-solid fa-folder-plus"></i><span><b id="discTitle">Proje ekle</b><small>Bir klasörü VoxStorm'a ekle; AI ve IDE modunda kullanılır.</small></span></span><button class="ghost icon" id="discClose" title="Kapat (Esc)" aria-label="Kapat"><i class="fa-solid fa-xmark"></i></button></div>
+      <div class="set-body ad-body" id="discBody"></div>
     </div>
   </div>
   <div class="settings-bg" id="gitWin" hidden>

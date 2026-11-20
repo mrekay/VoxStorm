@@ -212,7 +212,23 @@ function openTabMenu(e, id) {
   html += tgSep;
   if (!multi && tabs[0].kind !== 'agent') html += tgIt('rename', 'fa-solid fa-i-cursor', 'Yeniden adlandır');
   html += tgIt('close', 'fa-solid fa-xmark', multi ? 'Seçilenleri kapat' : 'Kapat', '', 'danger');
+  if (!multi) html += plugMenuHtml('session', sessCtx(tabs[0]));
   if (!multi) html += `<div class="lbl tg-hint">Ctrl+tık ile birden fazla sekme seç</div>`;
+  tgMenuAt(e, html);
+}
+// items plugins added to the session menu (plugins.js)
+const plugMenuHtml = (menu, ctx) => (window.pluginHost && pluginHost.menuHtml ? pluginHost.menuHtml(menu, ctx) : '');
+const sessCtx = t => ({ kind: t.kind === 'claude' ? 'claude' : t.kind, tabId: t.id, sessionId: t.sessionId || null, projectId: t.projectId || null, title: t.title, agent: t.agent || null });
+// sidebar rows that are not an open tab: a session running outside VoxStorm, or a past one
+function openSessMenu(e, el) {
+  const d = el.dataset;
+  TGM.ctx = { kind: 'sess', data: { watch: d.watch, resume: d.resume, pid: d.pid } };
+  let html = d.watch ? tgIt('swatch', 'fa-solid fa-eye', 'İzle') + tgIt('stake', 'fa-solid fa-right-to-bracket', "VoxStorm'a taşı")
+    : tgIt('sresume', 'fa-solid fa-play', 'Kaldığı yerden devam et', '', 'accent');
+  html += tgSep + tgIt('rename', 'fa-solid fa-i-cursor', 'Yeniden adlandır');
+  const ext = d.watch ? S.live.find(x => x.sessionId === d.watch) : null;
+  const h = d.resume ? (S.history[d.pid] || []).find(x => x.id === d.resume) : null;
+  html += plugMenuHtml('session', { kind: d.watch ? 'watch' : 'history', tabId: null, sessionId: d.watch || d.resume, projectId: d.pid || (ext && (projOfCwd(ext.cwd) || {}).id) || null, title: (ext || h || {}).title || '' });
   tgMenuAt(e, html);
 }
 function openGroupMenu(e, gid) {
@@ -242,7 +258,16 @@ function tgMenuAction(b) {
   }
   closeIdeMenu();
   TGM.ctx = null;
-  if (ctx.kind === 'tab') {
+  if (ctx.kind === 'sess') {
+    const d = ctx.data;
+    if (act === 'rename') renameSessionUi({ dataset: d });
+    else if (act === 'swatch') openWatch(d.watch);
+    else if (act === 'stake') takeOverSession(d.watch);
+    else if (act === 'sresume') {
+      const h = (S.history[d.pid] || []).find(x => x.id === d.resume);
+      openTerminal({ kind: 'claude', projectId: d.pid, resume: d.resume, title: h ? shorten(h.title, 48) : 'Oturum' });
+    }
+  } else if (ctx.kind === 'tab') {
     if (act === 'newgroup') newGroupFrom(ctx.ids);
     else if (act === 'addto') addToGroup(ctx.ids, b.dataset.g);
     else if (act === 'ungroup') ungroupTabs(ctx.ids);

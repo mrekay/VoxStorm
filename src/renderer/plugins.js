@@ -95,14 +95,39 @@
     'ui.addButton': (st, p) => {
       if (!p || !okId(p.id)) throw new Error('Düğmenin geçerli bir id\'si olmalı');
       const place = p.place === 'statusbar' ? 'statusbar' : 'titlebar';
-      st.buttons.set(p.id, { id: p.id, place, icon: str(p.icon, 60), label: str(p.label, 40), title: str(p.title, 200), badge: str(p.badge, 6), panel: p.panel && okId(p.panel) ? p.panel : '' });
+      st.buttons.set(p.id, { id: p.id, place, icon: str(p.icon, 60), label: str(p.label, 40), title: str(p.title, 200), badge: str(p.badge, 6), panel: p.panel && okId(p.panel) ? p.panel : '', menu: p.menu ? cleanItems(p.menu) : null });
       renderButtons(); return true;
     },
     'ui.updateButton': (st, p) => {
       const b = p && st.buttons.get(p.id); if (!b) throw new Error('Böyle bir düğme yok');
       for (const [k, n] of [['icon', 60], ['label', 40], ['title', 200], ['badge', 6]]) if (p[k] !== undefined) b[k] = str(p[k], n);
+      if (p.menu !== undefined) b.menu = p.menu ? cleanItems(p.menu) : null;
       renderButtons(); return true;
     },
+    // themed tooltip for an element of a plugin page; rect is in the frame's coordinates
+    'ui.tip': (st, p, frame) => {
+      const r = p && p.rect, text = str(p && p.text, 1000);
+      if (!text || !r || !frame.isConnected || frame.hidden || frame.style.visibility === 'hidden') { window.uiHideTip && uiHideTip(); return true; }
+      const f = frame.getBoundingClientRect(), n = v => +v || 0;
+      window.uiTipAt && uiTipAt({ left: f.left + n(r.left), top: f.top + n(r.top), right: f.left + n(r.right), bottom: f.top + n(r.bottom), width: n(r.width), height: n(r.height) }, text);
+      return true;
+    },
+    'ui.showMenu': (st, p, frame) => {
+      const items = cleanItems(p && p.items);
+      if (!items.some(it => it.id != null)) throw new Error('Menüde en az bir öğe olmalı');
+      const f = frame.getBoundingClientRect(), at = p && p.at;
+      const pt = at && Number.isFinite(+at.x) && Number.isFinite(+at.y) ? { x: f.left + +at.x, y: f.top + +at.y } : { x: f.left + 20, y: f.top + 20 };
+      if (at && Number.isFinite(+at.alignRight)) pt.alignRight = f.left + +at.alignRight;
+      return showMenu(items, pt);
+    },
+    'ui.addMenuItem': (st, p) => {
+      if (!p || !okId(p.id)) throw new Error('Menü öğesinin geçerli bir id\'si olmalı');
+      const menu = MENUS.includes(p.menu) ? p.menu : null;
+      if (!menu) throw new Error(`menu şunlardan biri olmalı: ${MENUS.join(', ')}`);
+      st.menuItems.set(p.id, { id: p.id, menu, title: str(p.title || p.id, 80), icon: str(p.icon, 60), danger: !!p.danger, when: ['claude', 'shell', 'watch', 'file', 'dir'].includes(p.when) ? p.when : '' });
+      return true;
+    },
+    'ui.removeMenuItem': (st, p) => { st.menuItems.delete(p && p.id); return true; },
     'ui.removeButton': (st, p) => { st.buttons.delete(p && p.id); renderButtons(); return true; },
     'ui.addPanel': (st, p) => {
       if (!p || !okId(p.id)) throw new Error('Panelin geçerli bir id\'si olmalı');
@@ -200,6 +225,88 @@
     } catch (err) { error = String(err && err.message || err).replace(/^Error invoking remote method '[^']+': (Error: )?/, ''); }
     try { e.source.postMessage({ vox: 1, re: m.id, result, error }, '*'); } catch (_) {}
   });
+
+  /* ---------------- menus ----------------
+     Plugins can (1) add items to the app's right-click menus (sessions, projects, files), (2) give a
+     titlebar / statusbar button a drop-down menu, (3) open a menu from their own page (vox.ui.showMenu).
+     Menus are drawn by the app in its own style; only ids and labels cross over, never markup. */
+  const MENUS = ['session', 'project', 'file'];
+  function cleanItems(list) {
+    const out = [];
+    for (const it of (Array.isArray(list) ? list : []).slice(0, 40)) {
+      if (!it || it.separator) { if (out.length && !out[out.length - 1].separator) out.push({ separator: true }); continue; }
+      if (it.label != null && it.id == null) { out.push({ label: str(it.label, 60) }); continue; }
+      if (!okId(it.id)) continue;
+      out.push({ id: String(it.id), title: str(it.title || it.id, 80), icon: str(it.icon, 60), hint: str(it.hint || it.keys, 30), danger: !!it.danger, disabled: !!it.disabled, checked: it.checked === true });
+    }
+    while (out.length && out[out.length - 1].separator) out.pop();
+    return out;
+  }
+  function itemHtml(it, attrs) {
+    if (it.separator) return '<div class="sep"></div>';
+    if (it.id == null) return `<div class="lbl">${escH(it.label)}</div>`;
+    const ic = it.checked ? 'fa-solid fa-check' : it.icon ? icon(it.icon) : '';
+    return `<button ${attrs(it)} class="${it.danger ? 'danger' : ''}" role="menuitem"${it.disabled ? ' disabled' : ''}><span class="mi">${ic ? `<i class="mic ${ic}"></i>` : '<i class="mic"></i>'}${escH(it.title)}</span>${it.hint ? `<code>${escH(it.hint)}</code>` : ''}</button>`;
+  }
+  let pmenu = null; // { el, done }
+  function closeMenu(id) {
+    if (!pmenu) return;
+    const { el, done } = pmenu; pmenu = null;
+    el.hidden = true; el.innerHTML = '';
+    done(id == null ? null : id);
+  }
+  // a free-standing menu at a window point (or under a rect); resolves with the chosen id or null
+  function showMenu(items, pt) {
+    closeMenu(null);
+    if (typeof closeMenus === 'function') closeMenus();
+    let el = document.getElementById('plugMenu');
+    if (!el) {
+      el = document.createElement('div'); el.id = 'plugMenu'; el.className = 'new-menu ide-menu plug-menu'; el.setAttribute('role', 'menu'); el.tabIndex = -1;
+      document.getElementById('win').appendChild(el);
+      el.addEventListener('click', e => { const b = e.target.closest('[data-pmi]'); if (b && !b.disabled) { e.stopPropagation(); closeMenu(b.dataset.pmi); } });
+      el.addEventListener('keydown', e => {
+        const all = [...el.querySelectorAll('button:not([disabled])')], i = all.indexOf(document.activeElement);
+        if (e.key === 'ArrowDown' || e.key === 'ArrowUp') { e.preventDefault(); const n = all.length; const down = e.key === 'ArrowDown'; if (n) all[i < 0 ? (down ? 0 : n - 1) : (i + (down ? 1 : n - 1)) % n].focus(); }
+        else if (e.key === 'Escape') { e.stopPropagation(); closeMenu(null); }
+      });
+      document.addEventListener('mousedown', e => { if (pmenu && !e.target.closest('#plugMenu') && !(pmenu.from && pmenu.from.contains(e.target))) closeMenu(null); }, true);
+      window.addEventListener('blur', () => closeMenu(null)); // a click inside a plugin frame
+    }
+    el.innerHTML = items.map(it => itemHtml(it, x => `data-pmi="${escH(x.id)}"`)).join('');
+    el.hidden = false;
+    const w = document.getElementById('win').getBoundingClientRect();
+    let left = (pt.alignRight != null && pt.x + el.offsetWidth > w.right - 8 ? pt.alignRight - el.offsetWidth : pt.x) - w.left;
+    let top = pt.y - w.top;
+    if (top + el.offsetHeight > w.height - 8 && pt.above != null) top = pt.above - w.top - el.offsetHeight - 4;
+    left = Math.max(8, Math.min(left, w.width - el.offsetWidth - 8)); top = Math.max(8, Math.min(top, w.height - el.offsetHeight - 8));
+    el.style.left = left + 'px'; el.style.top = top + 'px';
+    el.focus();
+    return new Promise(done => { pmenu = { el, done }; });
+  }
+  // items plugins added to one of the app's menus, for the given context; the app puts the html in its menu
+  let menuCtx = null;
+  function menuHtml(menu, ctx) {
+    let h = '';
+    P.forEach(st => {
+      const limit = userProjects(st);
+      if (limit.length && !(ctx.projectId && limit.includes(ctx.projectId))) return;
+      st.menuItems.forEach(it => {
+        if (it.menu !== menu || (it.when && it.when !== ctx.kind)) return;
+        h += itemHtml(it, x => `data-plmi="${escH(st.info.id)}" data-plm="${escH(x.id)}" title="${escH(st.info.name)} eklentisi"`);
+      });
+    });
+    if (!h) return '';
+    menuCtx = ctx;
+    return '<div class="sep"></div>' + h;
+  }
+  document.addEventListener('click', e => {
+    const b = e.target.closest('[data-plmi]');
+    if (!b) return;
+    e.stopPropagation();
+    if (typeof closeMenus === 'function') closeMenus();
+    const st = P.get(b.dataset.plmi);
+    if (st) emit(st, 'menu', { id: b.dataset.plm, context: Object.assign({ menu: (st.menuItems.get(b.dataset.plm) || {}).menu }, menuCtx) });
+  }, true);
 
   /* ---------------- buttons, modes, drawer ---------------- */
   const modeKey = (id, panelId) => `plugin:${id}:${panelId}`;
@@ -423,7 +530,7 @@
 
   /* ---------------- load / unload ---------------- */
   function start(info) {
-    const st = { info, frames: new Set(), buttons: new Map(), panels: new Map(), commands: new Map(), log: [] };
+    const st = { info, frames: new Set(), buttons: new Map(), panels: new Map(), commands: new Map(), menuItems: new Map(), log: [] };
     P.set(info.id, st);
     if (info.main) {
       const f = makeFrame(st, `${SCHEME}://${info.id}/__vox__/main.html`, 'plug-worker');
@@ -562,6 +669,16 @@
     if (d.plbtn) {
       const st = P.get(d.plbtn), btn = st && st.buttons.get(d.plb);
       if (!btn) return;
+      if (btn.menu && btn.menu.length) {
+        e.stopPropagation();
+        if (pmenu && pmenu.from === b) { closeMenu(null); return; } // a second click closes it
+        const r = b.getBoundingClientRect();
+        const pr = showMenu(btn.menu, { x: r.left, y: r.bottom + 4, alignRight: r.right, above: r.top });
+        pmenu.from = b;
+        const id = await pr;
+        if (id != null) emit(st, 'menu', { id, context: { menu: 'button', button: btn.id } });
+        return;
+      }
       if (btn.panel) {
         const pn = st.panels.get(btn.panel);
         if (pn && pn.place === 'side' && !isCollapsed(st, pn)) closePanel(st, pn.id);
@@ -629,6 +746,7 @@
     onRender() { const c = String(contextProject()); if (c !== lastCtx) { lastCtx = c; renderTbOnly(); } syncSide(); clearTimeout(stateTimer); stateTimer = setTimeout(emitState, 150); },
     statusHtml,
     settingsHtml,
+    menuHtml,
     relayout() { syncSide(); },
     // the column a plugin side section starts in, before the user moves it
     defaultCol(key) { const [, id, panelId] = String(key).split(':'); const st = P.get(id); const pn = st && st.panels.get(panelId); return pn ? pn.column || 'right' : 'right'; },

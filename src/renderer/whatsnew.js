@@ -8,6 +8,15 @@
   // try: what the "Dene" button does (optional)
   const NOTES = [
     {
+      id: '2026-11-20b', title: 'Sürüm 0.8.1', date: '20 Kasım 2026',
+      items: [
+        { icon: 'fa-solid fa-folder-plus', title: 'Yeni proje ekleme penceresi', text: 'Klasörü sürükle-bırak, seç ya da yolunu yapıştır. Claude’un çalıştığı klasörler aranabilir listede; art arda birkaç tane ekleyebilirsin. IDE gezgininde proje seçicinin yanındaki + ile de açılır.', try: () => openDiscover() },
+        { icon: 'fa-solid fa-bars', title: 'Oturumlarda sağ tık menüsü', text: 'Soldaki oturum listesinde sağ tık artık doğrudan yeniden adlandırmıyor; menü açılır: gruba ekle, yeniden adlandır, kapat. Dışarıdaki ve geçmiş oturumlarda izle, taşı, devam et.' },
+        { icon: 'fa-solid fa-puzzle-piece', title: 'Eklentilere menü ve ipucu', text: 'Eklentiler oturum, proje ve dosya sağ tık menülerine öğe ekleyebilir, düğmelerine açılır menü koyabilir, kendi sayfalarından menü açabilir. Eklenti sayfalarındaki title’lar uygulamanın temalı ipucuyla görünür.' },
+      ],
+      small: ['Soldan bir oturuma tıklayınca, sekme çok olsa da üst şerit o sekmeye kayıyor.'],
+    },
+    {
       id: '2026-11-20', title: 'Sürüm 0.8.0', date: '20 Kasım 2026',
       items: [
         { icon: 'fa-brands fa-openai', title: 'Codex desteği', text: 'Claude Code’un yanında OpenAI Codex oturumları: + Oturum menüsünden ya da Ctrl+Shift+X ile aç. İzin kartları, bitince bildirim, geçmiş ve kaldığın yerden devam, alt ajanlar ve arka planda süren komutlar ajan panelinde. Codex kurulu değilse hiçbir yerde görünmez.', keys: 'Ctrl+Shift+X', try: () => { if (INFO && INFO.codex) setMode('claude'); else toast('Codex kurulu değil', 'npm i -g @openai/codex, ardından codex login.'); } },

@@ -1408,7 +1408,7 @@ function registerIpc() {
     const known = new Set(config.projects.map(p => norm(p.path)));
     return (await discoverProjects()).filter(p => !known.has(norm(p.path)));
   });
-  ipcMain.handle('project:addPath', (_e, p) => (fs.existsSync(p) ? addProject(p) : null));
+  ipcMain.handle('project:addPath', (_e, p) => { try { return typeof p === 'string' && fs.statSync(p).isDirectory() ? addProject(p) : null; } catch (_) { return null; } });
   ipcMain.handle('project:open', (_e, p) => { if (insideProject(p)) shell.openPath(p); });
 
   // files copied in Explorer: the clipboard holds a file list, not text. Read it the way

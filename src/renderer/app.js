@@ -352,6 +352,8 @@ function activate(id) {
   if (S.mode === 'ide' && t.projectId && t.projectId !== IDE.project) { IDE.project = t.projectId; showFile(); }
   $$('.term-pane').forEach(x => x.classList.toggle('on', x === t.el));
   renderAll();
+  // with many tabs the strip scrolls sideways: bring the activated one into view (sidebar click, Ctrl+Tab, notification)
+  for (const sel of ['#tabs .tab.active', '#ptabs .ptab.on']) { const on = $(sel); if (on && on.offsetParent) on.scrollIntoView({ block: 'nearest', inline: 'nearest' }); }
   requestAnimationFrame(() => {
     fitActive();
     if (t.kind === 'watch') setWatchView(t, t.view);
@@ -1930,6 +1932,11 @@ function openIdeMenu(e, ctx) {
       + it('reveal', 'fa-regular fa-folder-open', 'Dosya Gezgini’nde göster')
       + (root ? '' : sep + it('ask', 'fa-solid fa-comment-dots', askLabel(), '', 'accent'));
   }
+  // items plugins added to the file menu (tree and editor tabs)
+  if (ctx.kind !== 'dock' && window.pluginHost) {
+    const fp = ctx.path || projRoot();
+    if (fp) html += pluginHost.menuHtml('file', { kind: ctx.kind === 'tab' || !ctx.dir ? 'file' : 'dir', path: fp, projectId: IDE.project || null, from: ctx.kind === 'tab' ? 'tab' : 'tree' });
+  }
   m.innerHTML = html;
   m.hidden = false;
   const w = $('#win').getBoundingClientRect();
@@ -2283,23 +2290,84 @@ function openProjMenu(btn, pid) {
   const m = $('#newMenu');
   const n = (CFG.lastTabs || []).filter(t => t.projectId === pid).length;
   m.innerHTML = `<button data-pact="restore" data-pid="${pid}">${n ? `Son oturumları geri yükle <code>${n}</code>` : 'Son oturuma devam et'}</button><div class="sep"></div><button data-pact="open" data-pid="${pid}">Klasörü Gezgin'de aç</button><button data-pact="refresh" data-pid="${pid}">Oturum listesini yenile</button><div class="sep"></div><button class="danger" data-pact="remove" data-pid="${pid}">Listeden kaldır</button>`;
+  const p = proj(pid);
+  if (p && window.pluginHost) m.innerHTML += pluginHost.menuHtml('project', { kind: 'project', projectId: p.id, name: p.name, path: p.path });
   placeMenu(m, btn);
 }
 
-/* ---------------- add project ---------------- */
+/* ---------------- add project ----------------
+   One window for every way in: pick a folder, drop one, paste a path, or take one Claude Code has
+   already worked in (from its session history). Adding from the list keeps the window open so several
+   can be added; the other ways add one and close it. In IDE mode the new project opens in the explorer. */
+const DISC = { list: [], added: new Set(), q: '' };
 async function openDiscover() {
+  closeMenus();
   $('#discover').hidden = false;
-  $('#discBody').innerHTML = '<h4>Klasör seç</h4><div><button class="btn primary" id="pickFolder">Klasör seç…</button></div><h4>Claude geçmişinden</h4><div id="discList" class="set-note">Aranıyor…</div>';
-  const list = await api.invoke('project:discover');
+  DISC.q = ''; DISC.added = new Set();
+  $('#discBody').innerHTML = `
+    <div class="ad-drop" id="adDrop">
+      <i class="fa-solid fa-folder-open ad-ic"></i>
+      <div class="ad-t"><b>Klasörü buraya sürükle</b><span>ya da bilgisayarından seç</span></div>
+      <button class="btn primary" id="pickFolder"><i class="fa-solid fa-folder-plus"></i> Klasör seç…</button>
+    </div>
+    <form class="ad-path" id="adPathForm" autocomplete="off">
+      <i class="fa-solid fa-link"></i>
+      <input id="adPath" type="text" spellcheck="false" placeholder="ya da klasör yolunu yapıştır: ${esc(IS_WIN ? 'C:\\Projeler\\site' : '~/projeler/site')}" aria-label="Klasör yolu">
+      <button class="btn" type="submit">Ekle</button>
+    </form>
+    <div class="ad-msg" id="adMsg" hidden></div>
+    <div class="ad-h">
+      <span><i class="fa-solid fa-clock-rotate-left"></i> Claude'un çalıştığı klasörler <em id="adCount"></em></span>
+      <label class="ad-q"><i class="fa-solid fa-magnifying-glass"></i><input id="adQ" type="text" spellcheck="false" placeholder="Süz…" aria-label="Listeyi süz"></label>
+    </div>
+    <div class="ad-list" id="discList">${'<div class="ad-row sk"><span></span><span></span></div>'.repeat(4)}</div>`;
+  $('#adQ').addEventListener('input', e => { DISC.q = e.target.value.trim().toLowerCase(); renderDiscList(); });
+  $('#adPathForm').addEventListener('submit', async e => {
+    e.preventDefault();
+    const v = $('#adPath').value.trim().replace(/^["']|["']$/g, '');
+    if (v) addProjectPath(v, true);
+  });
+  const drop = $('#adDrop');
+  drop.addEventListener('dragover', e => { if ([...e.dataTransfer.types].includes('Files')) { e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; drop.classList.add('over'); } });
+  drop.addEventListener('dragleave', e => { if (!drop.contains(e.relatedTarget)) drop.classList.remove('over'); });
+  drop.addEventListener('drop', e => {
+    e.preventDefault(); drop.classList.remove('over');
+    const paths = [...(e.dataTransfer.files || [])].map(f => api.pathForFile(f)).filter(Boolean);
+    if (paths.length) addProjectPath(paths[0], true);
+  });
+  requestAnimationFrame(() => $('#pickFolder') && $('#pickFolder').focus());
+  DISC.list = await api.invoke('project:discover').catch(() => []);
+  renderDiscList();
+}
+function renderDiscList() {
   const el = $('#discList'); if (!el) return;
-  el.className = '';
-  el.innerHTML = list.length ? list.map(x => `<div class="disc-row"><span class="p" title="${esc(x.path)}">${esc(x.path)}</span><span class="sess-time">${rel(x.mtime)}</span><button class="btn" data-addpath="${esc(x.path)}">Ekle</button></div>`).join('') : '<div class="set-note">Listede olmayan başka proje bulunamadı.</div>';
+  const rows = DISC.list.filter(x => !DISC.q || x.path.toLowerCase().includes(DISC.q));
+  $('#adCount').textContent = DISC.list.length ? DISC.list.length : '';
+  if (!DISC.list.length) { el.innerHTML = `<div class="ad-empty"><i class="fa-regular fa-circle-check"></i>Claude'un çalıştığı bütün klasörler zaten listende.</div>`; return; }
+  if (!rows.length) { el.innerHTML = '<div class="ad-empty">Eşleşen klasör yok.</div>'; return; }
+  el.innerHTML = rows.map(x => {
+    const done = DISC.added.has(x.path);
+    return `<div class="ad-row${done ? ' done' : ''}"><i class="fa-regular fa-folder ad-fi"></i><span class="ad-info"><b>${esc(baseName(x.path))}</b><span title="${esc(x.path)}">${esc(x.path)}</span></span><span class="ad-time">${rel(x.mtime)}</span>`
+      + (done ? '<span class="ad-ok"><i class="fa-solid fa-check"></i> Eklendi</span>' : `<button class="btn" data-addpath="${esc(x.path)}"><i class="fa-solid fa-plus"></i> Ekle</button>`) + '</div>';
+  }).join('');
+}
+// add a folder by path; `close` for the single-add ways (picker, drop, pasted path)
+async function addProjectPath(path, close) {
+  const msg = $('#adMsg');
+  const p = await api.invoke('project:addPath', path).catch(() => null);
+  if (!p) { if (msg) { msg.hidden = false; msg.textContent = 'Bu yolda bir klasör bulunamadı: ' + path; } return null; }
+  if (msg) msg.hidden = true;
+  DISC.added.add(path);
+  if (close) $('#discover').hidden = true; else renderDiscList();
+  await projectAdded(p);
+  return p;
 }
 async function projectAdded(p) {
   if (!p) return;
   if (!S.projects.some(x => x.id === p.id)) S.projects.push(p);
   CFG.projects = S.projects;
   await refreshHistory(p.id);
+  if (S.mode === 'ide') switchIdeProject(p.id);
   renderAll();
   toast('Proje eklendi', p.path);
 }
@@ -2547,14 +2615,16 @@ function updatePromptPreview() {
 function closeMenus() { $('#newMenu').hidden = true; $('#skinMenu').hidden = true; $('#pop').hidden = true; closeIdeMenu(); }
 function bindEvents() {
   bindDock();
-  // right click on a session (top tab, sidebar row, past session): rename it
+  // right click on a session (sidebar row, IDE panel tab, past session): context menu
+  // (the top tab strip has its own handler in tabgroups.js)
   document.addEventListener('contextmenu', e => {
     const el = e.target.closest('#tabs [data-tab], #ptabs [data-tab], #side [data-tab], #side [data-watch], #side [data-resume], #newMenu [data-resume]');
     if (!el) return;
     if (el.dataset.tab && (tabById(el.dataset.tab) || {}).kind === 'agent') return;
     e.preventDefault();
     $('#newMenu').hidden = true;
-    renameSessionUi(el);
+    if (el.dataset.tab && tabById(el.dataset.tab)) openTabMenu(e, el.dataset.tab);
+    else openSessMenu(e, el);
   });
   document.addEventListener('click', async e => {
     const el = e.target.closest('button,[data-tab],tr[data-month]');
@@ -2615,7 +2685,7 @@ function bindEvents() {
     else if (d.chime) playChime(d.chime);
     else if (d.set) { await setCfg({ settings: { [d.set]: !CFG.settings[d.set] } }); renderSettings(); }
     else if (d.notif) { await setCfg({ settings: { notif: { [d.notif]: !CFG.settings.notif[d.notif] } } }); renderSettings(); }
-    else if (d.addpath) { const p = await api.invoke('project:addPath', d.addpath); await projectAdded(p); el.closest('.disc-row').remove(); }
+    else if (d.addpath) addProjectPath(d.addpath, false);
     else if (d.mdmode) { const fp = ist().file; if (d.mdmode === 'view') IDE.mdView.add(fp); else IDE.mdView.delete(fp); showFile(); if (d.mdmode === 'src') IDE.cm.focus(); }
     else if (d.tb) toolbar(d.tb);
     else if (d.report) openReport();
@@ -2627,6 +2697,7 @@ function bindEvents() {
     else if (d.csv) { const f = await api.invoke('usage:exportCsv', d.csv === 'all' ? null : d.csv); if (f) toast('CSV kaydedildi', f); }
     else if (el.id === 'saveBtn') saveFile();
     else if (el.id === 'pickFolder') { const p = await api.invoke('project:add'); if (p) { $('#discover').hidden = true; await projectAdded(p); } }
+    else if (el.id === 'ideAddProj') openDiscover();
   });
   $('#minBtn').onclick = () => api.send('win:min');
   $('#maxBtn').onclick = () => api.send('win:max');

@@ -62,7 +62,7 @@ onay ister.
 | `claude` | `vox.claude.newSession / send`: Claude oturumu başlatma, açık oturuma mesaj yazma. |
 | `net` | `fetch`, `WebSocket` ve `https:` kaynaklı resim, yazı tipi, stil. İzin yoksa ağ kapalıdır. |
 
-İzinsiz kullanılabilenler: düğme, panel, mod sekmesi, kısayol, `vox.ui.toast / confirm / prompt`,
+İzinsiz kullanılabilenler: düğme, panel, mod sekmesi, kısayol, menü, ipucu, `vox.ui.toast / confirm / prompt`,
 `vox.app.state` ve olaylar.
 
 ## Sayfalar ve görünüm
@@ -124,6 +124,61 @@ const ok = await vox.ui.confirm({ title: 'Emin misin?', message: '...', ok: 'Sil
 const name = await vox.ui.prompt({ title: 'Ad', value: 'varsayılan' }); // vazgeçilirse null
 ```
 
+### İpuçları (tooltip)
+
+Sayfandaki herhangi bir öğeye `title` vermen yeterli: VoxStorm onu tarayıcının gri balonu yerine kendi temalı
+ipucuyla gösterir. İpucu uygulamanın kendisinde çizildiği için küçük bir yan panelin kenarında kesilmez.
+Birden fazla satır yazarsan ilk satır kalın başlık, kalanlar soluk açıklama olur.
+
+```html
+<button title="Yayınla&#10;main dalını prod'a gönderir">Yayınla</button>
+```
+
+### Menüler
+
+Menüleri uygulama kendi görünümüyle çizer; sen yalnızca öğeleri verirsin. Bir öğe:
+`{ id, title, icon, hint, danger, disabled, checked, onClick }`, ayraç için `{ separator: true }`, küçük başlık
+için `{ label: 'Başlık' }`. `hint` sağda soluk yazılır (ör. kısayol).
+
+```js
+// 1) uygulamanın sağ tık menülerine öğe ekle
+//    menu: 'session' (üst sekmeler ve soldaki oturum listesi) · 'project' (proje satırındaki ⋯) · 'file' (IDE dosya ağacı ve editör sekmeleri)
+//    when (isteğe bağlı): session için 'claude' | 'shell' | 'watch', file için 'file' | 'dir'
+await vox.ui.addMenuItem({
+  id: 'ozetle', menu: 'session', when: 'claude', title: 'Oturumu özetle', icon: 'fa-solid fa-list',
+  onClick: ctx => { /* ctx: { menu, kind, tabId, sessionId, projectId, title } */ },
+});
+await vox.ui.addMenuItem({ id: 'yayinla', menu: 'project', title: 'Yayınla', icon: 'fa-solid fa-rocket', onClick: ctx => { /* { projectId, name, path } */ } });
+await vox.ui.addMenuItem({ id: 'satir', menu: 'file', when: 'file', title: 'Satır say', onClick: ctx => { /* { kind, path, projectId, from: 'tree' | 'tab' } */ } });
+await vox.ui.removeMenuItem('ozetle');
+
+// 2) üst çubuk / durum çubuğu düğmesine açılır menü: tıklayınca panel ya da onClick yerine menü açılır
+await vox.ui.addButton({
+  id: 'yayin', place: 'titlebar', icon: 'fa-solid fa-rocket', title: 'Yayın',
+  menu: [
+    { label: 'Ortam' },
+    { id: 'test', title: 'Test ortamına', icon: 'fa-solid fa-flask', onClick: () => deploy('test') },
+    { id: 'prod', title: 'Prod ortamına', icon: 'fa-solid fa-rocket', danger: true, onClick: () => deploy('prod') },
+    { separator: true },
+    { id: 'log', title: 'Son kaydı aç', onClick: () => vox.ui.openPanel('log') },
+  ],
+});
+
+// 3) kendi sayfandan menü aç: fare olayının yerinde, bir öğenin altında ya da { x, y } noktasında
+list.addEventListener('contextmenu', async e => {
+  e.preventDefault();
+  const id = await vox.ui.showMenu([
+    { id: 'edit', title: 'Düzenle', icon: 'fa-solid fa-pen' },
+    { id: 'del', title: 'Sil', icon: 'fa-regular fa-trash-can', danger: true },
+  ], e);
+  // seçilen öğenin id'si, vazgeçilirse null (öğelerin onClick'i de çağrılır)
+});
+moreBtn.onclick = () => vox.ui.showMenu(items, moreBtn);   // düğmenin altında
+```
+
+Kullanıcı eklentiyi belirli projelerle sınırladıysa, sağ tık öğeleri yalnızca o projelerin oturum, proje ve
+dosyalarında görünür.
+
 ### Komutlar ve kısayollar
 
 ```js
@@ -144,6 +199,7 @@ vox.on('theme', t => { /* tema değişti; CSS değişkenleri zaten güncellendi 
 vox.on('panel', p => { /* { id, visible } panel açıldı / kapandı */ });
 vox.on('button', b => { /* { id } düğmeye tıklandı */ });
 vox.on('command', c => { /* { id } kısayola basıldı */ });
+vox.on('menu', m => { /* { id, context } bir menü öğesi seçildi (onClick'e ek olarak) */ });
 
 await vox.app.setMode('ide');            // 'claude' | 'ide' | 'db'
 await vox.app.openUrl('https://...');    // varsayılan tarayıcıda açar
