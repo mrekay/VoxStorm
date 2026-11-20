@@ -2464,7 +2464,8 @@ function renderSettings() {
 }
 /* the AI page: what both share on top, then Claude and Codex as sections that fold (remembered) */
 let setFocus = null; // the section to show when the page opens ('ortak' | 'claude' | 'codex')
-const SET_FOLDED = (() => { try { return new Set(JSON.parse(localStorage.getItem('vs.setFolded') || '[]')); } catch (_) { return new Set(); } })();
+// Ortak starts open, Claude and Codex folded; what the user opens or folds is remembered
+const SET_FOLDED = (() => { try { const v = localStorage.getItem('vs.setFolded.v2'); return new Set(v ? JSON.parse(v) : ['claude', 'codex']); } catch (_) { return new Set(['claude', 'codex']); } })();
 function aiSettingsHtml(shared, claude, codex) {
   const sec = (k, icon, title, sub, body) => `<details class="set-sec" data-setsec="${k}" ${SET_FOLDED.has(k) ? '' : 'open'}><summary><i class="${icon}"></i><b>${title}</b><small>${esc(sub)}</small><i class="fa-solid fa-chevron-down sec-car"></i></summary><div class="set-sec-b">${body}</div></details>`;
   return sec('ortak', 'fa-solid fa-user', 'Ortak', 'Claude ve Codex için: varsayılan yapay zekâ, hitap, ton ve dil', shared)
@@ -2474,7 +2475,7 @@ function aiSettingsHtml(shared, claude, codex) {
 document.addEventListener('toggle', e => {
   const d = e.target; if (!d.matches || !d.matches('.set-sec')) return;
   if (d.open) SET_FOLDED.delete(d.dataset.setsec); else SET_FOLDED.add(d.dataset.setsec);
-  try { localStorage.setItem('vs.setFolded', JSON.stringify([...SET_FOLDED])); } catch (_) {}
+  try { localStorage.setItem('vs.setFolded.v2', JSON.stringify([...SET_FOLDED])); } catch (_) {}
 }, true);
 let prevTimer = null;
 function updatePromptPreview() {
