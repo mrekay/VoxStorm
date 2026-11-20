@@ -296,7 +296,7 @@ function imItems(id) {
     // this system's shells: PowerShell / Komut İstemi / Git Bash on Windows, zsh / bash elsewhere
     ...Object.keys(SHELLS).map(k => E('Yeni ' + SHELLS[k].name, k === 'bash' && IS_WIN ? 'fa-brands fa-git-alt' : 'fa-solid fa-terminal', '', () => imTerminal('shell', k), { dis: !hasProj })),
     '-',
-    E('Claude’a sor (dosya / seçim)', 'fa-solid fa-comment-dots', '', () => askClaude(), { dis: !fp, cls: 'accent' }),
+    E(askLabel() + ' (dosya / seçim)', 'fa-solid fa-comment-dots', '', () => askClaude(), { dis: !fp, cls: 'accent' }),
     '-',
     E('Git / GitHub paneli', 'fa-brands fa-git-alt', 'Ctrl+Shift+G', () => toggleGitPanel()),
     E('Dosya ağacını ve git durumunu yenile', 'fa-solid fa-arrows-rotate', '', () => { IDE.dirCache = {}; delete IDE.index[IDE.project]; renderTree(); refreshGit(); }, { dis: !hasProj }),

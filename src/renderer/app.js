@@ -85,6 +85,9 @@ function agentPickHtml() {
     <div class="seg"><button class="${cur === 'claude' ? 'on' : ''}" data-defagent="claude"><i class="fa-brands fa-claude"></i> Claude</button><button class="${cur === 'codex' ? 'on' : ''}" data-defagent="codex" ${INFO.codex ? '' : 'disabled title="Codex CLI kurulu değil"'}><i class="fa-brands fa-openai"></i> Codex</button></div>
     <p class="set-note">Ctrl+Shift+N, Proje Başlat ve projeye tıklayınca açılan yeni oturumlar bununla başlar. “+ Oturum ▾” menüsünden ikisini de ayrıca seçebilirsin; Codex için kısayol Ctrl+Shift+X.</p>`;
 }
+// "Claude'a sor" becomes "Codex'e sor" when Codex is the default (IDE, DB mode)
+const aiName = () => (defaultAgent() === 'codex' ? 'Codex' : 'Claude');
+const askLabel = () => (defaultAgent() === 'codex' ? 'Codex’e sor' : 'Claude’a sor');
 // which AI a new session starts with when none is chosen (settings: Varsayılan yapay zekâ)
 const defaultAgent = () => (CFG && CFG.settings.defaultAgent === 'codex' && INFO && INFO.codex ? 'codex' : 'claude');
 const EDIT_TOOLS = new Set(['Edit', 'Write', 'MultiEdit', 'NotebookEdit']);
@@ -1051,6 +1054,9 @@ function renderUsageView() {
     ].map(([l, t, c, tip]) => `<div class="us" title="${tip}"><small>${l}</small><b>${fmtTok(t)}</b>${u.cost != null && c != null ? `<span>≈ ${fmtUsd(c)}</span>` : ''}</div>`).join('')}</div>`;
 }
 function renderStatus() {
+  const askBtn = document.querySelector('[data-tb="ask"]');
+  document.querySelectorAll('.db-ask').forEach(x => { x.textContent = askLabel(); });
+  if (askBtn) { askBtn.querySelector('span').textContent = askLabel(); askBtn.title = `Açık dosyayı ya da seçili satırları ${aiName()}’${aiName() === 'Codex' ? 'e' : 'a'} sor`; }
   const running = S.tabs.filter(t => t.status === 'running' && t.kind !== 'watch' && t.kind !== 'agent').length;
   const claudeOk = INFO && INFO.claude;
   const u = S.usage;
@@ -1554,7 +1560,7 @@ function applyIdeUi() {
 }
 function saveIdeUi() { applyIdeUi(); setCfg({ ide: { ui: IDE.ui } }); }
 function toggleWrap() { IDE.ui.wrap = !IDE.ui.wrap; saveIdeUi(); }
-/* puts "@path" (and the selected lines) into the project's Claude session */
+/* puts "@path" (and the selected lines) into the project's session of the default AI (Claude or Codex) */
 async function askClaude(target, targetIsDir) {
   const p = proj(IDE.project);
   const fp = target || ist().file;
@@ -1568,7 +1574,8 @@ async function askClaude(target, targetIsDir) {
   }
   IDE.ui.panel = true; saveIdeUi();
   let t = tabById(S.active);
-  if (!t || t.kind !== 'claude' || t.exited || t.projectId !== p.id) t = [...S.tabs].reverse().find(x => x.kind === 'claude' && !x.exited && x.projectId === p.id);
+  const want = defaultAgent(), mine = x => x && x.kind === 'claude' && !x.exited && x.projectId === p.id && (x.agent || 'claude') === want;
+  if (!mine(t)) t = [...S.tabs].reverse().find(mine);
   let delay = 0;
   if (!t) { t = await openTerminal({ kind: 'claude', projectId: p.id }); delay = 2500; }
   if (!t) return;
@@ -1867,7 +1874,7 @@ function openIdeMenu(e, ctx) {
         : sep + it('rename', 'fa-solid fa-i-cursor', 'Yeniden adlandır', 'F2') + it('delete', 'fa-regular fa-trash-can', 'Sil', 'Delete', 'danger'))
       + sep + it('copy', 'fa-regular fa-copy', 'Yolu kopyala') + (root ? '' : it('copyrel', 'fa-solid fa-link', 'Göreli yolu kopyala'))
       + it('reveal', 'fa-regular fa-folder-open', 'Dosya Gezgini’nde göster')
-      + (root ? '' : sep + it('ask', 'fa-solid fa-comment-dots', 'Claude’a sor', '', 'accent'));
+      + (root ? '' : sep + it('ask', 'fa-solid fa-comment-dots', askLabel(), '', 'accent'));
   }
   m.innerHTML = html;
   m.hidden = false;
@@ -2705,7 +2712,7 @@ function bindEvents() {
   // the welcome window picked a project; take it (only once) and act on it
   api.on('open-project', async () => handleOpen(await api.invoke('app:takePendingOpen')));
   api.on('projects-changed', async list => { S.projects = list; CFG.projects = list; await refreshAllHistory(); renderAll(); });
-  api.on('config-changed', c => { const skin = CFG && CFG.settings.skin; CFG = c; if (c.settings.skin !== skin) applySkin(c.settings.skin); renderSettings(); });
+  api.on('config-changed', c => { const skin = CFG && CFG.settings.skin; CFG = c; if (c.settings.skin !== skin) applySkin(c.settings.skin); renderSettings(); renderStatus(); });
   $('#updBtn').onclick = () => openSettings('hakkinda');
   api.invoke('update:state').then(st => { UPD = st; renderUpdBtn(); }).catch(() => {});
   api.on('address-learned', n => toast('Hitap güncellendi', n ? `Bundan sonra “${n}” diye hitap edilecek.` : 'Bundan sonra hitap kullanılmayacak.'));

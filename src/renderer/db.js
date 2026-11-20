@@ -120,7 +120,7 @@
           <span class="db-ro" id="dbRo" hidden title="Bu bağlantıda yazma ifadeleri engellenir"><i class="fa-solid fa-lock"></i>Salt okunur</span>
           <span class="db-grow"></span>
           <button class="db-tb" data-act="saveQuery" title="Sorguyu kaydet (Ctrl+S)"><i class="fa-regular fa-bookmark"></i>Kaydet</button>
-          <button class="db-tb" data-act="claude" title="Seçili sorguyu Claude'a sor (Ctrl+Shift+K)"><i class="fa-solid fa-robot"></i>Claude'a sor</button>
+          <button class="db-tb" data-act="claude" title="Seçili sorguyu yapay zekâya sor (Ctrl+Shift+K)"><i class="fa-solid fa-robot"></i><span class="db-ask">Claude'a sor</span></button>
         </div>
         <div class="db-ed" id="dbEd"></div>
         <div class="db-split-h" data-drag="ed" title="Sürükleyerek boyutlandır"></div>
@@ -959,7 +959,7 @@
         ['top', 'İlk 100 satırı göster', 'fa-table-list'], ['pages', 'Verileri sayfa sayfa gez', 'fa-book-open'],
         '-', ['sel', 'SELECT şablonu', 'fa-magnifying-glass'], ...(n.kind === 'tables' ? [['ins', 'INSERT şablonu', 'fa-plus']] : []), ['count', 'Satırları say', 'fa-hashtag'],
         ...((n.kind === 'views' || isMy(c.type)) ? [['def', 'Tanımı göster', 'fa-code']] : []),
-        '-', ['copy', 'Adı kopyala', 'fa-copy'], ['copyfull', 'Tam adı kopyala', 'fa-copy'], ['claude', "Claude'a sor (şemasıyla)", 'fa-robot'], ['refresh', 'Sütunları yenile', 'fa-rotate-right'],
+        '-', ['copy', 'Adı kopyala', 'fa-copy'], ['copyfull', 'Tam adı kopyala', 'fa-copy'], ['claude', askLabel() + ' (şemasıyla)', 'fa-robot'], ['refresh', 'Sütunları yenile', 'fa-rotate-right'],
       ];
     } else items = [['def', 'Tanımı göster', 'fa-code'], ['exec', n.kind === 'procs' ? 'Çalıştırma şablonu' : 'Çağırma şablonu', 'fa-play'], '-', ['copy', 'Adı kopyala', 'fa-copy'], ['copyfull', 'Tam adı kopyala', 'fa-copy']];
     const a = await menu(e.clientX, e.clientY, items);
@@ -1041,12 +1041,12 @@
     const defProj = (activeTab && activeTab.projectId) || S.projects[0].id;
     const presets = o.schema ? ['Bu tablo için sık kullanılacak örnek sorgular yaz', 'Bu tablonun yapısını değerlendir; indeks ve tip önerilerin neler?'] : err ? ['Bu hatayı açıkla ve sorguyu düzelt', 'Bu sorguyu açıkla'] : ['Bu sorguyu açıkla', 'Bu sorgunun performansını nasıl iyileştirebilirim?', 'Bu sorguda hata ya da risk var mı?'];
     const r = await modal({
-      title: "Claude'a sor", icon: 'fa-robot', wide: true,
+      title: askLabel(), icon: 'fa-robot', wide: true,
       body: `<div class="db-presets">${presets.map(p => `<button type="button" class="db-chipbtn" data-preset="${esc(p)}">${esc(p)}</button>`).join('')}</div>
-        <label class="db-f"><span>Soru</span><textarea name="q" rows="3" placeholder="Claude'a ne sormak istersin?">${esc(presets[0])}</textarea></label>
-        <label class="db-f"><span>Proje (Claude bu klasörde açılır)</span><select name="proj">${S.projects.map(p => `<option value="${esc(p.id)}"${p.id === defProj ? ' selected' : ''}>${esc(p.name)}</option>`).join('')}</select></label>
+        <label class="db-f"><span>Soru</span><textarea name="q" rows="3" placeholder="${aiName()}’${aiName() === 'Codex' ? 'e' : 'a'} ne sormak istersin?">${esc(presets[0])}</textarea></label>
+        <label class="db-f"><span>Proje (${aiName()} bu klasörde açılır)</span><select name="proj">${S.projects.map(p => `<option value="${esc(p.id)}"${p.id === defProj ? ' selected' : ''}>${esc(p.name)}</option>`).join('')}</select></label>
         <p class="db-muted">${sql ? `Gönderilecek: ${o.schema ? 'tablo şeması' : `${fmtN(sql.split('\n').length)} satır SQL`}${err ? ' ve son hata mesajı' : ''}, veritabanı türü. Parola ve bağlantı bilgisi gönderilmez.` : o.schema ? 'Gönderilecek: tablo şeması ve veritabanı türü. Parola ve bağlantı bilgisi gönderilmez.' : 'Düzenleyici boş; yalnızca sorunu gönderirsin.'}</p>`,
-      buttons: [['cancel', 'Vazgeç'], ['ok', 'Yeni Claude oturumunda sor', 'primary']],
+      buttons: [['cancel', 'Vazgeç'], ['ok', `Yeni ${aiName()} oturumunda sor`, 'primary']],
       onOpen: form => form.addEventListener('click', e => { const b = e.target.closest('[data-preset]'); if (b) { const ta = form.querySelector('[name=q]'); ta.value = b.dataset.preset; ta.focus(); } }),
     });
     if (!r || r.value !== 'ok') return;
@@ -1329,7 +1329,7 @@
       { group: 'DB', keys: 'Ctrl+S', label: 'Sorguyu kaydet (Kayıtlı sorgular)' },
       { group: 'DB', keys: 'Ctrl+Space', label: 'Tablo ve sütun tamamlama' },
       { group: 'DB', keys: 'Ctrl+/', label: 'Satırları yorum yap / aç' },
-      { group: 'DB', keys: 'Ctrl+Shift+K', label: "Seçili sorguyu Claude'a sor" },
+      { group: 'DB', keys: 'Ctrl+Shift+K', label: 'Seçili sorguyu yapay zekâya sor (varsayılan: Claude ya da Codex)' },
       { group: 'DB', keys: 'Ctrl+Alt+N', label: 'Yeni bağlantı' },
       { group: 'DB', keys: 'Ctrl+C / Ctrl+Shift+C', label: 'Sonuç tablosunda seçimi kopyala / başlıklarla kopyala' },
     );
