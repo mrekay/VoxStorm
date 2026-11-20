@@ -8,6 +8,18 @@
   // try: what the "Dene" button does (optional)
   const NOTES = [
     {
+      id: '2026-11-20', title: 'Sürüm 0.8.0', date: '20 Kasım 2026',
+      items: [
+        { icon: 'fa-brands fa-openai', title: 'Codex desteği', text: 'Claude Code’un yanında OpenAI Codex oturumları: + Oturum menüsünden ya da Ctrl+Shift+X ile aç. İzin kartları, bitince bildirim, geçmiş ve kaldığın yerden devam, alt ajanlar ve arka planda süren komutlar ajan panelinde. Codex kurulu değilse hiçbir yerde görünmez.', keys: 'Ctrl+Shift+X', try: () => { if (INFO && INFO.codex) setMode('claude'); else toast('Codex kurulu değil', 'npm i -g @openai/codex, ardından codex login.'); } },
+        { icon: 'fa-solid fa-wand-magic-sparkles', title: 'Varsayılan yapay zekâ', text: 'Ayarlarda Claude ya da Codex seç: Ctrl+Shift+N ve “… sor” düğmeleri (IDE, DB) seçtiğine gider.' },
+        { icon: 'fa-solid fa-chart-column', title: 'Codex kullanımı', text: 'Haftalık kullanım panelinde Claude / Codex seçici: Codex’in token grafiği ve 5 saatlik / haftalık plan limitleri.' },
+        { icon: 'fa-brands fa-linux', title: 'Linux desteği', text: 'VoxStorm artık Linux’ta da çalışıyor: AppImage ve .deb. Güncellemeler AppImage’da uygulama içinden gelir.' },
+        { icon: 'fa-solid fa-file-import', title: 'Terminale sürükle-bırak', text: 'Gezginden ya da masaüstünden dosya/klasörü terminale bırak; yolu tırnaklı olarak yazılır.' },
+        { icon: 'fa-solid fa-sliders', title: 'Tek sayfa ayarlar', text: 'Claude, Codex ve hitap ayarları tek kaydırılabilir “Yapay zekâ” sayfasında: ortak ayarlar açık, Claude ve Codex bölümleri katlanır.' },
+      ],
+      small: ['Panel başlıklarındaki sabitle ve kapat düğmeleri hep görünür; yanındaki düğmeler artık kaymıyor.', 'Terminalde emojili satırlarda harflerin üst üste binmesi düzeldi.', 'Görev çubuğu simgesi güncel logo.'],
+    },
+    {
       id: '2026-11-19', title: 'Sürüm 0.7.0', date: '19 Kasım 2026',
       items: [
         { icon: 'fa-solid fa-server', title: 'SSH modu', text: 'PuTTY ve WinSCP bir arada: kayıtlı sunucular, terminal, iki panelli SFTP dosya yöneticisi (sürükle-bırak, klasör aktarımı, chmod, uzak dosyayı düzenleme), port yönlendirme tünelleri ve Uzak Masaüstü (RDP) kayıtları.', keys: 'Ctrl+4', try: () => setMode('ssh') },

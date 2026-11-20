@@ -1,6 +1,6 @@
 {
   "name": "voxstorm",
-  "version": "0.7.0",
+  "version": "0.8.0",
   "description": "Claude Code ve Codex oturumlarını tek pencereden yöneten Windows, macOS ve Linux masaüstü uygulaması",
   "author": "mrekay",
   "homepage": "https://github.com/mrekay/claudelot",
