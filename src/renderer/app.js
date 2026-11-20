@@ -58,6 +58,31 @@ function claudeSummary() {
   if ((c.command || '').trim()) parts.push('özel komut');
   return parts.join(' · ');
 }
+// Codex CLI (OpenAI) sessions: settings.codex = { model, effort, mode, search, command }
+const CODEX_MODES = [
+  ['', 'Varsayılan', 'Codex kendi ayarını kullanır (config.toml)'],
+  ['readonly', 'Salt okunur', 'Dosya yazmadan ve komut çalıştırmadan önce sorar'],
+  ['never', 'Sormadan çalış', 'Hiç onay sormaz; korumalı alan (sandbox) açık kalır'],
+  ['full', 'Tam yetki', 'Onay sormaz, korumalı alan kapalı: her şeyi yapabilir'],
+];
+const CODEX_EFFORTS = [['', 'Varsayılan'], ['low', 'Düşük'], ['medium', 'Orta'], ['high', 'Yüksek']];
+function codexSummary() {
+  const c = (CFG && CFG.settings.codex) || {};
+  const parts = [c.model || 'varsayılan model'];
+  if (c.effort) parts.push((CODEX_EFFORTS.find(([k]) => k === c.effort) || [0, c.effort])[1].toLocaleLowerCase('tr') + ' efor');
+  if (c.mode) parts.push((CODEX_MODES.find(([k]) => k === c.mode) || [0, c.mode])[1].toLocaleLowerCase('tr'));
+  if (c.search) parts.push('web araması');
+  if ((c.command || '').trim()) parts.push('özel komut');
+  return parts.join(' · ');
+}
+function agentPickHtml() {
+  const cur = (CFG.settings.defaultAgent === 'codex') ? 'codex' : 'claude';
+  return `<h4>Varsayılan yapay zekâ</h4>
+    <div class="seg"><button class="${cur === 'claude' ? 'on' : ''}" data-defagent="claude"><i class="fa-brands fa-claude"></i> Claude</button><button class="${cur === 'codex' ? 'on' : ''}" data-defagent="codex" ${INFO.codex ? '' : 'disabled title="Codex CLI kurulu değil"'}><i class="fa-brands fa-openai"></i> Codex</button></div>
+    <p class="set-note">Ctrl+Shift+N, Proje Başlat ve projeye tıklayınca açılan yeni oturumlar bununla başlar. “+ Oturum ▾” menüsünden ikisini de ayrıca seçebilirsin; Codex için kısayol Ctrl+Shift+X.</p>`;
+}
+// which AI a new session starts with when none is chosen (settings: Varsayılan yapay zekâ)
+const defaultAgent = () => (CFG && CFG.settings.defaultAgent === 'codex' && INFO && INFO.codex ? 'codex' : 'claude');
 const EDIT_TOOLS = new Set(['Edit', 'Write', 'MultiEdit', 'NotebookEdit']);
 
 const proj = id => S.projects.find(p => p.id === id);
@@ -174,13 +199,21 @@ async function refreshUsage() {
 }
 
 /* ---------------- terminals ---------------- */
-function tabIcon(t) { if (t.kind === 'agent') return `<span class="dot ${t.status}"></span><i class="fa-solid fa-robot watch-ic" title="Alt ajanın konuşması (salt okunur)"></i>`; if (t.kind === 'watch') return `<span class="dot ${t.status}"></span><i class="fa-solid fa-eye watch-ic" title="VoxStorm dışında açık, izleniyor"></i>`; return t.kind === 'shell' ? (SHELL_ICONS[t.shell] || '<i class="shi fa-solid fa-terminal"></i>') : `<span class="dot ${t.status}"></span>`; }
+function tabIcon(t) { if (t.kind === 'agent') return `<span class="dot ${t.status}"></span><i class="fa-solid fa-robot watch-ic" title="Alt ajanın konuşması (salt okunur)"></i>`; if (t.kind === 'watch') return `<span class="dot ${t.status}"></span><i class="fa-solid fa-eye watch-ic" title="VoxStorm dışında açık, izleniyor"></i>`; return t.kind === 'shell' ? (SHELL_ICONS[t.shell] || '<i class="shi fa-solid fa-terminal"></i>') : `<span class="dot ${t.status}"></span>${t.agent === 'codex' ? CODEX_IC : ''}`; }
+const CODEX_IC = '<i class="fa-brands fa-openai codex-ic" title="Codex oturumu"></i>';
 
 // adopt: a running terminal handed over by another window ({ id, sessionId, buffer, … }, see detached windows)
-async function openTerminal({ kind = 'claude', shell, projectId, resume, title, overrides, adopt, group }) {
+// agent: 'codex' for an OpenAI Codex session (kind stays 'claude': an AI session tab either way)
+async function openTerminal({ kind = 'claude', shell, projectId, resume, title, overrides, adopt, group, agent }) {
   // already running in an outside terminal: follow it instead of starting a second copy
   if (resume && isExtLive(resume)) return openWatch(resume);
   const p = proj(projectId); if (!p) return null;
+  // no agent given: a past session keeps its own, a new one uses the default from settings
+  if (kind === 'claude' && !agent) {
+    if (resume) { const h = (S.history[projectId] || []).find(x => x.id === resume); agent = (h && h.agent) || 'claude'; }
+    else agent = defaultAgent();
+  }
+  if (kind !== 'claude' || agent !== 'codex') agent = undefined;
   if (resume) { const ex = tabBySession(resume); if (ex) { activate(ex.id); return ex; } }
   const el = document.createElement('div');
   el.className = 'term-pane';
@@ -196,7 +229,7 @@ async function openTerminal({ kind = 'claude', shell, projectId, resume, title, 
   term.open(el);
   try { fit.fit(); } catch (_) {}
   const tab = {
-    id: 'pending-' + (seq++), kind, shell, projectId, sessionId: null, term, fit, el, exited: false,
+    id: 'pending-' + (seq++), kind, shell, projectId, sessionId: null, term, fit, el, exited: false, agent,
     title: title || (kind === 'claude' ? 'Yeni oturum' : (SHELLS[shell] || SHELLS[DEFAULT_SHELL]).name + numberSuffix(projectId, shell)),
     status: kind === 'claude' ? 'idle' : 'shell',
     prompted: !!resume, // a brand-new session has nothing to resume until the first message
@@ -208,7 +241,7 @@ async function openTerminal({ kind = 'claude', shell, projectId, resume, title, 
   renderAll();
   if (adopt) adoptTerminal(tab, adopt);
   else try {
-    const res = await api.invoke('pty:spawn', { kind, shell, cwd: p.path, resume, overrides, rcName: `${p.name} · VoxStorm`, cols: term.cols, rows: term.rows });
+    const res = await api.invoke('pty:spawn', { kind, agent, shell, cwd: p.path, resume, overrides, rcName: `${p.name} · VoxStorm`, cols: term.cols, rows: term.rows });
     tab.id = res.id; tab.sessionId = res.sessionId;
     S.active = tab.id;
     (early.get(res.id) || []).forEach(d => term.write(d));
@@ -221,6 +254,7 @@ async function openTerminal({ kind = 'claude', shell, projectId, resume, title, 
   term.onData(d => { if (!tab.exited) api.send('pty:write', tab.id, d); });
   term.onResize(({ cols, rows }) => { if (!tab.exited) api.send('pty:resize', tab.id, cols, rows); });
   // Claude Code puts the session's title in the terminal title bar: use it unless the user named the tab
+  // (Codex does the same, as "title | folder")
   if (kind === 'claude') term.onTitleChange(raw => applyClaudeTitle(tab, raw));
   term.attachCustomKeyEventHandler(e => {
     if (e.type !== 'keydown') return true;
@@ -275,9 +309,19 @@ function claudeTermTitle(raw) {
   return !s || /^claude( code)?$/i.test(s) ? '' : s;
 }
 let titleTimer = null;
+// Codex: "Fix the login bug | myproject"; before the first message only the folder name, or the
+// launcher's own title (cmd.exe's path)
+function codexTermTitle(raw, tab) {
+  let s = String(raw || '').replace(/[⠀-⣿]/g, '').replace(/\s+/g, ' ').trim();
+  const p = proj(tab.projectId), dir = p ? baseName(p.path) : '';
+  if (dir && s.endsWith(' | ' + dir)) s = s.slice(0, -(dir.length + 3)).trim();
+  s = s.replace(/^\[[^\]]{0,8}\]\s*Action Required\s*(\|\s*)?/i, '').trim(); // while it waits for an approval
+  if (!s || s === dir || /[\\/]/.test(s) && /\.exe\b/i.test(s) || /^codex$/i.test(s)) return '';
+  return s;
+}
 function applyClaudeTitle(tab, raw) {
   if (tab.renamed) return;
-  const v = claudeTermTitle(raw);
+  const v = tab.agent === 'codex' ? codexTermTitle(raw, tab) : claudeTermTitle(raw);
   if (!v) return;
   const t = shorten(v, 48);
   if (t === tab.title) return;
@@ -403,6 +447,7 @@ function agentEnded(a) {
 }
 api.on('hook', ev => {
   S.lastHook = { name: ev.hook_event_name, session: ev.session_id, at: Date.now() };
+  if (ev.vs_agent === 'codex') return codexHook(ev);
   const t = tabBySession(ev.session_id);
   if (!t) return;
   const name = ev.hook_event_name, tool = ev.tool_name, input = ev.tool_input || {};
@@ -476,12 +521,43 @@ api.on('hook', ev => {
   renderAll();
 });
 
+/* Codex CLI hook events (main.js tags them vs_agent/vs_pty). The terminal id finds the tab even
+   before the session id is known; SessionStart (or any later event) brings the session id. */
+function codexHook(ev) {
+  const t = (ev.vs_pty && tabById(ev.vs_pty)) || tabBySession(ev.session_id);
+  if (!t || t.agent !== 'codex') return;
+  if (ev.session_id && t.sessionId !== ev.session_id) { t.sessionId = ev.session_id; saveOpenTabs(); }
+  const name = ev.hook_event_name, input = ev.tool_input || {};
+  const where = () => `${t.title} · ${(proj(t.projectId) || {}).name || ''}`;
+  if (name === 'SessionStart' && t.pendingPrompt) sendPendingPrompt(t);
+  else if (name === 'UserPromptSubmit') {
+    clearPending(t); t.status = 'running';
+    if (t.title === 'Yeni oturum' && !t.renamed && ev.prompt) t.title = shorten(ev.prompt, 48);
+    if (!t.prompted) { t.prompted = true; saveOpenTabs(); }
+  } else if (name === 'PermissionRequest') {
+    const what = input.command || input.file_path || toolSummary(input);
+    addPending(t, { kind: 'permission', agent: 'codex', q: input.description || 'Codex izin istiyor', detail: (ev.tool_name ? ev.tool_name + ': ' : '') + String(what || '').slice(0, 600) });
+    notify('decision', 'Codex izin istiyor', `${t.title}: ${input.description || what || ''}`, t.id);
+  } else if (name === 'PostToolUse') {
+    clearPending(t);
+    if (t.status === 'waiting' || t.status === 'idle' || t.status === 'done') t.status = 'running';
+  } else if (name === 'Stop') {
+    clearPending(t);
+    const was = t.status;
+    t.status = 'done';
+    if (was === 'running' || was === 'waiting') notify('done', 'İş bitti' + (addr() ? ', ' + addr() : ''), where(), t.id);
+    refreshHistory(t.projectId).then(renderSide);
+  }
+  renderAll();
+}
+
 function decide(id, c) {
   const p = S.pending.find(x => x.id === id); if (!p) return;
   const t = tabById(p.tabId);
   if (c === 'goto') { if (S.mode !== 'claude') setMode('claude'); if (t) activate(t.id); return; }
   if (t && !t.exited) {
-    const keys = { yes: '1', always: '2', no: '\x1b' };
+    // Codex's approval: y = yes, p = don't ask again for such commands, Esc = no
+    const keys = t.agent === 'codex' ? { yes: 'y', always: 'p', no: '\x1b' } : { yes: '1', always: '2', no: '\x1b' };
     if (keys[c]) api.send('pty:write', t.id, keys[c]);
     else if (c.startsWith('opt')) api.send('pty:write', t.id, String(+c.slice(3) + 1));
     t.status = 'running';
@@ -833,7 +909,7 @@ function renderSide() {
     const limit = S.showAll[p.id] ? hist.length : 0;
     const items = live.map(t => `<li><button class="sess live ${t.id === S.active ? 'active' : ''}${attnCls(t.attn)}" data-tab="${t.id}" title="${esc(t.title)} · ${STATUS_TEXT[t.status]}">${tabIcon(t)}<span class="sess-t">${esc(t.title)}</span><span class="sess-badge ${t.status}">${STATUS_SHORT[t.status]}</span></button></li>`).join('')
       + ext.map(s => extRow(s)).join('')
-      + hist.slice(0, limit).map(h => `<li><button class="sess" data-resume="${h.id}" data-pid="${p.id}" title="${esc(h.title)}&#10;Kaldığı yerden devam ettirmek için tıkla"><span class="dot idle"></span><span class="sess-t">${esc(h.title)}</span><span class="sess-time">${rel(h.mtime)}</span></button></li>`).join('')
+      + hist.slice(0, limit).map(h => `<li><button class="sess" data-resume="${h.id}" data-pid="${p.id}" title="${esc(h.title)}${h.agent === 'codex' ? ' (Codex)' : ''}&#10;Kaldığı yerden devam ettirmek için tıkla"><span class="dot idle"></span>${h.agent === 'codex' ? CODEX_IC : ''}<span class="sess-t">${esc(h.title)}</span><span class="sess-time">${rel(h.mtime)}</span></button></li>`).join('')
       + (hist.length > limit ? `<li><button class="sess-more" data-more="${p.id}" title="Geçmiş oturumları göster">+ ${hist.length - limit} oturum daha</button></li>`
         : hist.length ? `<li><button class="sess-more" data-more="${p.id}" title="Geçmiş oturumları gizle">Geçmişi gizle</button></li>` : '')
       + (!live.length && !ext.length && !hist.length ? '<li class="empty-side" style="padding:4px 8px">Henüz oturum yok</li>' : '');
@@ -890,7 +966,8 @@ function renderQueue() {
     const t = tabById(d.tabId) || { title: '?' }, p = proj(t.projectId) || {};
     const label = { permission: 'İzin', plan: 'Plan', question: 'Soru' }[d.kind];
     let acts;
-    if (d.kind === 'permission') acts = `<button class="btn primary" data-dec="${d.id}" data-c="yes" title="Terminale 1 gönderir">Evet</button><button class="btn" data-dec="${d.id}" data-c="always" title="Terminale 2 gönderir">Bu oturumda hep</button><button class="btn deny" data-dec="${d.id}" data-c="no" title="Terminale Esc gönderir">Hayır</button>`;
+    if (d.kind === 'permission' && d.agent === 'codex') acts = `<button class="btn primary" data-dec="${d.id}" data-c="yes" title="Terminale y gönderir">Evet</button><button class="btn" data-dec="${d.id}" data-c="always" title="Terminale p gönderir: bu şekilde başlayan komutlar bir daha sorulmaz">Bu komut için hep</button><button class="btn deny" data-dec="${d.id}" data-c="no" title="Terminale Esc gönderir">Hayır</button>`;
+    else if (d.kind === 'permission') acts = `<button class="btn primary" data-dec="${d.id}" data-c="yes" title="Terminale 1 gönderir">Evet</button><button class="btn" data-dec="${d.id}" data-c="always" title="Terminale 2 gönderir">Bu oturumda hep</button><button class="btn deny" data-dec="${d.id}" data-c="no" title="Terminale Esc gönderir">Hayır</button>`;
     else if (d.kind === 'question' && !d.multi && !d.more && d.options.length) acts = d.options.map((o, i) => `<button class="btn ${i === 0 ? 'primary' : ''}" data-dec="${d.id}" data-c="opt${i}" title="Terminale ${i + 1} gönderir">${esc(o)}</button>`).join('');
     else acts = '';
     acts += `<button class="btn" data-dec="${d.id}" data-c="goto">Terminale git</button>`;
@@ -2031,7 +2108,7 @@ window.vsReleaseTabs = () => {
     if (t.kind === 'watch') { clearInterval(t.timer); if (t.mirror) api.send('mirror:stop', t.mirror); out.push({ kind: 'watch', sessionId: t.sessionId }); }
     else if (t.kind === 'agent') clearInterval(t.timer);
     else if (!t.exited && !String(t.id).startsWith('pending-')) {
-      out.push({ id: t.id, kind: t.kind, shell: t.shell || null, projectId: t.projectId, sessionId: t.sessionId, title: t.title, renamed: !!t.renamed, prompted: !!t.prompted, status: t.status, active: t.id === S.active });
+      out.push({ id: t.id, kind: t.kind, agent: t.agent || null, shell: t.shell || null, projectId: t.projectId, sessionId: t.sessionId, title: t.title, renamed: !!t.renamed, prompted: !!t.prompted, status: t.status, active: t.id === S.active });
     }
     if (t.term) t.term.dispose();
     t.el.remove();
@@ -2075,7 +2152,7 @@ async function adoptTabs() {
   for (const it of list) {
     if (it.kind === 'watch') { if (isExtLive(it.sessionId)) { openWatch(it.sessionId); n++; } continue; }
     if (!proj(it.projectId)) { api.send('pty:kill', it.id); continue; }
-    const t = await openTerminal({ kind: it.kind, shell: it.shell || undefined, projectId: it.projectId, title: it.title, adopt: it });
+    const t = await openTerminal({ kind: it.kind, agent: it.agent || 'claude', shell: it.shell || undefined, projectId: it.projectId, title: it.title, adopt: it });
     if (t) { n++; if (it.active) act = t.id; }
   }
   if (act) activate(act);
@@ -2124,6 +2201,7 @@ function openNewMenu(btn, pid, withHistory) {
   m.innerHTML = `<button data-newkind="claude" data-pid="${pid}"><span class="mi"><i class="mic fa-solid fa-terminal"></i>Claude oturumu</span><code class="ell" title="${esc(claudeSummary())}">${esc(claudeSummary())}</code></button>`
     + `<div class="has-sub"><button class="sub-open" type="button"><span class="mi"><i class="mic fa-solid fa-user-shield"></i>İzin moduyla başlat</span><i class="fa-solid fa-chevron-right sub-ar"></i></button>`
     + `<div class="sub">${QUICK_MODES.map(([k, l]) => `<button data-newkind="claude" data-pm="${k}" data-pid="${pid}" class="${k === 'bypassPermissions' ? 'danger' : ''}"><span>${l}</span><code>${k}</code></button>`).join('')}</div></div>`
+    + `<button data-newkind="codex" data-pid="${pid}" title="${INFO.codex ? 'OpenAI Codex CLI oturumu (Ctrl+Shift+X)' : 'Codex CLI bulunamadı: npm i -g @openai/codex ile kurulabilir'}"><span class="mi"><i class="mic fa-brands fa-openai"></i>Codex oturumu</span><code class="ell" title="${esc(codexSummary())}">${INFO.codex ? esc(codexSummary()) : 'kurulu değil'}</code></button>`
     + `<div class="sep"></div>`
     + Object.keys(SHELLS).map(k => `<button data-newkind="${k}" data-pid="${pid}"><span class="mi">${SHELL_ICONS[k]}${SHELLS[k].name}</span><code>${SHELLS[k].exe}</code></button>`).join('');
   if (withHistory) {
@@ -2131,7 +2209,7 @@ function openNewMenu(btn, pid, withHistory) {
     const nRestore = (CFG.lastTabs || []).filter(t => t.projectId === pid).length;
     m.innerHTML += `<div class="sep"></div><div class="lbl">Geçmiş</div>`
       + (nRestore ? `<button data-pact="restore" data-pid="${pid}"><span class="mi"><i class="mic fa-solid fa-clock-rotate-left"></i>Son oturumları geri yükle</span><code>${nRestore}</code></button>` : '')
-      + (hist.length ? hist.map(h => `<button data-resume="${h.id}" data-pid="${pid}" title="${esc(h.title)}"><span class="mi hist"><i class="mic fa-regular fa-comment"></i><span>${esc(shorten(h.title, 34))}</span></span><code>${rel(h.mtime)}</code></button>`).join('') : '<div class="lbl" style="text-transform:none;letter-spacing:0;font-weight:400">Geçmiş oturum yok</div>');
+      + (hist.length ? hist.map(h => `<button data-resume="${h.id}" data-pid="${pid}" title="${esc(h.title)}${h.agent === 'codex' ? ' (Codex)' : ''}"><span class="mi hist"><i class="mic ${h.agent === 'codex' ? 'fa-brands fa-openai' : 'fa-regular fa-comment'}"></i><span>${esc(shorten(h.title, 34))}</span></span><code>${rel(h.mtime)}</code></button>`).join('') : '<div class="lbl" style="text-transform:none;letter-spacing:0;font-weight:400">Geçmiş oturum yok</div>');
   }
   m.querySelector('.sub-open').addEventListener('click', ev => { ev.stopPropagation(); m.querySelector('.has-sub').classList.toggle('open'); });
   placeMenu(m, btn);
@@ -2296,7 +2374,7 @@ function openSettings(tab) {
 function renderSettings() {
   if ($('#settings').hidden) return;
   const st = CFG.settings;
-  $('#setNav').innerHTML = [['claude', 'Claude oturumları'], ['hitap', 'Hitap ve dil'], ['tema', 'Tema'], ['bildirim', 'Bildirimler'], ['pencere', 'Pencere'], ['eklenti', 'Eklentiler'], ['kisayol', 'Kısayollar'], ['hakkinda', 'Hakkında']].map(([k, l]) => `<button class="set-tab ${k === setTab ? 'on' : ''}" data-settab="${k}">${l}</button>`).join('');
+  $('#setNav').innerHTML = [['claude', 'Claude oturumları'], ['codex', 'Codex oturumları'], ['hitap', 'Hitap ve dil'], ['tema', 'Tema'], ['bildirim', 'Bildirimler'], ['pencere', 'Pencere'], ['eklenti', 'Eklentiler'], ['kisayol', 'Kısayollar'], ['hakkinda', 'Hakkında']].map(([k, l]) => `<button class="set-tab ${k === setTab ? 'on' : ''}" data-settab="${k}">${l}</button>`).join('');
   let h = '';
   if (setTab === 'hitap') {
     h = `<h4>Claude sana nasıl hitap etsin?</h4>
@@ -2315,7 +2393,7 @@ function renderSettings() {
   } else if (setTab === 'claude') {
     const c = CFG.settings.claude || {};
     const custom = c.model && !MODELS.some(([k]) => k === c.model);
-    h = `<h4>Varsayılan model</h4>
+    h = agentPickHtml() + `<h4>Varsayılan model</h4>
       <select id="cModel">${MODELS.map(([k, l]) => `<option value="${k}" ${(custom ? '__custom' : c.model || '') === k ? 'selected' : ''}>${l}</option>`).join('')}</select>
       <input type="text" id="cModelCustom" placeholder="Tam model adı, ör. claude-opus-5-5" value="${custom ? esc(c.model) : ''}" ${custom ? '' : 'hidden'}>
       <h4>Efor seviyesi</h4>
@@ -2335,6 +2413,22 @@ function renderSettings() {
       <div class="seg">${[30, 90, 180, 365].map(n => `<button class="${(CLEANUP || 30) === n ? 'on' : ''}" data-cleanup="${n}">${n} gün${n === 30 ? ' (varsayılan)' : ''}</button>`).join('')}</div>
       ${CLEANUP && ![30, 90, 180, 365].includes(CLEANUP) ? `<p class="set-note">Şu anki değer: ${CLEANUP} gün.</p>` : ''}
       <p class="set-note">Claude Code, bu süreden eski oturum kayıtlarını siler; silinen oturumlar geçmişte ve proje listesinde görünmez. Bu, <code>~/.claude/settings.json</code> içindeki <code>cleanupPeriodDays</code> ayarıdır; VoxStorm dışında açtığın oturumlar için de geçerlidir. Daha önce silinenleri geri getirmez.</p>`;
+  } else if (setTab === 'codex') {
+    const c = CFG.settings.codex || {};
+    h = agentPickHtml() + (INFO.codex ? '' : '<p class="set-warn">Codex CLI bulunamadı. Kurmak için: <code>npm i -g @openai/codex</code>, sonra bir terminalde <code>codex login</code>. Kurduktan sonra VoxStorm’u yeniden başlat.</p>')
+      + `<h4>Varsayılan model</h4>
+      <input type="text" id="xModel" spellcheck="false" placeholder="Boş: Codex’in varsayılanı (ör. gpt-6.2-sol)" value="${esc(c.model || '')}">
+      <h4>Akıl yürütme eforu</h4>
+      <div class="seg">${CODEX_EFFORTS.map(([k, l]) => `<button class="${(c.effort || '') === k ? 'on' : ''}" data-xeffort="${k}">${l}</button>`).join('')}</div>
+      <h4>Onay modu</h4>
+      <div class="pm-list">${CODEX_MODES.map(([k, l, d]) => `<button class="pm ${(c.mode || '') === k ? 'on' : ''} ${k === 'full' ? 'danger' : ''}" data-xmode="${k}"><b>${l}</b><small>${d}</small></button>`).join('')}</div>
+      ${c.mode === 'full' ? '<p class="set-warn">Dikkat: Codex hiçbir şey sormadan ve korumalı alan olmadan komut çalıştırır, dosya yazar ve siler. Sadece güvendiğin projelerde kullan.</p>' : ''}
+      <h4>Web araması</h4>
+      <div class="set-row"><span>Oturumlar web araması açık başlasın<small>Codex <code>--search</code> ile açılır.</small></span>${sw('data-xset="search"', c.search, 'Web araması')}</div>
+      <h4>Varsayılan açılış komutu</h4>
+      <input type="text" id="xCommand" spellcheck="false" placeholder="codex" value="${esc(c.command || '')}">
+      <p class="set-note">Boş bırakılırsa PATH'teki <code>codex</code> çalışır. VoxStorm kendi argümanlarını (hook’lar, model, onay modu…) sonuna ekler.</p>
+      <p class="set-note">VoxStorm, oturumun durumunu (çalışıyor / izin bekliyor / bitti) Codex’in hook’larıyla öğrenir. Bu hook’lar komut satırında verilir, <code>~/.codex</code> içinde hiçbir şey değişmez. Port her açılışta değiştiği için Codex’in hook onayı atlanır (<code>--dangerously-bypass-hook-trust</code>); bu yüzden VoxStorm’dan açılan oturumlarda, kendi tanımlayıp henüz onaylamadığın hook’lar da sorulmadan çalışır. Hitap ve dil tercihlerin Codex’e de iletilir.</p>`;
   } else if (setTab === 'tema') {
     const tc = st.termColors || 'windows';
     h = '<h4>Tema</h4>' + skinOptions()
@@ -2410,7 +2504,7 @@ function bindEvents() {
     else if (d.new) openTerminal({ kind: 'claude', projectId: d.new });
     else if (d.newmenu) { const m = $('#newMenu'); if (!m.hidden && m.dataset.for === d.newmenu + el.className) m.hidden = true; else { m.dataset.for = d.newmenu + el.className; openNewMenu(el, d.newmenu); } }
     else if (d.projmenu) { const m = $('#newMenu'); m.dataset.for = 'p' + d.projmenu; openProjMenu(el, d.projmenu); }
-    else if (d.newkind) { $('#newMenu').hidden = true; openTerminal(d.newkind === 'claude' ? { kind: 'claude', projectId: d.pid, overrides: d.pm ? { permissionMode: d.pm } : undefined } : { kind: 'shell', shell: d.newkind, projectId: d.pid }); }
+    else if (d.newkind) { $('#newMenu').hidden = true; openTerminal(d.newkind === 'claude' ? { kind: 'claude', agent: 'claude', projectId: d.pid, overrides: d.pm ? { permissionMode: d.pm } : undefined } : d.newkind === 'codex' ? { kind: 'claude', agent: 'codex', projectId: d.pid } : { kind: 'shell', shell: d.newkind, projectId: d.pid }); }
     else if (d.pact) {
       $('#newMenu').hidden = true;
       const p = proj(d.pid); if (!p) return;
@@ -2498,6 +2592,18 @@ function bindEvents() {
   document.addEventListener('input', e => {
     if (e.target.id === 'cModelCustom') setCfg({ settings: { claude: { model: e.target.value.trim() } } }).then(renderStatus);
     if (e.target.id === 'cCommand') setCfg({ settings: { claude: { command: e.target.value.trim() } } }).then(renderStatus);
+    if (e.target.id === 'xModel') setCfg({ settings: { codex: { model: e.target.value.trim() } } });
+    if (e.target.id === 'xCommand') setCfg({ settings: { codex: { command: e.target.value.trim() } } });
+  });
+  // Codex settings and the default AI
+  document.addEventListener('click', e => {
+    const b = e.target.closest('#setBody [data-defagent],#setBody [data-xeffort],#setBody [data-xmode],#setBody [data-xset]'); if (!b || b.disabled) return;
+    const d = b.dataset, c = CFG.settings.codex || {};
+    const done = () => { renderSettings(); renderStatus(); };
+    if (d.defagent) setCfg({ settings: { defaultAgent: d.defagent } }).then(done);
+    else if (d.xeffort !== undefined) setCfg({ settings: { codex: { effort: d.xeffort } } }).then(done);
+    else if (d.xmode !== undefined) setCfg({ settings: { codex: { mode: d.xmode } } }).then(done);
+    else setCfg({ settings: { codex: { [d.xset]: !c[d.xset] } } }).then(done);
   });
   // Ctrl+V in a terminal with files copied in Explorer: paste their paths (like Windows Terminal)
   document.addEventListener('paste', async e => {
@@ -2587,17 +2693,18 @@ async function renameSessionUi(el) {
   const h = d.resume ? (S.history[pid] || []).find(x => x.id === d.resume) : null;
   const cur = t ? t.title : ext ? ext.title : h ? h.title : '';
   const isClaude = t ? t.kind !== 'shell' : true;
+  const agent = (t && t.agent) || (h && h.agent) || null;
   const name = await uiPrompt({
     title: isClaude ? 'Oturumu yeniden adlandır' : 'Terminali yeniden adlandır', icon: 'fa-i-cursor',
     input: cur, ok: 'Kaydet', maxLength: 120,
-    detail: isClaude && sid ? 'Ad oturum kaydına yazılır; Claude Code’un /resume listesinde de görünür.' : '',
+    detail: isClaude && sid ? (agent === 'codex' ? 'Ad VoxStorm’da saklanır; Codex’in kendi listesi değişmez.' : 'Ad oturum kaydına yazılır; Claude Code’un /resume listesinde de görünür.') : '',
   });
   const v = name == null ? '' : name.replace(/\s+/g, ' ').trim();
   if (!v || v === cur) return;
   if (t) { t.title = shorten(v, 48); t.renamed = true; }
   if (isClaude && sid) {
     const p = proj(pid);
-    const r = await api.invoke('session:rename', sid, (p && p.path) || (ext && ext.cwd) || '', v).catch(e => ({ ok: false, error: e.message }));
+    const r = await api.invoke('session:rename', sid, (p && p.path) || (ext && ext.cwd) || '', v, agent).catch(e => ({ ok: false, error: e.message }));
     if (!r.ok) uiAlert({ title: 'Ad kaydedilemedi', message: r.error || 'Bilinmeyen hata.' });
     if (pid) await refreshHistory(pid);
   }
@@ -2607,7 +2714,7 @@ async function renameSessionUi(el) {
 function saveOpenTabs() {
   const list = S.tabs
     .filter(t => !t.exited && (t.kind === 'shell' || (t.sessionId && t.prompted)))
-    .map(t => ({ projectId: t.projectId, kind: t.kind, shell: t.shell || null, sessionId: t.kind === 'claude' ? t.sessionId : null, title: t.title, group: t.group || null }));
+    .map(t => ({ projectId: t.projectId, kind: t.kind, agent: t.agent || null, shell: t.shell || null, sessionId: t.kind === 'claude' ? t.sessionId : null, title: t.title, group: t.group || null }));
   const tabGroups = S.groups.filter(g => list.some(x => x.group === g.id));
   CFG.lastTabs = list; CFG.tabGroups = tabGroups;
   api.invoke('config:set', { lastTabs: list, tabGroups });
@@ -2617,7 +2724,7 @@ async function restoreTabs(pid) {
   if (!list.length) {
     // nothing remembered: continue the most recent conversation of that project
     const h = pid && (S.history[pid] || [])[0];
-    if (h) await openTerminal({ kind: 'claude', projectId: pid, resume: h.id, title: shorten(h.title, 48) });
+    if (h) await openTerminal({ kind: 'claude', agent: h.agent, projectId: pid, resume: h.id, title: shorten(h.title, 48) });
     else toast('Geri yüklenecek oturum yok');
     return;
   }
@@ -2627,7 +2734,7 @@ async function restoreTabs(pid) {
     if (t.kind === 'shell') {
       if (S.tabs.some(x => x.projectId === t.projectId && x.shell === t.shell && !x.exited)) continue;
       await openTerminal({ kind: 'shell', shell: t.shell, projectId: t.projectId, group });
-    } else await openTerminal({ kind: 'claude', projectId: t.projectId, resume: t.sessionId, title: t.title, group });
+    } else await openTerminal({ kind: 'claude', agent: t.agent || undefined, projectId: t.projectId, resume: t.sessionId, title: t.title, group });
   }
   toast('Oturumlar geri yüklendi', list.length + ' terminal');
 }
@@ -2732,7 +2839,8 @@ const SHORTCUTS = [
   { group: 'Paneller', keys: 'Ctrl+Shift+D', label: 'Sağ panel (IDE: Claude paneli)', run: () => togglePanel('right') },
   { group: 'Paneller', keys: 'Ctrl+Shift+U', label: 'Haftalık kullanım paneli', run: () => togglePanel('usage') },
   { group: 'Paneller', keys: 'Ctrl+Shift+J', label: 'Aktif ajanlar bölümü', run: () => togglePanel('agents') },
-  { group: 'Terminaller', keys: 'Ctrl+Shift+N', label: 'Yeni Claude oturumu (seçili proje)', run: () => { const p = projectHere(); if (p) openTerminal({ kind: 'claude', projectId: p }); } },
+  { group: 'Terminaller', keys: 'Ctrl+Shift+N', label: 'Yeni oturum, varsayılan yapay zekâyla (seçili proje)', run: () => { const p = projectHere(); if (p) openTerminal({ kind: 'claude', projectId: p }); } },
+  { group: 'Terminaller', keys: 'Ctrl+Shift+X', label: 'Yeni Codex oturumu (seçili proje)', when: () => S.mode === 'claude' || S.mode === 'ide', run: () => { const p = projectHere(); if (!p) return; if (!INFO.codex) { toast('Codex CLI bulunamadı', 'npm i -g @openai/codex ile kurabilirsin'); return; } openTerminal({ kind: 'claude', agent: 'codex', projectId: p }); } },
   { group: 'Terminaller', keys: 'Ctrl+Shift+T', label: IS_MAC ? 'Yeni terminal (seçili proje)' : 'Yeni PowerShell (seçili proje)', run: () => { const p = projectHere(); if (p) openTerminal({ kind: 'shell', shell: DEFAULT_SHELL, projectId: p }); } },
   { group: 'Terminaller', keys: 'Ctrl+Shift+W', label: 'Açık terminali kapat', run: () => { if (S.active) closeTab(S.active); } },
   { group: 'Terminaller', keys: 'Ctrl+Tab', label: 'Sonraki terminal', run: () => cycleTabs(1) },

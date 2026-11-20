@@ -75,7 +75,8 @@ const trayByWc = new Map(), tabsByWc = new Map(); // per window: tray counts, op
 const DEFAULTS = {
   projects: [],
   removedProjects: [], // paths the user removed; discovery never brings them back
-  lastTabs: [], // terminals that were open last time: {projectId, kind, shell, sessionId, title}
+  lastTabs: [], // terminals that were open last time: {projectId, kind, agent, shell, sessionId, title}
+  codexNames: {}, // names given in VoxStorm to Codex sessions (Codex's own database is never written)
   settings: {
     name: '', tone: 'samimi', // name: filled from git / GitHub on first launch, else no form of address lang: 'tr', extra: '',
     closeToTray: true, autostart: false, sound: true, welcome: true,
@@ -84,6 +85,9 @@ const DEFAULTS = {
     // defaults for every Claude session VoxStorm starts ('' = leave it to Claude Code)
     // command: launch command line used instead of plain `claude` ('' = find claude on PATH); chrome: start with --chrome
     claude: { model: '', effort: '', permissionMode: '', remoteControl: false, chrome: false, command: '' },
+    // Codex CLI sessions (src/main/codex.js); mode: '' | readonly | never | full
+    codex: { model: '', effort: '', mode: '', search: false, command: '' },
+    defaultAgent: 'claude', // the AI a new session starts with: 'claude' | 'codex'
     notif: { done: true, decision: true, subagent: true, workflow: true, quiet: false },
     skin: 'mono', mode: 'claude', termColors: 'windows',
     ui: { side: true, queue: true, usage: true }, // IDE panels; AI mode side panels live in ui.dock (dock.js)
@@ -736,13 +740,15 @@ async function parseTranscript(fp, proj) {
 async function scanUsage() {
   if (!usageHistory) { try { usageHistory = JSON.parse(await fsp.readFile(USAGE_HISTORY, 'utf8')); } catch (_) { usageHistory = {}; } }
   const files = await listTranscripts();
+  // Codex sessions count too (rollout files in ~/.codex/sessions)
+  for (const fp of await CODEX.rollouts().catch(() => [])) files.push({ fp, codex: true });
   const seen = new Set();
-  for (const { fp, proj } of files) {
+  for (const { fp, proj, codex } of files) {
     seen.add(fp);
     let st; try { st = await fsp.stat(fp); } catch (_) { continue; }
     const c = fileCache.get(fp);
     if (c && c.mtime === st.mtimeMs && c.size === st.size) continue;
-    fileCache.set(fp, { mtime: st.mtimeMs, size: st.size, entries: await parseTranscript(fp, proj) });
+    fileCache.set(fp, { mtime: st.mtimeMs, size: st.size, entries: codex ? await CODEX.parseRollout(fp) : await parseTranscript(fp, proj) });
   }
   for (const k of [...fileCache.keys()]) if (!seen.has(k)) fileCache.delete(k);
 
@@ -885,6 +891,9 @@ function startHookServer() {
       req.on('end', () => {
         res.end('');
         let ev; try { ev = JSON.parse(Buffer.concat(chunks).toString('utf8')); } catch (_) { return; }
+        if (!ev || typeof ev !== 'object') return;
+        // Codex hooks: /hook?agent=codex&pty=<terminal id> (the terminal is known before the session id)
+        try { const q = new URL(req.url, 'http://x').searchParams; if (q.get('agent') === 'codex') { ev.vs_agent = 'codex'; ev.vs_pty = q.get('pty') || ''; } } catch (_) {}
         if (ev.hook_event_name === 'UserPromptSubmit' && ev.prompt) learnAddress(ev.prompt);
         if (ev.hook_event_name === 'SubagentStop') { try { enrichSubagentStop(ev); } catch (_) {} }
         send('hook', ev);
@@ -988,7 +997,11 @@ function spawnTerminal(opts, owner) {
   const id = crypto.randomUUID();
   let file, args = [], sessionId = null;
   const cwd = opts.cwd && fs.existsSync(opts.cwd) ? opts.cwd : os.homedir();
-  if (opts.kind === 'claude') {
+  if (opts.kind === 'claude' && opts.agent === 'codex') {
+    writeAppendPrompt();
+    const l = CODEX.launch({ resume: opts.resume, overrides: opts.overrides }, id);
+    file = l.file; args = l.args; sessionId = opts.resume || null; // a new session's id comes with its first hook
+  } else if (opts.kind === 'claude') {
     const launch = claudeLaunch();
     if (!launch) throw new Error('claude komutu bulunamadı. Claude Code kurulu ve PATH içinde olmalı ya da Ayarlar → Claude oturumları → Açılış komutu doldurulmalı.');
     args.push(...launch.pre);
@@ -1012,7 +1025,7 @@ function spawnTerminal(opts, owner) {
   }
   // drop per-session markers in case VoxStorm itself was started from inside a Claude Code session
   const env = { ...process.env, CLAUDELOT: '1', FORCE_COLOR: '1' };
-  for (const k of Object.keys(env)) if (k === 'CLAUDECODE' || /^CLAUDE_CODE_(CHILD_SESSION|ENTRYPOINT|SSE_PORT|SESSION_ID)/.test(k)) delete env[k];
+  for (const k of Object.keys(env)) if (k === 'CLAUDECODE' || /^CLAUDE_CODE_(CHILD_SESSION|ENTRYPOINT|SSE_PORT|SESSION_ID)/.test(k) || /^CODEX_(THREAD_ID|SANDBOX|MANAGED_)/.test(k)) delete env[k];
   const p = pty.spawn(file, args, {
     name: 'xterm-256color',
     cols: Math.max(20, opts.cols || 120),
@@ -1042,6 +1055,8 @@ function spawnTerminal(opts, owner) {
 let U = null;
 let SSH = null;
 let DOCKER = null;
+// Codex CLI sessions (OpenAI), shown and handled like Claude's
+const CODEX = require('./codex')({ config: () => config, hookPort: () => hookPort, buildPrompt: () => buildAppendPrompt(), encodeProjectDir });
 function setupUpdater() {
   const { net } = require('electron');
   U = require('./updater')({
@@ -1343,7 +1358,7 @@ function appMenu() {
 
 /* ---------------- IPC ---------------- */
 function registerIpc() {
-  ipcMain.handle('config:get', () => ({ config, info: { platform: process.platform, claude: findClaude(), hookPort, hookSettings: HOOK_SETTINGS, appendPrompt: APPEND_PROMPT, home: os.homedir() } }));
+  ipcMain.handle('config:get', () => ({ config, info: { platform: process.platform, claude: findClaude(), codex: CODEX.installed(), hookPort, hookSettings: HOOK_SETTINGS, appendPrompt: APPEND_PROMPT, home: os.homedir() } }));
   ipcMain.handle('config:set', (e, patch) => {
     // every window reports its own open terminals; lastTabs is all of them together
     if (patch && Array.isArray(patch.lastTabs)) { tabsByWc.set(e.sender.id, patch.lastTabs); patch = { ...patch, lastTabs: [].concat(...tabsByWc.values()) }; }
@@ -1443,8 +1458,12 @@ function registerIpc() {
   });
   ipcMain.handle('shell:openGithub', (_e, url) => { if (/^https:\/\/github\.com\//i.test(String(url))) shell.openExternal(url); });
 
-  ipcMain.handle('history:list', (_e, projectPath) => listSessions(projectPath));
-  ipcMain.handle('session:rename', (_e, sessionId, projectPath, title) => renameSession(sessionId, projectPath, title));
+  // Claude and Codex sessions of a folder, newest first (Codex ones carry agent: 'codex')
+  ipcMain.handle('history:list', async (_e, projectPath) => {
+    const [a, b] = await Promise.all([listSessions(projectPath), CODEX.listSessions(projectPath).catch(() => [])]);
+    return [...a, ...b].sort((x, y) => y.mtime - x.mtime).slice(0, 40);
+  });
+  ipcMain.handle('session:rename', (_e, sessionId, projectPath, title, agent) => (agent === 'codex' ? CODEX.rename(sessionId, title, saveConfig) : renameSession(sessionId, projectPath, title)));
   ipcMain.handle('usage:get', () => computeUsage());
   ipcMain.handle('live:list', () => scanLive());
   ipcMain.handle('live:tail', (_e, sid, offset, agent) => tailTranscript(sid, offset, agent && typeof agent === 'object' ? { agentId: String(agent.agentId || ''), toolUseId: String(agent.toolUseId || '') } : null));

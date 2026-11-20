@@ -1238,3 +1238,6 @@ kbd{font:10.5px var(--f-mono);opacity:.75;margin-left:4px}
 html.is-mac .win-ctl{display:none}
 html.is-mac .titlebar .tb-left{padding-left:80px}
 html.is-mac.is-fullscreen .titlebar .tb-left{padding-left:10px}
+/* Codex (OpenAI) sessions: a small logo after the status dot */
+.codex-ic{font-size:11px;color:var(--muted);margin:0 2px 0 4px;flex:none}
+.tab.active .codex-ic,.sess.active .codex-ic{color:var(--fg)}

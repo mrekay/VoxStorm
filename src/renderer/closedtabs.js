@@ -19,7 +19,7 @@
     if (!t || (t.kind !== 'claude' && t.kind !== 'shell')) return;
     if (t.kind === 'claude' && !t.sessionId) return;
     if (t.kind === 'claude' && !t.prompted) return; // nothing was said in it: nothing to come back to
-    const e = { kind: t.kind, shell: t.shell || null, projectId: t.projectId, sessionId: t.kind === 'claude' ? t.sessionId : null, title: t.title, group: t.group || null, at: Date.now() };
+    const e = { kind: t.kind, agent: t.agent || null, shell: t.shell || null, projectId: t.projectId, sessionId: t.kind === 'claude' ? t.sessionId : null, title: t.title, group: t.group || null, at: Date.now() };
     const l = stored().filter(x => !(e.sessionId && x.sessionId === e.sessionId));
     l.unshift(e);
     save(l);
@@ -34,7 +34,7 @@
     if (S.mode !== 'claude' && S.mode !== 'ide') setMode('claude');
     const group = e.group && S.groups && S.groups.some(g => g.id === e.group) ? e.group : null;
     if (e.kind === 'claude') {
-      await openTerminal({ kind: 'claude', projectId: e.projectId, resume: e.sessionId, title: e.title, group });
+      await openTerminal({ kind: 'claude', agent: e.agent || 'claude', projectId: e.projectId, resume: e.sessionId, title: e.title, group });
     } else await openTerminal({ kind: 'shell', shell: e.shell, projectId: e.projectId, group });
   }
   const ago = ms => {
@@ -65,7 +65,7 @@
     const l = list();
     menu.innerHTML = `<div class="h">Son kapatılanlar</div>` + (l.length ? l.map((e, i) => {
       const p = proj(e.projectId);
-      const icon = e.kind === 'claude' ? 'fa-solid fa-robot' : 'fa-solid fa-terminal';
+      const icon = e.kind !== 'claude' ? 'fa-solid fa-terminal' : e.agent === 'codex' ? 'fa-brands fa-openai' : 'fa-solid fa-robot';
       return `<button data-ct="${i}" role="menuitem" title="${e.kind === 'claude' ? 'Konuşmasıyla birlikte devam ettir' : 'Yeni terminal aç'}"><i class="${icon}"></i><span class="ct-t"><b>${esc(e.title)}</b><small>${esc(p ? p.name : 'silinmiş proje')} · ${ago(e.at)}</small></span>${i === 0 ? '<kbd>Ctrl+Alt+T</kbd>' : ''}</button>`;
     }).join('') + '<div class="sep"></div><button data-ct="clear" role="menuitem"><i class="fa-solid fa-broom"></i><span class="ct-t">Listeyi temizle</span></button>'
       : '<div class="ct-empty">Bu oturumda kapatılan sekme yok.</div>');
