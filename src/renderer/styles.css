@@ -1145,8 +1145,9 @@ kbd{font:10.5px var(--f-mono);opacity:.75;margin-left:4px}
 .dg-tabs:not(.multi) .dg-tab{color:var(--muted)}
 .dg-n{font-size:10px;letter-spacing:0;padding:0 6px;border-radius:999px;background:var(--accent-soft);color:var(--accent)}
 .dg-n.warn{background:var(--warn-soft);color:var(--warn)}
-.dg-acts{flex:none;display:none;gap:1px}
-.dock-group:hover .dg-acts,.dg-acts:focus-within,.dg-peek .dg-acts{display:flex}
+/* always in place (shown only on hover they pushed the header's own buttons, e.g. Proje Başlat, around) */
+.dg-acts{flex:none;display:flex;gap:1px;opacity:.55;transition:opacity .12s}
+.dock-group:hover .dg-acts,.dg-acts:focus-within,.dg-peek .dg-acts{opacity:1}
 .dg-acts .dg-pin-on{color:var(--accent)}
 .dg-body{flex:1;min-height:0;display:flex;flex-direction:column;overflow:hidden}
 .dg-body > .dock-view{flex:1 1 auto;min-height:0;border:0;max-height:none;margin:0}
