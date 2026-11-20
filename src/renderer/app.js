@@ -2313,7 +2313,7 @@ function renderReport() {
 }
 
 /* ---------------- settings ---------------- */
-let setTab = 'hitap';
+let setTab = 'ai';
 const TONES = { samimi: 'Samimi', resmi: 'Resmi', kisa: 'Kısa ve öz' };
 const LANGS = { tr: 'Türkçe', en: 'İngilizce' };
 const NOTIF_LABELS = { done: 'İş bittiğinde', decision: 'Kararını beklediğinde (izin, plan, soru)', subagent: 'Alt ajan açılınca / bitince', workflow: 'Workflow açılınca / bitince', quiet: 'Rahatsız etme (hepsini sustur)' };
@@ -2377,27 +2377,28 @@ function openSettings(tab) {
 }
 function renderSettings() {
   if ($('#settings').hidden) return;
+  if (setTab === 'claude' || setTab === 'codex' || setTab === 'hitap') { setFocus = setTab === 'hitap' ? 'ortak' : setTab; setTab = 'ai'; }
   const st = CFG.settings;
-  $('#setNav').innerHTML = [['claude', 'Claude oturumları'], ['codex', 'Codex oturumları'], ['hitap', 'Hitap ve dil'], ['tema', 'Tema'], ['bildirim', 'Bildirimler'], ['pencere', 'Pencere'], ['eklenti', 'Eklentiler'], ['kisayol', 'Kısayollar'], ['hakkinda', 'Hakkında']].map(([k, l]) => `<button class="set-tab ${k === setTab ? 'on' : ''}" data-settab="${k}">${l}</button>`).join('');
+  $('#setNav').innerHTML = [['ai', 'Yapay zekâ'], ['tema', 'Tema'], ['bildirim', 'Bildirimler'], ['pencere', 'Pencere'], ['eklenti', 'Eklentiler'], ['kisayol', 'Kısayollar'], ['hakkinda', 'Hakkında']].map(([k, l]) => `<button class="set-tab ${k === setTab ? 'on' : ''}" data-settab="${k}">${l}</button>`).join('');
   let h = '';
-  if (setTab === 'hitap') {
-    h = `<h4>Claude sana nasıl hitap etsin?</h4>
+  if (setTab === 'ai') { let h1 = '', h2 = '', h3 = ''; {
+    h1 = agentPickHtml() + `<h4>Sana nasıl hitap edilsin?</h4>
       <input type="text" id="fName" data-field="name" value="${esc(st.name)}" placeholder="Boş bırakırsan hitap kullanılmaz">
       <div class="chips">${[...new Set([firstName((CFG.identity || {}).name), 'Başkanım', 'Hocam', 'Şefim', 'Patron'].filter(Boolean))].map(c => `<button class="chip-btn ${st.name === c ? 'on' : ''}" data-hitap="${c}">${c}</button>`).join('')}<button class="chip-btn ${!addr() ? 'on' : ''}" data-hitap="">Hitapsız</button></div>
-      <p class="set-note">${(CFG.identity || {}).name ? `Adın ${(CFG.identity || {}).source === 'github' ? 'GitHub' : 'git'} ayarlarından alındı: <b>${esc(CFG.identity.name)}</b>. ` : ''}Bir oturumda Claude'a “bana … diye hitap et” dersen burası da güncellenir.</p>
+      <p class="set-note">${(CFG.identity || {}).name ? `Adın ${(CFG.identity || {}).source === 'github' ? 'GitHub' : 'git'} ayarlarından alındı: <b>${esc(CFG.identity.name)}</b>. ` : ''}Bir oturumda “bana … diye hitap et” dersen burası da güncellenir.</p>
       <h4>Konuşma tonu</h4>
       <div class="seg">${Object.keys(TONES).map(k => `<button class="${st.tone === k ? 'on' : ''}" data-tone="${k}">${TONES[k]}</button>`).join('')}</div>
       <h4>Yanıt dili</h4>
       <select id="fLang" data-field="lang">${Object.keys(LANGS).map(k => `<option value="${k}" ${st.lang === k ? 'selected' : ''}>${LANGS[k]}</option>`).join('')}</select>
       <h4>Ek talimatlar</h4>
       <textarea id="fExtra" data-field="extra" rows="3" placeholder="Her satır bir talimat. Ör: Commit mesajlarını İngilizce yaz.">${esc(st.extra)}</textarea>
-      <h4>Claude'a eklenecek metin</h4>
+      <h4>Oturumlara eklenecek metin</h4>
       <pre class="md" id="promptPrev">…</pre>
-      <p class="set-note">Bu metin VoxStorm'tan başlatılan Claude oturumlarına eklenir. CLAUDE.md dosyalarına dokunulmaz. Değişiklik yeni açılan oturumlarda geçerli olur.</p>`;
-  } else if (setTab === 'claude') {
+      <p class="set-note">Bu metin VoxStorm'tan başlatılan Claude ve Codex oturumlarına eklenir. CLAUDE.md ve AGENTS.md dosyalarına dokunulmaz. Değişiklik yeni açılan oturumlarda geçerli olur.</p>`;
+  } {
     const c = CFG.settings.claude || {};
     const custom = c.model && !MODELS.some(([k]) => k === c.model);
-    h = agentPickHtml() + `<h4>Varsayılan model</h4>
+    h2 = `<h4>Varsayılan model</h4>
       <select id="cModel">${MODELS.map(([k, l]) => `<option value="${k}" ${(custom ? '__custom' : c.model || '') === k ? 'selected' : ''}>${l}</option>`).join('')}</select>
       <input type="text" id="cModelCustom" placeholder="Tam model adı, ör. claude-opus-5-5" value="${custom ? esc(c.model) : ''}" ${custom ? '' : 'hidden'}>
       <h4>Efor seviyesi</h4>
@@ -2417,9 +2418,9 @@ function renderSettings() {
       <div class="seg">${[30, 90, 180, 365].map(n => `<button class="${(CLEANUP || 30) === n ? 'on' : ''}" data-cleanup="${n}">${n} gün${n === 30 ? ' (varsayılan)' : ''}</button>`).join('')}</div>
       ${CLEANUP && ![30, 90, 180, 365].includes(CLEANUP) ? `<p class="set-note">Şu anki değer: ${CLEANUP} gün.</p>` : ''}
       <p class="set-note">Claude Code, bu süreden eski oturum kayıtlarını siler; silinen oturumlar geçmişte ve proje listesinde görünmez. Bu, <code>~/.claude/settings.json</code> içindeki <code>cleanupPeriodDays</code> ayarıdır; VoxStorm dışında açtığın oturumlar için de geçerlidir. Daha önce silinenleri geri getirmez.</p>`;
-  } else if (setTab === 'codex') {
+  } {
     const c = CFG.settings.codex || {};
-    h = agentPickHtml() + (INFO.codex ? '' : '<p class="set-warn">Codex CLI bulunamadı. Kurmak için: <code>npm i -g @openai/codex</code>, sonra bir terminalde <code>codex login</code>. Kurduktan sonra VoxStorm’u yeniden başlat.</p>')
+    h3 = (INFO.codex ? '' : '<p class="set-warn">Codex CLI bulunamadı. Kurmak için: <code>npm i -g @openai/codex</code>, sonra bir terminalde <code>codex login</code>. Kurduktan sonra VoxStorm’u yeniden başlat.</p>')
       + `<h4>Varsayılan model</h4>
       <input type="text" id="xModel" spellcheck="false" placeholder="Boş: Codex’in varsayılanı (ör. gpt-6.2-sol)" value="${esc(c.model || '')}">
       <h4>Akıl yürütme eforu</h4>
@@ -2433,7 +2434,7 @@ function renderSettings() {
       <input type="text" id="xCommand" spellcheck="false" placeholder="codex" value="${esc(c.command || '')}">
       <p class="set-note">Boş bırakılırsa PATH'teki <code>codex</code> çalışır. VoxStorm kendi argümanlarını (hook’lar, model, onay modu…) sonuna ekler.</p>
       <p class="set-note">VoxStorm, oturumun durumunu (çalışıyor / izin bekliyor / bitti) Codex’in hook’larıyla öğrenir. Bu hook’lar komut satırında verilir, <code>~/.codex</code> içinde hiçbir şey değişmez. Port her açılışta değiştiği için Codex’in hook onayı atlanır (<code>--dangerously-bypass-hook-trust</code>); bu yüzden VoxStorm’dan açılan oturumlarda, kendi tanımlayıp henüz onaylamadığın hook’lar da sorulmadan çalışır. Hitap ve dil tercihlerin Codex’e de iletilir.</p>`;
-  } else if (setTab === 'tema') {
+  } h = aiSettingsHtml(h1, h2, h3); } else if (setTab === 'tema') {
     const tc = st.termColors || 'windows';
     h = '<h4>Tema</h4>' + skinOptions()
       + `<h4>Terminal yazı renkleri</h4><div class="seg"><button class="${tc === 'windows' ? 'on' : ''}" data-termcolors="windows">Windows Terminal</button><button class="${tc === 'theme' ? 'on' : ''}" data-termcolors="theme">Temaya uyumlu</button></div><p class="set-note">Windows Terminal: Claude Code normal Windows terminalindeki renklerle görünür (beyaz yazı, mavi bağlantılar).</p>`;
@@ -2456,9 +2457,25 @@ function renderSettings() {
       <span>Ek talimat dosyası</span><span><code>${esc(INFO.appendPrompt)}</code></span></div>
       <p class="set-note">VoxStorm, başlattığı her Claude oturumuna kendi hook ayarlarını <code>--settings</code> ile verir. Senin <code>~/.claude/settings.json</code> dosyan değiştirilmez. Uygulama dışında açılan oturumlar burada görünmez ama geçmişleri listelenir.</p>`;
   }
-  $('#setBody').innerHTML = h;
-  if (setTab === 'hitap') updatePromptPreview();
+  const body = $('#setBody'), keep = body.dataset.tab === setTab ? body.scrollTop : 0; // a re-render (a setting changed) stays where it was
+  body.innerHTML = h; body.dataset.tab = setTab; body.scrollTop = keep;
+  if (setTab === 'ai') updatePromptPreview();
+  if (setFocus) { const sec = body.querySelector(`[data-setsec="${setFocus}"]`); setFocus = null; if (sec) { sec.open = true; sec.scrollIntoView({ block: 'start' }); } }
 }
+/* the AI page: what both share on top, then Claude and Codex as sections that fold (remembered) */
+let setFocus = null; // the section to show when the page opens ('ortak' | 'claude' | 'codex')
+const SET_FOLDED = (() => { try { return new Set(JSON.parse(localStorage.getItem('vs.setFolded') || '[]')); } catch (_) { return new Set(); } })();
+function aiSettingsHtml(shared, claude, codex) {
+  const sec = (k, icon, title, sub, body) => `<details class="set-sec" data-setsec="${k}" ${SET_FOLDED.has(k) ? '' : 'open'}><summary><i class="${icon}"></i><b>${title}</b><small>${esc(sub)}</small><i class="fa-solid fa-chevron-down sec-car"></i></summary><div class="set-sec-b">${body}</div></details>`;
+  return sec('ortak', 'fa-solid fa-user', 'Ortak', 'Claude ve Codex için: varsayılan yapay zekâ, hitap, ton ve dil', shared)
+    + sec('claude', 'fa-brands fa-claude', 'Claude', claudeSummary(), claude)
+    + sec('codex', 'fa-brands fa-openai', 'Codex', INFO.codex ? codexSummary() : 'kurulu değil', codex);
+}
+document.addEventListener('toggle', e => {
+  const d = e.target; if (!d.matches || !d.matches('.set-sec')) return;
+  if (d.open) SET_FOLDED.delete(d.dataset.setsec); else SET_FOLDED.add(d.dataset.setsec);
+  try { localStorage.setItem('vs.setFolded', JSON.stringify([...SET_FOLDED])); } catch (_) {}
+}, true);
 let prevTimer = null;
 function updatePromptPreview() {
   clearTimeout(prevTimer);
