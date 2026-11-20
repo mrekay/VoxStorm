@@ -1,4 +1,4 @@
-// VoxStorm — what differs between Windows and macOS (and other Unix-likes), in one place.
+// VoxStorm — what differs between Windows, macOS and Linux, in one place.
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
@@ -26,12 +26,14 @@ function fixUnixEnv() {
   const extra = [
     path.join(os.homedir(), '.local', 'bin'), path.join(os.homedir(), '.claude', 'local'),
     '/opt/homebrew/bin', '/opt/homebrew/sbin', '/usr/local/bin', path.join(os.homedir(), '.docker', 'bin'),
+    // Linux: global npm without sudo, snaps
+    path.join(os.homedir(), '.npm-global', 'bin'), '/snap/bin',
   ];
   const parts = (process.env.PATH || '').split(':').filter(Boolean);
   for (const d of extra) if (!parts.includes(d) && fs.existsSync(d)) parts.push(d);
   process.env.PATH = parts.join(':');
   // Finder starts apps without a locale; terminals then mangle Turkish characters
-  if (!process.env.LANG) process.env.LANG = 'en_US.UTF-8';
+  if (!process.env.LANG) process.env.LANG = IS_MAC ? 'en_US.UTF-8' : 'C.UTF-8';
 }
 
 /* every match for a command on PATH, like `where` on Windows / `which -a` elsewhere */
@@ -50,4 +52,13 @@ const userShell = () => process.env.SHELL && fs.existsSync(process.env.SHELL) ? 
 /* quote one word for a POSIX shell command line */
 const shQuote = a => (/^[\w@%+=:,./-]+$/.test(a) ? a : `'${String(a).replace(/'/g, `'\\''`)}'`);
 
-module.exports = { IS_WIN, IS_MAC, fixUnixEnv, whereAll, userShell, shQuote };
+/* can saved passwords be encrypted? Linux without a keyring (gnome-keyring / KWallet) makes
+   Electron fall back to a fixed key ("basic_text"), which protects nothing: ask every time then */
+function canEncrypt(safeStorage) {
+  try {
+    if (!safeStorage.isEncryptionAvailable()) return false;
+    return !(process.platform === 'linux' && safeStorage.getSelectedStorageBackend && safeStorage.getSelectedStorageBackend() === 'basic_text');
+  } catch (_) { return false; }
+}
+
+module.exports = { IS_WIN, IS_MAC, fixUnixEnv, whereAll, userShell, shQuote, canEncrypt };

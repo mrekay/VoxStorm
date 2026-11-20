@@ -9,6 +9,8 @@
 //   asar      an unpacked folder    -> replace resources\app.asar (only when Electron is unchanged)
 //   mac       VoxStorm.app          -> unzip VoxStorm-x.y.z-mac-<arch>.zip next to it and swap the bundle
 //             (checked against the sha256 digest GitHub keeps for every release file)
+//   appimage  Linux AppImage       -> replace the .AppImage file with VoxStorm-x.y.z-linux-x86_64.AppImage (same check)
+//   linux     .deb install         -> announced only: the new .deb is installed with the package manager
 // Every download is checked against the sha256 in voxstorm-update.json; a release without
 // that file is only announced, never installed.
 const path = require('path');
@@ -36,7 +38,10 @@ module.exports = function updater({ app, net, DATA, settings, notify, onState, b
   const exe = process.execPath;
   // macOS: .../VoxStorm.app/Contents/MacOS/VoxStorm -> .../VoxStorm.app
   const bundle = process.platform === 'darwin' ? path.resolve(exe, '..', '..', '..') : '';
+  // Linux: an AppImage (APPIMAGE = the file that was started) replaces itself; a .deb install
+  // is updated by downloading the new .deb (dpkg needs root, so it is not done here)
   const kind = !app.isPackaged ? 'dev'
+    : process.platform === 'linux' ? (process.env.APPIMAGE ? 'appimage' : 'linux')
     : process.platform !== 'win32' ? 'mac'
     : process.env.PORTABLE_EXECUTABLE_FILE ? 'portable'
     : ['Uninstall VoxStorm.exe', 'Uninstall Claudelot.exe'].some(n => fs.existsSync(path.join(path.dirname(exe), n))) ? 'nsis'
@@ -60,6 +65,8 @@ module.exports = function updater({ app, net, DATA, settings, notify, onState, b
   function pick() {
     if (kind === 'dev') return { reason: 'Geliştirme modunda (npm start) güncelleme yapılmaz.' };
     if (kind === 'mac') return pickMac();
+    if (kind === 'linux') return { reason: 'Paketle (.deb) kurulmuş: yeni sürümün .deb dosyasını sürüm sayfasından indirip kur.' };
+    if (kind === 'appimage') return pickAppImage();
     if (!manifest) return { reason: 'Bu sürümde otomatik kurulum bilgisi yok; sürüm sayfasından indirebilirsin.' };
     const want = kind === 'nsis' ? 'setup' : kind === 'portable' ? 'portable' : 'asar';
     if (want === 'asar' && manifest.electron && manifest.electron !== process.versions.electron)
@@ -83,6 +90,19 @@ module.exports = function updater({ app, net, DATA, settings, notify, onState, b
     if (!a) return { reason: 'Bu sürümün macOS dosyası henüz yüklenmedi; biraz sonra tekrar kontrol et.' };
     if (!sha) return { reason: 'Bu sürümün macOS dosyası doğrulanamıyor; sürüm sayfasından indirebilirsin.' };
     return { want: 'mac', f: { name, size: a.size, sha256: sha[1].toLowerCase() }, a };
+  }
+
+  function pickAppImage() {
+    const img = process.env.APPIMAGE;
+    try { fs.accessSync(path.dirname(img), fs.constants.W_OK); fs.accessSync(img, fs.constants.W_OK); }
+    catch (_) { return { reason: `${path.dirname(img)} klasörüne yazılamıyor; sürüm sayfasından indirebilirsin.` }; }
+    // electron-builder names AppImages by the Linux arch name: x86_64 / arm64
+    const name = `VoxStorm-${release.tag_name.replace(/^v/, '')}-linux-${process.arch === 'x64' ? 'x86_64' : process.arch}.AppImage`;
+    const a = asset(name);
+    const sha = a && /^sha256:([0-9a-f]{64})$/i.exec(a.digest || '');
+    if (!a) return { reason: 'Bu sürümün Linux dosyası henüz yüklenmedi; biraz sonra tekrar kontrol et.' };
+    if (!sha) return { reason: 'Bu sürümün Linux dosyası doğrulanamıyor; sürüm sayfasından indirebilirsin.' };
+    return { want: 'appimage', f: { name, size: a.size, sha256: sha[1].toLowerCase() }, a };
   }
 
   async function check({ quiet } = {}) {
@@ -171,6 +191,7 @@ module.exports = function updater({ app, net, DATA, settings, notify, onState, b
   function apply(relaunch) {
     if (!file || applying || st.status !== 'ready') return false;
     if (kind === 'mac') return applyMac(relaunch);
+    if (kind === 'appimage') return applyAppImage(relaunch);
     applying = true;
     const ps1 = path.join(DIR, 'apply.ps1');
     const res = path.join(path.dirname(exe), 'resources');
@@ -253,6 +274,31 @@ ${relaunch ? `/usr/bin/open -n "$APP"${process.argv.length > 1 ? ' --args ' + pr
     fs.mkdirSync(DIR, { recursive: true });
     fs.writeFileSync(sh, script, { mode: 0o755 });
     spawn('/bin/bash', [sh], { detached: true, stdio: 'ignore' }).unref();
+    return true;
+  }
+
+  /* Linux AppImage: a detached script waits for this process to exit, puts the new AppImage in
+     place of the old one (same folder, so the rename is atomic) and starts it again. */
+  function applyAppImage(relaunch) {
+    applying = true;
+    const q = s => "'" + String(s).replace(/'/g, "'\\''") + "'";
+    const img = process.env.APPIMAGE;
+    const sh = path.join(DIR, 'apply.sh');
+    const script = `#!/bin/sh
+LOG=${q(path.join(DIR, 'apply.log'))}
+IMG=${q(img)}
+NEW=${q(file.path)}
+log() { echo "$(date '+%F %T') $*" >> "$LOG"; }
+log 'VoxStorm ${st.current} -> ${st.latest} (appimage)'
+i=0; while kill -0 ${process.pid} 2>/dev/null && [ $i -lt 120 ]; do sleep 0.5; i=$((i+1)); done
+if kill -0 ${process.pid} 2>/dev/null; then log 'hata: VoxStorm kapanmadı'; exit 1; fi
+TMP="$IMG.new"
+if cp "$NEW" "$TMP" && chmod +x "$TMP" && mv -f "$TMP" "$IMG"; then log 'kuruldu'; rm -f "$NEW"; else log 'hata: değiştirilemedi'; rm -f "$TMP"; fi
+${relaunch ? `nohup "$IMG"${process.argv.length > 1 ? ' ' + process.argv.slice(1).map(q).join(' ') : ''} >/dev/null 2>&1 &` : ''}
+`;
+    fs.mkdirSync(DIR, { recursive: true });
+    fs.writeFileSync(sh, script, { mode: 0o755 });
+    spawn('/bin/sh', [sh], { detached: true, stdio: 'ignore' }).unref();
     return true;
   }
 

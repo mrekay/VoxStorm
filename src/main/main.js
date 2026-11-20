@@ -599,7 +599,7 @@ async function startMirror(sessionId, owner) {
   const s = liveList.find(x => x.sessionId === sessionId);
   if (!s) throw new Error('Oturum artık açık değil.');
   // attaching to another terminal's console is a Windows API; macOS shows the conversation only
-  if (!IS_WIN) throw new Error('macOS\'ta dışarıdaki terminale bağlanılamıyor; konuşma görünür, devralarak burada devam edebilirsin.');
+  if (!IS_WIN) throw new Error('Bu sistemde dışarıdaki terminale bağlanılamıyor; konuşma görünür, devralarak burada devam edebilirsin.');
   const exe = await mirrorBinary();
   const id = crypto.randomUUID();
   const child = spawn(exe, [String(s.pid)], { windowsHide: true, stdio: ['pipe', 'pipe', 'ignore'] });

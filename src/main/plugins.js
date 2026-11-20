@@ -19,8 +19,21 @@ function dittoZip(args) {
       (err, _out, stderr) => (err ? reject(new Error(String(stderr || err.message).trim().split('\n')[0])) : resolve()));
   });
 }
-const unzipTo = (zip, out) => (IS_WIN ? psZip('Expand-Archive -LiteralPath $env:VOX_ZIP -DestinationPath $env:VOX_OUT -Force', { VOX_ZIP: zip, VOX_OUT: out }) : dittoZip(['-x', '-k', zip, out]));
-const zipFolder = (src, zip) => (IS_WIN ? psZip('Compress-Archive -LiteralPath $env:VOX_SRC -DestinationPath $env:VOX_ZIP -Force', { VOX_SRC: src, VOX_ZIP: zip }) : dittoZip(['-c', '-k', '--keepParent', src, zip]));
+// Linux: Info-ZIP's unzip / zip (zip keeps the folder itself, like ditto --keepParent)
+function infoZip(cmd, args, cwd) {
+  return new Promise((resolve, reject) => {
+    execFile(cmd, args, { timeout: 120000, cwd }, (err, _out, stderr) => {
+      if (err && err.code === 'ENOENT') return reject(new Error(`${cmd} komutu bulunamadı; paket yöneticinden kur (ör. sudo apt install ${cmd}).`));
+      if (err) return reject(new Error(String(stderr || err.message).trim().split('\n')[0]));
+      resolve();
+    });
+  });
+}
+const IS_MAC_ZIP = process.platform === 'darwin';
+const unzipTo = (zip, out) => (IS_WIN ? psZip('Expand-Archive -LiteralPath $env:VOX_ZIP -DestinationPath $env:VOX_OUT -Force', { VOX_ZIP: zip, VOX_OUT: out })
+  : IS_MAC_ZIP ? dittoZip(['-x', '-k', zip, out]) : infoZip('unzip', ['-o', '-q', zip, '-d', out]));
+const zipFolder = (src, zip) => (IS_WIN ? psZip('Compress-Archive -LiteralPath $env:VOX_SRC -DestinationPath $env:VOX_ZIP -Force', { VOX_SRC: src, VOX_ZIP: zip })
+  : IS_MAC_ZIP ? dittoZip(['-c', '-k', '--keepParent', src, zip]) : infoZip('zip', ['-r', '-q', '-y', zip, path.basename(src)], path.dirname(src)));
 
 // Windows' own zip support; paths go in as environment variables so nothing needs quoting
 function psZip(script, env) {

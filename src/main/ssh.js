@@ -47,7 +47,7 @@ module.exports = function registerSsh({ ipcMain, dialog, getWin, send, sendTo, D
 
   /* ---------------- secrets ---------------- */
   const mem = new Map(); // `${id}:pw` / `${id}:pp` -> secret given this run
-  const canEncrypt = () => { try { return safeStorage.isEncryptionAvailable(); } catch (_) { return false; } };
+  const canEncrypt = () => require('./platform').canEncrypt(safeStorage); // false on Linux without a keyring
   const encrypt = s => safeStorage.encryptString(String(s)).toString('base64');
   const decrypt = b => { try { return safeStorage.decryptString(Buffer.from(b, 'base64')); } catch (_) { return null; } };
   function secretOf(h, kind) { // kind: 'pw' | 'pp'
@@ -677,7 +677,7 @@ module.exports = function registerSsh({ ipcMain, dialog, getWin, send, sendTo, D
       catch (_) { return { error: 'Windows App (Microsoft Remote Desktop) bulunamadı; App Store’dan kurabilirsin.' }; }
       return { ok: true };
     }
-    if (!IS_WIN) return { error: 'Uzak Masaüstü bu sistemde açılamıyor.' };
+    if (!IS_WIN) return require('./rdp').openLinux(h, typeof given === 'string' ? given : secretOf(h, 'pw')); // FreeRDP / Remmina
     const target = h.port && h.port !== 3389 ? `${h.host}:${h.port}` : h.host;
     const pw = typeof given === 'string' ? given : secretOf(h, 'pw');
     const user = h.user ? (h.domain ? `${h.domain}\\${h.user}` : h.user) : '';

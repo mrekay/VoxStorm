@@ -135,6 +135,10 @@ module.exports = function registerDocker({ ipcMain, shell, getSsh }) {
         if (process.platform === 'darwin') {
           return await new Promise(res => execFile('open', ['-a', 'Docker'], err => res(err ? { error: 'Docker Desktop bulunamadı (/Applications/Docker.app).' } : { ok: true })));
         }
+        if (process.platform !== 'win32') { // Linux: Docker Desktop is a user service; plain Docker Engine is a system one
+          const ok = await new Promise(res => execFile('systemctl', ['--user', 'start', 'docker-desktop'], { timeout: 20000 }, err => res(!err)));
+          return ok ? { ok: true } : { error: 'Docker başlatılamadı. Docker Desktop yoksa servisi kendin başlat: sudo systemctl start docker' };
+        }
         const exe = path.join(process.env.ProgramFiles || 'C:\\Program Files', 'Docker', 'Docker', 'Docker Desktop.exe');
         if (!fs.existsSync(exe)) return { error: 'Docker Desktop bulunamadı: ' + exe };
         try { const p = spawn(exe, [], { detached: true, stdio: 'ignore' }); p.on('error', () => {}); p.unref(); } catch (e) { return { error: e.message }; }

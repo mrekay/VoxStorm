@@ -1,6 +1,6 @@
 # Pushing a tag like v0.2.0 builds VoxStorm on Windows and publishes a GitHub release
 # with the installers, the app.asar and voxstorm-update.json (used by the in-app updater);
-# the mac job then adds the macOS .dmg / .zip files to the same release.
+# the mac and linux jobs then add the macOS .dmg / .zip and the Linux .AppImage / .deb files to the same release.
 # The tag must match "version" in package.json:  npm version minor && git push --follow-tags
 # A tag with a dash (v0.7.0-beta.1) makes a pre-release: downloadable, but no copy updates itself to it.
 name: Release
@@ -81,3 +81,27 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: gh release upload "$GITHUB_REF_NAME" dist/VoxStorm-*-mac-*.dmg dist/VoxStorm-*-mac-*.zip --clobber
+
+  # Linux: AppImage (updates itself in the app) and .deb (Debian / Ubuntu), x64, added to the same release.
+  linux:
+    needs: release
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - name: Build
+        run: |
+          node scripts/make-icon.js --size 512
+          npx electron-builder --linux --x64 --publish never
+
+      - name: Upload to release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload "$GITHUB_REF_NAME" dist/VoxStorm-*-linux-*.AppImage dist/VoxStorm-*-linux-*.deb --clobber

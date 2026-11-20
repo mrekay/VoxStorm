@@ -119,7 +119,7 @@
 })();
 
 /* ---------------- platform ----------------
-   The same pages run on Windows and macOS. Paths use the platform's separator, app shortcuts use
+   The same pages run on Windows, macOS and Linux. Paths use the platform's separator, app shortcuts use
    Cmd on macOS (Ctrl stays with the terminal: Ctrl+C stops, Ctrl+R searches), and the labels that
    say "Ctrl+…", "Geri Dönüşüm Kutusu", "tepsi" are rewritten for macOS as they appear. */
 (() => {
@@ -142,10 +142,17 @@
     for (const k of Object.keys(map)) if (/^Ctrl-/.test(k) && k !== 'Ctrl-Space') out[k.replace(/^Ctrl-/, 'Cmd-')] = map[k];
     return out;
   };
-  if (!IS_MAC) return;
+  if (IS_WIN) return;
 
-  document.documentElement.classList.add('is-mac');
-  const WORDS = [
+  document.documentElement.classList.add(IS_MAC ? 'is-mac' : 'is-linux');
+  // Linux: shortcuts stay on Ctrl; only the Windows names change
+  const LINUX_WORDS = [
+    [/Geri Dönüşüm Kutusu’na/g, 'Çöp kutusuna'], [/Geri Dönüşüm Kutusu/g, 'Çöp kutusu'],
+    [/Dosya Gezgini’nde/g, 'Dosya yöneticisinde'], [/Gezgin'de aç/g, 'Dosya yöneticisinde aç'],
+    [/Windows açılınca başlat/g, 'Oturum açılınca başlat'], [/Windows ile başlat/g, 'Oturum açılınca başlat'],
+    [/Windows bildirimi/g, 'Sistem bildirimi'], [/Windows sesi/g, 'Sistem sesi'],
+  ];
+  const WORDS = !IS_MAC ? LINUX_WORDS : [
     [/Geri Dönüşüm Kutusu’na/g, 'Çöp Sepeti’ne'], [/Geri Dönüşüm Kutusu/g, 'Çöp Sepeti'],
     [/Dosya Gezgini’nde/g, 'Finder’da'], [/Gezgin'de aç/g, "Finder'da aç"],
     [/sistem tepsisindeki simgeye sağ tıkla → Çık\./g, 'menü çubuğundaki simgeye tıkla → Çık ya da ⌘Q.'],
@@ -154,9 +161,9 @@
     [/Windows açılınca başlat/g, 'Oturum açılınca başlat'], [/Windows ile başlat/g, 'Oturum açılınca başlat'],
     [/Windows bildirimi/g, 'macOS bildirimi'], [/Windows sesi/g, 'Sistem sesi'],
   ];
-  const fix = s => { let o = macKeys(s); for (const [re, to] of WORDS) o = o.replace(re, to); return o; };
-  const KBD = { Ctrl: '⌘', Shift: '⇧', Alt: '⌥' };
-  const NEEDS = /Ctrl|Shift\+|Alt\+|Geri Dönüşüm|Gezgin|tepsi|Tepsi|Windows/;
+  const fix = s => { let o = IS_MAC ? macKeys(s) : s; for (const [re, to] of WORDS) o = o.replace(re, to); return o; };
+  const KBD = IS_MAC ? { Ctrl: '⌘', Shift: '⇧', Alt: '⌥' } : {};
+  const NEEDS = IS_MAC ? /Ctrl|Shift\+|Alt\+|Geri Dönüşüm|Gezgin|tepsi|Tepsi|Windows/ : /Geri Dönüşüm|Gezgin|Windows/;
   // terminals, editors and rendered Markdown show the user's own text: never rewrite those
   const SKIP = '.xterm,.CodeMirror,.md,.wm-b,.db-grid,[data-raw]';
   function fixNode(n) {

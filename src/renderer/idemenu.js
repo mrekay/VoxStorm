@@ -168,10 +168,11 @@ async function imRevert() {
   await reloadFromDisk(fp, true);
 }
 function imSaveAll() { toolbar('saveall'); }
+// kind 'claude' with shell = an AI ('claude' | 'codex'); kind 'shell' with the shell's key
 function imTerminal(kind, shell) {
   const p = IDE.project; if (!p) { toast('Önce bir proje ekle'); return; }
   if (!IDE.ui.panel) { IDE.ui.panel = true; saveIdeUi(); }
-  openTerminal(kind === 'shell' ? { kind, shell, projectId: p } : { kind, projectId: p });
+  openTerminal(kind === 'shell' ? { kind, shell, projectId: p } : { kind, agent: shell || 'claude', projectId: p });
 }
 function imToggleUi(key, def) { IDE.ui[key] = !(IDE.ui[key] ?? def); saveIdeUi(); imApplyUi(); }
 function imApplyUi() {
@@ -291,9 +292,9 @@ function imItems(id) {
   }
   if (id === 'term') return [
     E('Yeni Claude oturumu', 'fa-solid fa-robot', '', () => imTerminal('claude'), { dis: !hasProj }),
-    E('Yeni PowerShell', 'fa-solid fa-terminal', '', () => imTerminal('shell', 'pwsh'), { dis: !hasProj }),
-    E('Yeni Komut İstemi', 'fa-solid fa-terminal', '', () => imTerminal('shell', 'cmd'), { dis: !hasProj }),
-    E('Yeni Git Bash', 'fa-brands fa-git-alt', '', () => imTerminal('shell', 'bash'), { dis: !hasProj }),
+    E('Yeni Codex oturumu', 'fa-brands fa-openai', '', () => imTerminal('claude', 'codex'), { dis: !hasProj || !(INFO && INFO.codex) }),
+    // this system's shells: PowerShell / Komut İstemi / Git Bash on Windows, zsh / bash elsewhere
+    ...Object.keys(SHELLS).map(k => E('Yeni ' + SHELLS[k].name, k === 'bash' && IS_WIN ? 'fa-brands fa-git-alt' : 'fa-solid fa-terminal', '', () => imTerminal('shell', k), { dis: !hasProj })),
     '-',
     E('Claude’a sor (dosya / seçim)', 'fa-solid fa-comment-dots', '', () => askClaude(), { dis: !fp, cls: 'accent' }),
     '-',

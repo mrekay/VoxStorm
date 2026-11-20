@@ -5,6 +5,8 @@ const $ = s => document.querySelector(s);
 const $$ = s => [...document.querySelectorAll(s)];
 const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const normPath = p => String(p || '').replace(/[\\/]/g, SEP).toLowerCase(); // SEP, IS_MAC: ui.js
+// a path typed into a terminal: "C:\My Files\a.txt" on Windows, '/my files/a.txt' elsewhere
+const quotePath = p => (IS_WIN ? (/[\s&()^%!,;=']/.test(p) ? `"${p}"` : p) : (/^[\w@%+=:,./-]+$/.test(p) ? p : `'${p.replace(/'/g, `'\\''`)}'`));
 const cleanErr = e => String((e && e.message) || e).replace(/^Error invoking remote method '[^']+': (Error: )?/, '');
 const shorten = (s, n) => { s = String(s || '').replace(/\s+/g, ' ').trim(); return s.length > n ? s.slice(0, n - 1) + '…' : s; };
 
@@ -22,15 +24,17 @@ const SHELL_ICONS = {
   cmd: '<svg class="shi" viewBox="0 0 16 16" aria-hidden="true"><rect x=".75" y="1.75" width="14.5" height="12.5" rx="1.5" fill="#1b1b1f" stroke="#8a8f98" stroke-width="1"/><path d="M.75 4.5h14.5" stroke="#8a8f98" stroke-width="1"/><path d="M3.5 7.2l2.3 1.6-2.3 1.6" fill="none" stroke="#e8e8e8" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/><path d="M7.2 11.2h3.4" stroke="#e8e8e8" stroke-width="1.2" stroke-linecap="round"/></svg>',
   bash: '<i class="shi fa-brands fa-git-alt" style="color:#f05133" aria-hidden="true"></i>',
 };
-if (IS_MAC) {
+if (!IS_WIN) {
   SHELL_ICONS.zsh = '<i class="shi fa-solid fa-terminal" style="color:#8be28b" aria-hidden="true"></i>';
   SHELL_ICONS.bash = '<i class="shi fa-solid fa-dollar-sign" style="color:#c9c9d1" aria-hidden="true"></i>';
 }
-const SHELLS = IS_MAC
-  ? { zsh: { name: 'Terminal (zsh)', exe: 'zsh' }, bash: { name: 'Bash', exe: 'bash' } }
+const SHELLS = IS_MAC ? { zsh: { name: 'Terminal (zsh)', exe: 'zsh' }, bash: { name: 'Bash', exe: 'bash' } }
+  : !IS_WIN ? { bash: { name: 'Bash', exe: 'bash' }, zsh: { name: 'Zsh', exe: 'zsh' } } // Linux (main.js falls back to the login shell)
   : { pwsh: { name: 'PowerShell', exe: 'powershell' }, cmd: { name: 'Komut İstemi', exe: 'cmd.exe' }, bash: { name: 'Git Bash', exe: 'bash.exe' } };
-const DEFAULT_SHELL = IS_MAC ? 'zsh' : 'pwsh';
-const MONO_FONT = IS_MAC ? '"SF Mono", Menlo, Monaco, monospace' : '"Cascadia Mono", "Cascadia Code", Consolas, monospace';
+const DEFAULT_SHELL = IS_MAC ? 'zsh' : !IS_WIN ? 'bash' : 'pwsh';
+const MONO_FONT = IS_MAC ? '"SF Mono", Menlo, Monaco, monospace'
+  : !IS_WIN ? '"Cascadia Mono", "JetBrains Mono", "DejaVu Sans Mono", "Ubuntu Mono", "Liberation Mono", monospace'
+  : '"Cascadia Mono", "Cascadia Code", Consolas, monospace';
 const STATUS_TEXT = { running: 'Çalışıyor', waiting: 'Kararını bekliyor', done: 'Bitti', idle: 'Hazır', exited: 'Kapandı', shell: 'Terminal' };
 const STATUS_SHORT = { running: 'çalışıyor', waiting: 'bekliyor', done: 'bitti', idle: 'açık', exited: 'kapandı', shell: 'terminal' };
 const ICONS = { done: '<i class="fa-solid fa-check"></i>', decision: '<i class="fa-solid fa-hand"></i>', subagent: '<i class="fa-solid fa-robot"></i>', workflow: '<i class="fa-solid fa-diagram-project"></i>', system: '<i class="fa-solid fa-circle-info"></i>', plugin: '<i class="fa-solid fa-puzzle-piece"></i>' };
@@ -286,7 +290,7 @@ const termLinkHandler = {
         openFile(fp, line ? { line: +line } : undefined); // gotoPos counts lines from 1, like #L5
         return;
       }
-      if (await uiConfirm({ title: 'Dosyayı aç', icon: 'fa-file', message: fp, detail: 'Bu dosya projelerinin dışında. Windows’un varsayılan uygulamasıyla açılsın mı?', ok: 'Aç' })) api.invoke('shell:openLink', uri);
+      if (await uiConfirm({ title: 'Dosyayı aç', icon: 'fa-file', message: fp, detail: `Bu dosya projelerinin dışında. ${IS_WIN ? 'Windows’un' : 'Sistemin'} varsayılan uygulamasıyla açılsın mı?`, ok: 'Aç' })) api.invoke('shell:openLink', uri);
       return;
     }
     if (u.protocol === 'http:' || u.protocol === 'https:' || u.protocol === 'mailto:') {
@@ -816,7 +820,7 @@ function renderWatchBar(t) {
   const bar = t.el.querySelector('.watch-bar'); if (!bar) return;
   const s = t.ext;
   const st = s ? (s.status === 'waiting' ? waitText(s.waitingFor) : s.status === 'busy' ? 'Çalışıyor' : 'Hazır') : '';
-  const conn = !s ? 'kapandı' : t.mirrorState === 'live' ? 'terminale bağlı, yazdıkların o pencereye gider' : t.mirrorState === 'connecting' ? 'terminale bağlanılıyor…' : !IS_WIN ? 'macOS\'ta yalnızca konuşma görünür; yazmak için VoxStorm\'a taşı' : 'terminale bağlanılamadı, sadece konuşma görünüyor';
+  const conn = !s ? 'kapandı' : t.mirrorState === 'live' ? 'terminale bağlı, yazdıkların o pencereye gider' : t.mirrorState === 'connecting' ? 'terminale bağlanılıyor…' : !IS_WIN ? 'Bu sistemde yalnızca konuşma görünür; yazmak için VoxStorm\'a taşı' : 'terminale bağlanılamadı, sadece konuşma görünüyor';
   bar.innerHTML = `<span class="dot ${t.status}"></span>`
     + `<span class="wb-t"><b>${s ? 'VoxStorm dışında açık' : 'Dışarıdaki oturum kapandı'}</b>${st ? ' · ' + esc(st) : ''}`
     + `<small>${esc(s ? s.cwd : t.cwd)}${s ? ' · PID ' + s.pid : ''} · ${conn}</small></span>`
@@ -1477,10 +1481,10 @@ async function renderTree() {
   const walk = (dir, d) => (IDE.dirCache[dir] || []).map(e => {
     if (e.dir) {
       const open = IDE.expanded[e.path], gd = IDE.git.dirs.has(normPath(e.path));
-      return `<button class="fx dir ${open ? '' : 'closed'} ${gd ? 'g-dir' : ''}" style="--d:${d}" data-dir="${esc(e.path)}" aria-expanded="${!!open}" title="${esc(e.name)}${gd ? ' · içinde değişiklik var' : ''}"><i class="car fa-solid fa-chevron-down" aria-hidden="true"></i>${open ? FOLDER_OPEN : FOLDER}<span class="fn">${esc(e.name)}</span>${gd ? '<span class="gdot" aria-hidden="true"></span>' : ''}</button>` + (open ? walk(e.path, d + 1) : '');
+      return `<button draggable="true" class="fx dir ${open ? '' : 'closed'} ${gd ? 'g-dir' : ''}" style="--d:${d}" data-dir="${esc(e.path)}" aria-expanded="${!!open}" title="${esc(e.name)}${gd ? ' · içinde değişiklik var' : ''}"><i class="car fa-solid fa-chevron-down" aria-hidden="true"></i>${open ? FOLDER_OPEN : FOLDER}<span class="fn">${esc(e.name)}</span>${gd ? '<span class="gdot" aria-hidden="true"></span>' : ''}</button>` + (open ? walk(e.path, d + 1) : '');
     }
     const g = gitOf(e.path), m = S.modified[normPath(e.path)];
-    return `<button class="fx file ${e.path === cur ? 'on' : ''} ${/^(~\$|\.)/.test(e.name) ? 'dim' : ''} ${g ? 'g-' + g : ''}" style="--d:${d}" data-file="${esc(e.path)}" title="${esc(e.name)}${g ? ' · ' + GIT_TITLE[g] : ''}${m ? ' · Claude değiştirdi' : ''}">${fileIcon(e.name)}<span class="fn">${esc(e.name)}</span>${m ? '<span class="mod" aria-label="Claude değiştirdi"><i class="fa-solid fa-robot"></i></span>' : ''}${g ? `<span class="gb">${g}</span>` : ''}</button>`;
+    return `<button draggable="true" class="fx file ${e.path === cur ? 'on' : ''} ${/^(~\$|\.)/.test(e.name) ? 'dim' : ''} ${g ? 'g-' + g : ''}" style="--d:${d}" data-file="${esc(e.path)}" title="${esc(e.name)}${g ? ' · ' + GIT_TITLE[g] : ''}${m ? ' · Claude değiştirdi' : ''}">${fileIcon(e.name)}<span class="fn">${esc(e.name)}</span>${m ? '<span class="mod" aria-label="Claude değiştirdi"><i class="fa-solid fa-robot"></i></span>' : ''}${g ? `<span class="gb">${g}</span>` : ''}</button>`;
   }).join('');
   const html = walk(p.path, 0);
   const tree = $('#tree');
@@ -2316,7 +2320,7 @@ const NOTIF_LABELS = { done: 'İş bittiğinde', decision: 'Kararını beklediğ
 const sw = (attr, on, label) => `<button class="sw" role="switch" aria-checked="${!!on}" aria-label="${esc(label)}" ${attr}></button>`;
 /* ---------------- updates ---------------- */
 let UPD = null;
-const UPD_KIND = { nsis: 'Kurulum (Setup)', portable: 'Taşınabilir (Portable)', asar: 'Klasör (win-unpacked)', dev: 'Geliştirme modu' };
+const UPD_KIND = { nsis: 'Kurulum (Setup)', portable: 'Taşınabilir (Portable)', asar: 'Klasör (win-unpacked)', mac: 'macOS uygulaması', appimage: 'AppImage', linux: 'Linux paketi (.deb)', dev: 'Geliştirme modu' };
 function updateHTML() {
   const u = UPD || { status: 'idle', current: '', kind: '' };
   const up = Object.assign({ check: true, auto: true }, CFG.settings.update || {});
@@ -2614,7 +2618,38 @@ function bindEvents() {
     if (!t || !t.term) return;
     e.preventDefault(); e.stopImmediatePropagation();
     const files = await api.invoke('clipboard:files').catch(() => []);
-    if (files.length) t.term.paste(files.map(f => (/\s/.test(f) ? `"${f}"` : f)).join(' '));
+    if (files.length) t.term.paste(files.map(quotePath).join(' '));
+  }, true);
+  // the IDE tree: a file or folder can be dragged onto a terminal
+  document.addEventListener('dragstart', e => {
+    const b = e.target.closest && e.target.closest('#tree [data-file], #tree [data-dir]');
+    if (!b) return;
+    e.dataTransfer.effectAllowed = 'copy';
+    e.dataTransfer.setData('text/x-vox-path', b.dataset.file || b.dataset.dir);
+  });
+  // files dragged from Explorer / Finder / the IDE tree onto a terminal: type their full paths
+  // (like Windows Terminal); Claude Code and Codex take a dropped image path as an attachment
+  const termAt = target => target && target.closest && S.tabs.find(x => x.term && !x.exited && x.el && x.el.contains(target));
+  const dragHasFiles = e => [...(e.dataTransfer && e.dataTransfer.types || [])].some(x => x === 'Files' || x === 'text/x-vox-path');
+  let dropPane = null;
+  const markDrop = el => { if (dropPane === el) return; if (dropPane) dropPane.classList.remove('file-drop'); dropPane = el; if (el) el.classList.add('file-drop'); };
+  document.addEventListener('dragover', e => {
+    const t = dragHasFiles(e) && termAt(e.target);
+    if (!t) { markDrop(null); return; }
+    e.preventDefault(); e.dataTransfer.dropEffect = 'copy';
+    markDrop(t.el);
+  }, true);
+  document.addEventListener('dragleave', e => { if (dropPane && !dropPane.contains(e.relatedTarget)) markDrop(null); }, true);
+  document.addEventListener('drop', e => {
+    markDrop(null);
+    const t = dragHasFiles(e) && termAt(e.target);
+    if (!t) return;
+    e.preventDefault(); e.stopImmediatePropagation();
+    let paths = [...(e.dataTransfer.files || [])].map(f => api.pathForFile(f)).filter(Boolean);
+    if (!paths.length) paths = (e.dataTransfer.getData('text/x-vox-path') || '').split('\n').filter(Boolean); // from the IDE tree
+    if (!paths.length) return;
+    t.term.paste(paths.map(quotePath).join(' ') + ' ');
+    activate(t.id);
   }, true);
   document.addEventListener('click', async e => {
     const b = e.target.closest('[data-ceffort],[data-cpm],[data-cset],[data-cleanup],[data-upd],[data-updcheck],[data-upddl],[data-updgo],[data-updpage]'); if (!b) return;
@@ -2841,7 +2876,7 @@ const SHORTCUTS = [
   { group: 'Paneller', keys: 'Ctrl+Shift+J', label: 'Aktif ajanlar bölümü', run: () => togglePanel('agents') },
   { group: 'Terminaller', keys: 'Ctrl+Shift+N', label: 'Yeni oturum, varsayılan yapay zekâyla (seçili proje)', run: () => { const p = projectHere(); if (p) openTerminal({ kind: 'claude', projectId: p }); } },
   { group: 'Terminaller', keys: 'Ctrl+Shift+X', label: 'Yeni Codex oturumu (seçili proje)', when: () => S.mode === 'claude' || S.mode === 'ide', run: () => { const p = projectHere(); if (!p) return; if (!INFO.codex) { toast('Codex CLI bulunamadı', 'npm i -g @openai/codex ile kurabilirsin'); return; } openTerminal({ kind: 'claude', agent: 'codex', projectId: p }); } },
-  { group: 'Terminaller', keys: 'Ctrl+Shift+T', label: IS_MAC ? 'Yeni terminal (seçili proje)' : 'Yeni PowerShell (seçili proje)', run: () => { const p = projectHere(); if (p) openTerminal({ kind: 'shell', shell: DEFAULT_SHELL, projectId: p }); } },
+  { group: 'Terminaller', keys: 'Ctrl+Shift+T', label: !IS_WIN ? 'Yeni terminal (seçili proje)' : 'Yeni PowerShell (seçili proje)', run: () => { const p = projectHere(); if (p) openTerminal({ kind: 'shell', shell: DEFAULT_SHELL, projectId: p }); } },
   { group: 'Terminaller', keys: 'Ctrl+Shift+W', label: 'Açık terminali kapat', run: () => { if (S.active) closeTab(S.active); } },
   { group: 'Terminaller', keys: 'Ctrl+Tab', label: 'Sonraki terminal', run: () => cycleTabs(1) },
   { group: 'Terminaller', keys: 'Ctrl+Shift+Tab', label: 'Önceki terminal', run: () => cycleTabs(-1) },

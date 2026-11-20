@@ -1,9 +1,10 @@
 {
   "name": "voxstorm",
   "version": "0.7.0",
-  "description": "Claude Code oturumlarını tek pencereden yöneten Windows ve macOS masaüstü uygulaması",
+  "description": "Claude Code ve Codex oturumlarını tek pencereden yöneten Windows, macOS ve Linux masaüstü uygulaması",
   "author": "mrekay",
   "homepage": "https://github.com/mrekay/claudelot",
+  "desktopName": "voxstorm.desktop",
   "repository": {
     "type": "git",
     "url": "https://github.com/mrekay/claudelot.git"
@@ -14,7 +15,8 @@
   "scripts": {
     "start": "electron .",
     "dist": "node scripts/make-icon.js && electron-builder --win",
-    "dist:mac": "node scripts/make-icon.js --size 1024 && electron-builder --mac"
+    "dist:mac": "node scripts/make-icon.js --size 1024 && electron-builder --mac",
+    "dist:linux": "node scripts/make-icon.js --size 512 && electron-builder --linux --x64"
   },
   "dependencies": {
     "@fortawesome/fontawesome-free": "^7.3.1",
@@ -106,6 +108,43 @@
     },
     "dmg": {
       "title": "VoxStorm ${version}"
+    },
+    "linux": {
+      "target": [
+        {
+          "target": "AppImage",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "deb",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "build/icon.png",
+      "category": "Development",
+      "executableName": "voxstorm",
+      "maintainer": "mrekay <63546213+mrekay@users.noreply.github.com>",
+      "synopsis": "Claude Code ve Codex oturumlarını tek pencereden yönet",
+      "artifactName": "VoxStorm-${version}-linux-${arch}.${ext}",
+      "syncDesktopName": true
+    },
+    "deb": {
+      "depends": [
+        "libgtk-3-0",
+        "libnotify4",
+        "libnss3",
+        "libxss1",
+        "libxtst6",
+        "xdg-utils",
+        "libatspi2.0-0",
+        "libuuid1",
+        "libsecret-1-0",
+        "curl"
+      ]
     }
   }
 }

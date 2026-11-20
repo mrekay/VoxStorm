@@ -58,7 +58,7 @@ module.exports = function registerDb({ ipcMain, app, dialog, getWin, DATA, getPr
      stored: base64 of safeStorage.encryptString (DPAPI on Windows). Not saved ("ask every time")
      or no encryption available: kept only in memory for this run. */
   const memPw = new Map();
-  const canEncrypt = () => { try { return safeStorage.isEncryptionAvailable(); } catch (_) { return false; } };
+  const canEncrypt = () => require('./platform').canEncrypt(safeStorage); // false on Linux without a keyring
   const encrypt = s => safeStorage.encryptString(String(s)).toString('base64');
   const decrypt = b => { try { return safeStorage.decryptString(Buffer.from(b, 'base64')); } catch (_) { return null; } };
   function passwordOf(c, given) {
