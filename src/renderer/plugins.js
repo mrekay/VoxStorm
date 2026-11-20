@@ -162,7 +162,7 @@
     notify: (st, p) => {
       need(st, 'notify');
       const title = str(p && p.title, 120), body = str(p && p.body, 300);
-      S.notifs.unshift({ type: 'plugin', title: `${st.info.name}: ${title}`, body, t: Date.now() });
+      S.notifs.unshift({ type: 'plugin', title: `${st.info.name}: ${title}`, body, t: Date.now(), unread: $('#pop').hidden });
       S.notifs = S.notifs.slice(0, 80);
       if ($('#pop').hidden) S.unread++;
       if (!(CFG.settings.notif || {}).quiet) api.send('notify', { title: `${st.info.name}: ${title}`, body });

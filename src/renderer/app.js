@@ -155,12 +155,16 @@ function playChime(type) {
   } catch (_) {}
 }
 function notify(type, title, body, tabId) {
-  S.notifs.unshift({ type, title, body, tabId, t: Date.now() });
-  S.notifs = S.notifs.slice(0, 80);
-  if ($('#pop').hidden) S.unread++;
+  const looking = !!tabId && document.hasFocus() && S.active === tabId; // already looking at it
+  if (!looking) { // a notification about the tab in front of you is not kept
+    const it = { type, title, body, tabId, t: Date.now(), unread: $('#pop').hidden };
+    S.notifs.unshift(it);
+    S.notifs = S.notifs.slice(0, 80);
+    if (it.unread) S.unread++;
+  }
   const n = CFG.settings.notif;
   if (n.quiet || !n[type]) return;
-  if (document.hasFocus() && S.active === tabId) return; // already looking at it
+  if (looking) return;
   if (CFG.settings.sound && (CFG.settings.soundStyle || 'claudelot') === 'claudelot') playChime(type);
   api.send('notify', { title, body, tabId });
 }
@@ -344,9 +348,17 @@ function fitActive() {
   const t = tabById(S.active);
   if (t && t.fit && t.el.offsetParent) { try { t.fit.fit(); } catch (_) {} }
 }
+// the user has seen this tab: its notifications leave the bell too
+function seenTab(id) {
+  if (!id || !document.hasFocus() || !S.notifs.some(n => n.tabId === id)) return false;
+  S.unread = Math.max(0, S.unread - S.notifs.filter(n => n.tabId === id && n.unread).length);
+  S.notifs = S.notifs.filter(n => n.tabId !== id);
+  return true;
+}
 function activate(id) {
   const t = tabById(id); if (!t) return;
   S.active = id;
+  seenTab(id);
   t.attn = null;
   if (t.kind === 'watch') S.extAttn.delete(t.sessionId);
   if (S.mode === 'ide' && t.projectId && t.projectId !== IDE.project) { IDE.project = t.projectId; showFile(); }
@@ -473,7 +485,8 @@ api.on('hook', ev => {
       addAgent(t, 'subagent', n, ev.tool_use_id, input.subagent_type);
       notify('subagent', 'Alt ajan açıldı', `${shorten(n, 60)} · ${t.title}`, t.id);
     } else if (tool === 'Workflow') {
-      const n = input.name || input.description || 'Workflow';
+      const sm = /\bname\s*:\s*(['"`])([^'"`\n]{1,80})\1/.exec(String(input.script || '')); // the script's meta.name
+      const n = input.name || (sm && sm[2]) || input.description || 'Workflow';
       addAgent(t, 'workflow', n, ev.tool_use_id);
       notify('workflow', 'Workflow açıldı', `${shorten(n, 60)} · ${t.title}`, t.id);
     } else if (tool === 'AskUserQuestion') {
@@ -1026,7 +1039,8 @@ function renderQueue() {
       : view ? `${a.name}${a.type ? ' · ' + a.type : ''}${a.bg ? ' · arka planda' : ''}\nKonuşmasını açmak için tıkla`
       : `${a.name}${a.type ? ' · ' + a.type : ''}\nOturuma gitmek için tıkla`;
     const label = a.kind === 'subagent' ? 'Ajan' : a.kind === 'term' ? 'Terminal' : 'Workflow';
-    return `<button class="agent-row" ${view ? `data-agent="${a.id}"` : `data-tab="${a.tabId}"`} title="${esc(tip)}"><span class="k ${a.kind}">${label}</span><span class="n">${esc(a.name)}</span><span class="s">${esc(t.title || '')}</span></button>`;
+    const wf = a.kind === 'workflow';
+    return `<button class="agent-row" ${view ? `data-agent="${a.id}"` : wf ? `data-wf="${a.id}"` : `data-tab="${a.tabId}"`} title="${esc(wf ? `${a.name}\nAyrıntıları görmek için tıkla` : tip)}"><span class="k ${a.kind}">${label}</span><span class="n">${esc(a.name)}</span><span class="s">${esc(t.title || '')}</span></button>`;
   }).join('') : '<div class="none">Şu an çalışan alt ajan, workflow ya da arka plan komutu yok.</div>';
 }
 /* The usage view has two modes: tokens counted from the session logs on this machine, or the plan
@@ -1969,7 +1983,7 @@ function ideMenuAction(act) {
   else if (act === 'ask') askClaude(fp, isDir);
 }
 /* shortcuts that belong to the IDE: only in IDE mode and not while typing in a terminal */
-const ideKeysOk = e => S.mode === 'ide' && !(e.target.closest && e.target.closest('.xterm')) && $('#settings').hidden && $('#report').hidden && $('#discover').hidden;
+const ideKeysOk = e => S.mode === 'ide' && !(e.target.closest && e.target.closest('.xterm')) && $('#settings').hidden && $('#report').hidden && $('#discover').hidden && $('#wfWin').hidden;
 
 function bindIde() {
   api.on('ide:fs-changed', onFsChanged);
@@ -2441,6 +2455,101 @@ function renderReport() {
     <div class="rep-note">Dolar tutarları API liste fiyatıyla karşılıktır; abonelikte ayrıca ödenmez. Claude Code oturum kayıtlarını yaklaşık 30 gün sonra siler. VoxStorm günlük toplamları kendi dosyasına da kaydeder; böylece geçmiş aylar uygulama kullanıldıkça birikir. Elindeki en eski kayıt: <b>${firstAvail ? monthLabel(firstAvail) : '–'}</b>.</div>`;
 }
 
+/* ---------------- workflow window ----------------
+   Clicking a workflow in the agents panel brings its session to the front and opens this window:
+   phases on the left, the agents of the chosen phase on the right (model, tokens, time, what it is
+   doing now, its result when it is done). Read from Claude Code's run files, refreshed while open. */
+const WF = { ref: null, d: null, phase: null, open: new Set(), timer: null, html: '' };
+const fmtDur = ms => { const s = Math.max(0, Math.round(ms / 1000)); const h = Math.floor(s / 3600), m = Math.floor(s / 60) % 60; return h ? `${h}sa ${m}dk` : m ? `${m}dk ${s % 60}sn` : `${s}sn`; };
+function openWorkflow(id) {
+  const a = S.agents.find(x => x.id === id); if (!a) return;
+  if (a.tabId && tabById(a.tabId)) { if (S.mode !== 'claude' && S.mode !== 'ide') setMode('claude'); activate(a.tabId); }
+  WF.ref = { a, sessionId: a.sessionId || (tabById(a.tabId) || {}).sessionId, runId: a.runId || '' };
+  WF.d = null; WF.phase = null; WF.open = new Set(); WF.html = '';
+  $('#wfTitle').innerHTML = `<i class="fa-solid fa-diagram-project"></i> ${esc(a.name)}`;
+  $('#wfBody').innerHTML = '<div class="wf-none">Workflow okunuyor…</div>';
+  $('#wfWin').hidden = false;
+  clearInterval(WF.timer);
+  WF.timer = setInterval(() => { if ($('#wfWin').hidden) { clearInterval(WF.timer); WF.timer = null; return; } loadWorkflow(); }, 2000);
+  loadWorkflow();
+}
+async function loadWorkflow() {
+  const r = WF.ref;
+  if (!r || !r.sessionId) { $('#wfBody').innerHTML = '<div class="wf-none">Workflow’un oturumu bulunamadı.</div>'; return; }
+  let d = null;
+  try { d = await api.invoke('workflow:detail', r.sessionId, r.runId || r.a.runId || ''); } catch (_) {}
+  if (WF.ref !== r) return;
+  if (!d || d.missing) { if (!WF.d) $('#wfBody').innerHTML = '<div class="wf-none">Bu workflow’un kayıtları henüz yazılmadı; ilk ajan başlayınca burada görünür.</div>'; return; }
+  if (!r.runId) r.runId = d.runId;
+  if (d.name && /^workflow$/i.test(r.a.name)) { r.a.name = d.name; renderQueue(); }
+  WF.d = d;
+  renderWorkflow();
+  if (!d.running) { clearInterval(WF.timer); WF.timer = null; }
+}
+function renderWorkflow() {
+  const d = WF.d; if (!d) return;
+  const now = Date.now();
+  const phases = [...d.phases];
+  for (const a of d.agents) if (a.phase && !phases.includes(a.phase)) phases.push(a.phase);
+  const inPhase = p => d.agents.filter(a => (p === '*' ? true : a.phase === p));
+  const stateOf = list => (list.some(a => a.state === 'failed') ? 'failed' : list.some(a => a.state === 'running') ? 'running' : list.length ? 'done' : 'wait');
+  const icon = st => ({
+    done: '<i class="wf-ic done fa-solid fa-check"></i>',
+    running: '<i class="wf-ic running fa-solid fa-circle-notch fa-spin"></i>',
+    failed: '<i class="wf-ic failed fa-solid fa-xmark"></i>',
+    wait: '<i class="wf-ic wait fa-regular fa-circle"></i>',
+  }[st]);
+  let sel = WF.phase;
+  if (sel == null || (sel !== '*' && !phases.includes(sel))) {
+    const run = phases.find(p => inPhase(p).some(a => a.state === 'running'));
+    sel = run || [...phases].reverse().find(p => inPhase(p).length) || phases[0] || '*';
+  }
+  const done = d.agents.filter(a => a.state === 'done').length;
+  const failed = !d.running && (d.error || /fail|error|cancel|kill|abort/i.test(d.status));
+  const st = d.running ? 'running' : failed ? 'failed' : 'done';
+  const stLabel = d.running ? 'Çalışıyor' : failed ? (/cancel|kill|abort/i.test(d.status) ? 'Durduruldu' : 'Hata') : 'Bitti';
+  const agents = inPhase(sel);
+  const agentHtml = a => {
+    const open = WF.open.has(a.id) && a.result;
+    const dur = a.first ? fmtDur((a.state === 'running' ? now : a.last) - a.first) : '';
+    const info = [a.model ? modelName(a.model) : '', a.tokens ? fmtTok(a.tokens) + ' token' : ''].filter(Boolean).join(' · ');
+    const commits = (a.commits || []).map(c => `<code>${esc(c)}</code>`).join('');
+    return `<div class="wf-ag">
+      <div class="row" data-wfag="${a.id}">${icon(a.state)}<b>${esc(a.label || a.id)}</b><span class="m">${esc(info)}</span><span class="sp"></span><span class="d">${dur}</span>${a.result ? `<i class="fa-solid fa-chevron-${open ? 'up' : 'down'} m"></i>` : ''}</div>
+      ${a.now ? `<div class="now" title="${esc(a.now)}">${esc(a.now)}</div>` : ''}
+      ${open ? `<div class="res">${commits}${commits ? '\n' : ''}${esc(a.result)}</div>` : ''}
+    </div>`;
+  };
+  const phaseHtml = (p, i) => {
+    const l = inPhase(p);
+    return `<button class="wf-ph ${sel === p ? 'on' : ''}" data-wfph="${esc(p)}">${icon(stateOf(l))}<span class="n">${i + 1}. ${esc(p)}</span><span class="c">${l.filter(a => a.state === 'done').length}/${l.length}</span></button>`;
+  };
+  const html = `
+    <div class="wf-head">
+      <div class="t"><h3>${esc(d.name)}</h3>${d.description ? `<p>${esc(d.description)}</p>` : ''}</div>
+      <div class="meta"><span class="wf-st ${st}">${stLabel}</span><span>${done}/${d.agents.length} ajan · ${d.started ? fmtDur((d.ended || now) - d.started) : '–'}</span></div>
+    </div>
+    ${d.error ? `<div class="wf-err">${esc(d.error)}</div>` : ''}
+    <div class="wf-main">
+      <div class="wf-phases"><h4>Fazlar</h4>
+        ${phases.length > 1 ? `<button class="wf-ph ${sel === '*' ? 'on' : ''}" data-wfph="*">${icon(stateOf(d.agents))}<span class="n">Tümü</span><span class="c">${done}/${d.agents.length}</span></button>` : ''}
+        ${phases.map(phaseHtml).join('')}
+      </div>
+      <div class="wf-agents"><h4>${sel === '*' ? 'Bütün ajanlar' : esc(sel)} · ${agents.length} ajan</h4>
+        ${agents.length ? agents.map(agentHtml).join('') : '<div class="wf-none">Bu fazda henüz başlayan ajan yok.</div>'}
+      </div>
+    </div>
+    <div class="wf-foot"><span>${esc(d.runId)}</span><span class="sp"></span>${WF.ref.a.tabId && tabById(WF.ref.a.tabId) ? '<button class="btn" data-wfgo="1">Oturuma git</button>' : ''}</div>`;
+  if (html === WF.html) return;
+  const body = $('#wfBody');
+  const box = body.querySelector('.wf-agents'), top = box ? box.scrollTop : 0;
+  const res = [...body.querySelectorAll('.res')].map(x => x.scrollTop);
+  WF.html = html;
+  body.innerHTML = html;
+  const nb = body.querySelector('.wf-agents'); if (nb) nb.scrollTop = top;
+  body.querySelectorAll('.res').forEach((x, i) => { x.scrollTop = res[i] || 0; });
+}
+
 /* ---------------- settings ---------------- */
 let setTab = 'ai';
 const TONES = { samimi: 'Samimi', resmi: 'Resmi', kisa: 'Kısa ve öz' };
@@ -2523,7 +2632,10 @@ function renderSettings() {
       <textarea id="fExtra" data-field="extra" rows="3" placeholder="Her satır bir talimat. Ör: Commit mesajlarını İngilizce yaz.">${esc(st.extra)}</textarea>
       <h4>Oturumlara eklenecek metin</h4>
       <pre class="md" id="promptPrev">…</pre>
-      <p class="set-note">Bu metin VoxStorm'tan başlatılan Claude ve Codex oturumlarına eklenir. CLAUDE.md ve AGENTS.md dosyalarına dokunulmaz. Değişiklik yeni açılan oturumlarda geçerli olur.</p>`;
+      <p class="set-note">Bu metin VoxStorm'tan başlatılan Claude ve Codex oturumlarına eklenir. CLAUDE.md ve AGENTS.md dosyalarına dokunulmaz. Değişiklik yeni açılan oturumlarda geçerli olur.</p>
+      <h4>SSH ve veritabanı bağlantıları</h4>
+      <div class="set-row"><span>Claude ve Codex, VoxStorm’daki bağlantıları kullanabilsin<small>Ajan kayıtlı SSH sunucularını ve veritabanlarını yalnızca adlarıyla görür. Bir bağlantıyı ilk kullanmak istediğinde sana sorulur (Evet / Hayır, “her zaman hatırla”). Bağlantıyı VoxStorm kurar; adres, kullanıcı adı ve parola ajana hiç verilmez, ajan yalnızca komutun ya da sorgunun çıktısını görür.</small></span>${sw('data-set="agentLink"', st.agentLink !== false, 'Bağlantıları ajanlara aç')}</div>
+      <p class="set-note">Hatırlanan kararları bağlantının düzenleme penceresindeki “Claude / Codex erişimi” alanından değiştirebilirsin. Değişiklik yeni açılan oturumlarda geçerli olur.</p>`;
   } {
     const c = CFG.settings.claude || {};
     const custom = c.model && !MODELS.some(([k]) => k === c.model);
@@ -2636,6 +2748,7 @@ function bindEvents() {
     if (e.target.id === 'settings') { $('#settings').hidden = true; return; }
     if (e.target.id === 'discover') { $('#discover').hidden = true; return; }
     if (e.target.id === 'report') { $('#report').hidden = true; return; }
+    if (e.target.id === 'wfWin') { $('#wfWin').hidden = true; return; }
     if (!el) return;
     const d = el.dataset;
     if (d.gsync) { runSync(d.gsync, d.act); return; }
@@ -2644,6 +2757,7 @@ function bindEvents() {
     else if (d.panel) togglePanel(d.panel);
     else if (d.watch) { if (S.mode === 'claude' || S.mode === 'ide') openWatch(d.watch); }
     else if (d.agent) openAgentView(d.agent);
+    else if (d.wf) openWorkflow(d.wf);
     else if (d.takeover) takeOverSession(d.takeover);
     else if (d.continue) continueHere(d.continue);
     else if (d.mode) setMode(d.mode);
@@ -2706,6 +2820,13 @@ function bindEvents() {
   $('#setClose').onclick = () => { $('#settings').hidden = true; };
   $('#discClose').onclick = () => { $('#discover').hidden = true; };
   $('#repClose').onclick = () => { $('#report').hidden = true; };
+  $('#wfClose').onclick = () => { $('#wfWin').hidden = true; };
+  $('#wfBody').addEventListener('click', e => {
+    const ph = e.target.closest('[data-wfph]'), ag = e.target.closest('[data-wfag]'), go = e.target.closest('[data-wfgo]');
+    if (ph) { WF.phase = ph.dataset.wfph; renderWorkflow(); }
+    else if (ag) { const id = ag.dataset.wfag; if (WF.open.has(id)) WF.open.delete(id); else WF.open.add(id); renderWorkflow(); }
+    else if (go) { $('#wfWin').hidden = true; if (WF.ref && tabById(WF.ref.a.tabId)) activate(WF.ref.a.tabId); }
+  });
   $('#repInfoBtn').onclick = () => { const n = $('#repInfo'); n.hidden = !n.hidden; $('#repInfoBtn').setAttribute('aria-expanded', !n.hidden); };
   $('#addProjBtn').onclick = () => { closeStartPanel(); openDiscover(); };
   $('#startBtn').onclick = () => ($('#startPanel').hidden ? openStartPanel() : closeStartPanel());
@@ -2717,14 +2838,23 @@ function bindEvents() {
     else if (e.key === 'Enter') { e.preventDefault(); const p = START.view[START.sel]; if (p) { closeStartPanel(); openTerminal({ kind: 'claude', projectId: p.id }); } }
     else if (e.key === 'Escape') { e.stopPropagation(); closeStartPanel(); }
   });
-  $('#startList').addEventListener('click', e => {
+  $('#startList').addEventListener('click', async e => {
+    const fav = e.target.closest('[data-startfav]');
+    if (fav) {
+      e.stopPropagation();
+      const p = proj(fav.dataset.startfav); if (!p) return;
+      p.fav = !p.fav; renderStartList();
+      await api.invoke('project:fav', p.id, p.fav).catch(() => {});
+      if (!$('#startPanel').hidden) renderStartList();
+      return;
+    }
     const more = e.target.closest('[data-startmore]');
     if (more) { e.stopPropagation(); const m = $('#newMenu'); m.dataset.for = 'start' + more.dataset.startmore; openNewMenu(more, more.dataset.startmore, true); return; }
     const row = e.target.closest('[data-start]');
     if (row) { closeStartPanel(); openTerminal({ kind: 'claude', projectId: row.dataset.start }); }
   });
   $('#skinBtn').onclick = () => { const m = $('#skinMenu'); renderSkinMenu(); m.hidden = !m.hidden; };
-  $('#bellBtn').onclick = () => { const p = $('#pop'); p.hidden = !p.hidden; if (!p.hidden) { S.unread = 0; renderPop(); renderStatus(); } };
+  $('#bellBtn').onclick = () => { const p = $('#pop'); p.hidden = !p.hidden; if (!p.hidden) { S.unread = 0; S.notifs.forEach(n => { n.unread = false; }); renderPop(); renderStatus(); } };
   $('#clearN').onclick = () => { S.notifs = []; renderPop(); };
   $('#notifSettings').onclick = () => openSettings('bildirim');
   // links inside the markdown view: web links open in the browser, relative links open the file here
@@ -2820,7 +2950,7 @@ function bindEvents() {
     if (f === 'name') $$('[data-hitap]').forEach(b => b.classList.toggle('on', b.dataset.hitap === e.target.value.trim()));
   });
   document.addEventListener('keydown', e => {
-    if (e.key === 'Escape') { closeMenus(); $('#settings').hidden = true; $('#discover').hidden = true; $('#report').hidden = true; }
+    if (e.key === 'Escape') { closeMenus(); $('#settings').hidden = true; $('#discover').hidden = true; $('#report').hidden = true; $('#wfWin').hidden = true; }
   });
   // capture phase: app shortcuts win over the terminal and the code editor
   window.addEventListener('keydown', e => {
@@ -2833,7 +2963,7 @@ function bindEvents() {
   api.on('focus-tab', id => { if (String(id).startsWith('watch:')) { const sid = id.slice(6); const w = watchTab(sid); if (w) id = w.id; else { if (isExtLive(sid)) openWatch(sid); return; } } const t = tabById(id); if (!t) return; if (S.mode === 'ide' && t.projectId !== IDE.project) switchIdeProject(t.projectId); activate(id); });
   api.on('open-settings', () => openSettings());
   api.on('win:state', st => { if (st && 'fullscreen' in st) document.documentElement.classList.toggle('is-fullscreen', !!st.fullscreen); });
-  window.addEventListener('focus', () => { const t = tabById(S.active); if (t && t.attn) { t.attn = null; renderAll(); } });
+  window.addEventListener('focus', () => { const t = tabById(S.active); const seen = seenTab(S.active), attn = !!(t && t.attn); if (attn) t.attn = null; if (seen || attn) renderAll(); });
   // the welcome window picked a project; take it (only once) and act on it
   api.on('open-project', async () => handleOpen(await api.invoke('app:takePendingOpen')));
   api.on('projects-changed', async list => { S.projects = list; CFG.projects = list; await refreshAllHistory(); renderAll(); });
@@ -2957,7 +3087,8 @@ async function handleOpen(req) {
 /* ---------------- "Proje Başlat" panel ---------------- */
 const START = { sel: 0, view: [] };
 const lowerTr = s => String(s || '').toLocaleLowerCase('tr');
-function lastActivity(pid) { const h = (S.history[pid] || [])[0]; return h ? h.mtime : 0; }
+// a project added a moment ago counts as used then, so it is not listed last for having no sessions
+function lastActivity(pid) { const h = (S.history[pid] || [])[0], p = proj(pid); return Math.max(h ? h.mtime : 0, (p && p.added) || 0); }
 function openStartPanel(query) {
   if (S.mode !== 'claude') setMode('claude');
   $('#startPanel').hidden = false;
@@ -2975,14 +3106,17 @@ function renderStartList() {
   const q = lowerTr($('#startQ').value.trim());
   START.view = S.projects
     .filter(p => !q || lowerTr(p.name).includes(q) || lowerTr(p.path).includes(q))
-    .sort((a, b) => lastActivity(b.id) - lastActivity(a.id));
+    .sort((a, b) => (!!b.fav - !!a.fav) || lastActivity(b.id) - lastActivity(a.id)); // favourites first
   START.sel = Math.min(START.sel, Math.max(0, START.view.length - 1));
+  const favs = START.view.filter(p => p.fav).length;
+  const head = i => (!favs ? '' : i === 0 ? '<div class="sp-sec"><i class="fa-solid fa-star"></i> Favoriler</div>' : i === favs && favs < START.view.length ? '<div class="sp-sec">Diğer projeler</div>' : '');
   $('#startList').innerHTML = START.view.length ? START.view.map((p, i) => {
     const live = S.tabs.filter(t => t.projectId === p.id).length;
     const last = lastActivity(p.id);
-    return `<div class="sp-row ${i === START.sel ? 'sel' : ''}" data-start="${p.id}" role="option" title="${esc(p.path)}&#10;Tıkla: yeni Claude oturumu">
+    return `${head(i)}<div class="sp-row ${i === START.sel ? 'sel' : ''}" data-start="${p.id}" role="option" title="${esc(p.path)}&#10;Tıkla: yeni Claude oturumu">
       <div class="sp-info"><b>${esc(p.name)}${live ? ` <span class="sp-live">${live} açık</span>` : ''}</b><span>${esc(p.path)}</span></div>
       <span class="sp-time">${last ? rel(last) : ''}</span>
+      <button class="sp-star ${p.fav ? 'on' : ''}" data-startfav="${p.id}" title="${p.fav ? 'Favorilerden çıkar' : 'Favorilere ekle: listenin başında durur'}" aria-label="${p.fav ? 'Favorilerden çıkar' : 'Favorilere ekle'}"><i class="fa-${p.fav ? 'solid' : 'regular'} fa-star"></i></button>
       <button class="sp-more" data-startmore="${p.id}" title="Diğer seçenekler: terminal, izin modu, geçmiş oturumlar" aria-label="${esc(p.name)} için seçenekler"><i class="fa-solid fa-chevron-right"></i></button>
     </div>`;
   }).join('') : `<div class="sp-empty">“${esc($('#startQ').value)}” ile eşleşen proje yok.</div>`;

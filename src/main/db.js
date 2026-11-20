@@ -94,6 +94,8 @@ module.exports = function registerDb({ ipcMain, app, dialog, getWin, DATA, getPr
       color: COLORS.has(d.color) ? d.color : '',
       askPassword: !!d.askPassword,
       timeout: Math.max(3, Math.min(120, parseInt(d.timeout, 10) || 15)),
+      // Claude / Codex through VoxStorm (agentlink.js): '' = ask, 'allow', 'deny'
+      aiAccess: ['allow', 'deny'].includes(d.aiAccess) ? d.aiAccess : '',
     };
   }
   const label = c => c.name || `${c.user ? c.user + '@' : ''}${c.host}${c.port ? ':' + c.port : ''}`;
@@ -349,14 +351,14 @@ module.exports = function registerDb({ ipcMain, app, dialog, getWin, DATA, getPr
   }
   function forget(ids) { for (const id of ids || []) { const x = cache.get(id); if (x) { cachedRows -= x.rows.length; cache.delete(id); } } }
 
-  function makeCtx(tab) {
+  function makeCtx(tab, keep = MAX_FETCH) {
     const ctx = {
       results: [], messages: [], cancelled: false, failed: false, affectedTotal: 0,
       newResult(columns) {
         const r = { id: newId(), columns, rows: [], total: 0, tab, closed: false };
         ctx.results.push(r); return r;
       },
-      addRow(r, row) { r.total++; if (r.rows.length < MAX_FETCH) r.rows.push(Array.from(row, cell)); },
+      addRow(r, row) { r.total++; if (r.rows.length < keep) r.rows.push(Array.from(row, cell)); },
       affected(n, cmd) { ctx.affectedTotal += n; ctx.messages.push({ type: 'rows', text: `${n.toLocaleString('tr-TR')} satır etkilendi${cmd ? ' (' + cmd + ')' : ''}.` }); },
       message(type, text, line) { ctx.messages.push({ type, text: String(text || ''), line: line || 0 }); },
       error(text, line, cancel) {
@@ -746,7 +748,8 @@ module.exports = function registerDb({ ipcMain, app, dialog, getWin, DATA, getPr
       return { ok: !ctx.failed, cancelled: ctx.cancelled, results, messages: ctx.messages, ms, currentDb };
     });
   });
-  handle('db:cancel', async tab => {
+  handle('db:cancel', tab => cancelTab(tab));
+  async function cancelTab(tab) {
     const s = sessions.get(tab);
     if (!s || !s.busy) return { ok: false };
     const x = await s.ready;
@@ -758,7 +761,7 @@ module.exports = function registerDb({ ipcMain, app, dialog, getWin, DATA, getPr
       try { const m = await meta(c, pw == null ? '' : pw, null); await m.q('KILL QUERY ' + Number(x.threadId)); } catch (_) {}
     }
     return { ok: true };
-  });
+  }
   handle('db:closeTab', async tab => {
     const s = sessions.get(tab);
     sessions.delete(tab);
@@ -817,6 +820,59 @@ module.exports = function registerDb({ ipcMain, app, dialog, getWin, DATA, getPr
     return { ok: true };
   });
 
+  /* ---------------- Claude / Codex (agentlink.js) ----------------
+     The agent names a connection id and sends SQL; the password never leaves this process. Each
+     agent session gets its own editor-like session per connection (tab key ai:<pty>:<conn>). */
+  const agentList = () => conns().filter(c => c.aiAccess !== 'deny').map(c => ({
+    id: c.id, name: c.name || `Adsız ${TYPES[c.type]} bağlantısı ${c.id}`, typeName: TYPES[c.type], database: c.database,
+    readOnly: c.readOnly, aiAccess: c.aiAccess || '', label: label(c) + (c.database ? ' / ' + c.database : ''),
+  }));
+  function setAiAccess(id, v) {
+    const c = connById(id); if (!c) return;
+    c.aiAccess = ['allow', 'deny'].includes(v) ? v : '';
+    write('conns', true);
+  }
+  async function agentQuery(id, text, o) {
+    const c = connById(id);
+    if (!c) throw new Error('Bağlantı bulunamadı.');
+    if (c.aiAccess === 'deny') throw new Error('Bu bağlantı ajanlara kapalı.');
+    const pw = passwordOf(c);
+    if (pw === null) throw new Error(`“${c.name || 'Bu bağlantı'}” için parola kayıtlı değil. Kullanıcının VoxStorm’un DB modunda bu bağlantıya bir kez bağlanması gerekiyor; sonra bu çalışma boyunca kullanılabilir.`);
+    const a = analyze(text, c.type);
+    if (c.readOnly && a.blocked.length) throw new Error(`Bu bağlantı salt okunur; şu ifadeler çalıştırılmadı: ${a.blocked.join(', ')}.`);
+    if (a.confirm.length && !(await o.confirm(a.confirm))) throw new Error('Kullanıcı bu sorgunun çalışmasını onaylamadı.');
+    const tab = `ai:${o.session}:${c.id}`;
+    let s, x;
+    try { ({ s, x } = await sessionFor(tab, c, pw, o.db)); } catch (e) {
+      const msg = scrub(friendly(e, c), pw);
+      if (/login failed|password authentication failed|Access denied for user|Oturum açma başarısız/i.test(msg)) { memPw.delete(c.id); await closeConn(c.id); }
+      throw new Error(msg);
+    }
+    if (s.busy) throw new Error('Bu oturumun bu bağlantıda hâlâ çalışan bir sorgusu var.');
+    s.busy = true;
+    const ctx = makeCtx(tab, o.maxRows);
+    s.ctx = ctx;
+    const t0 = Date.now();
+    const timer = setTimeout(() => { cancelTab(tab).catch(() => {}); }, o.timeout || 120000);
+    try { await x.run(text, ctx); } catch (e) {
+      ctx.error(scrub(friendly(e, c), pw), 0);
+      if (!x.alive()) sessions.delete(tab);
+    } finally { clearTimeout(timer); s.busy = false; s.ctx = null; }
+    const ms = Date.now() - t0;
+    let currentDb = o.db || '';
+    if (x.alive()) { try { currentDb = await x.currentDb(); s.db = currentDb; } catch (_) {} }
+    const summary = ctx.failed ? 'Hata' : ctx.cancelled ? 'İptal' : ctx.results.length ? ctx.results.map(r => r.total.toLocaleString('tr-TR') + ' satır').join(', ') : (ctx.affectedTotal ? ctx.affectedTotal.toLocaleString('tr-TR') + ' satır etkilendi' : 'Tamamlandı');
+    data.history.unshift({ id: newId(), at: Date.now(), connId: c.id, connName: `${label(c)} · ${o.by || 'Ajan'}`, db: currentDb, sql: text.slice(0, 20000), ms, ok: !ctx.failed && !ctx.cancelled, summary });
+    if (data.history.length > MAX_HISTORY) data.history.length = MAX_HISTORY;
+    write('history');
+    return { failed: ctx.failed, cancelled: ctx.cancelled, results: ctx.results.map(r => ({ columns: r.columns, rows: r.rows, total: r.total })), messages: ctx.messages, ms, currentDb };
+  }
+  // the agent session ended: close its connections
+  function agentRelease(session) {
+    const pre = `ai:${session}:`;
+    for (const [tab, s] of [...sessions]) if (tab.startsWith(pre)) { sessions.delete(tab); s.ready.then(x => x.close(), () => {}); }
+  }
+
   /* close every connection when the app quits */
   let closed = false;
   function closeAll() {
@@ -828,5 +884,5 @@ module.exports = function registerDb({ ipcMain, app, dialog, getWin, DATA, getPr
   }
   app.on('before-quit', closeAll);
   app.on('will-quit', closeAll);
-  return { closeAll, analyze, splitGo };
+  return { closeAll, analyze, splitGo, agentList, agentQuery, agentRelease, setAiAccess };
 };

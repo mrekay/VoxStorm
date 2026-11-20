@@ -91,6 +91,8 @@ module.exports = function registerSsh({ ipcMain, dialog, getWin, send, sendTo, D
       localDir: s(d.localDir).slice(0, 1024),
       keepalive: Math.max(0, Math.min(600, parseInt(d.keepalive, 10) || 30)),
       tunnels: cleanTunnels(d.tunnels),
+      // Claude / Codex through VoxStorm (agentlink.js): '' = ask, 'allow', 'deny'
+      aiAccess: ['allow', 'deny'].includes(d.aiAccess) ? d.aiAccess : '',
       // RDP
       fullscreen: !!d.fullscreen,
       admin: !!d.admin,
@@ -104,7 +106,7 @@ module.exports = function registerSsh({ ipcMain, dialog, getWin, send, sendTo, D
     const v = clean(d || {});
     if (!v.host) throw new Error('Sunucu adresi boş olamaz.');
     let h = d.id && hostById(d.id);
-    if (h) Object.assign(h, v); else { h = { id: newId(), ...v }; hosts().push(h); }
+    if (h) { Object.assign(h, v); dropAgent(h.id); } else { h = { id: newId(), ...v }; hosts().push(h); }
     if (typeof d.pw === 'string' && d.pw) {
       mem.set(h.id + ':pw', d.pw);
       if (!h.askPassword && canEncrypt()) h.pwd = encrypt(d.pw);
@@ -121,7 +123,7 @@ module.exports = function registerSsh({ ipcMain, dialog, getWin, send, sendTo, D
   });
   ipcMain.handle('ssh:delete', (_e, id) => {
     const i = hosts().findIndex(h => h.id === id);
-    if (i >= 0) { hosts().splice(i, 1); mem.delete(id + ':pw'); mem.delete(id + ':pp'); write('hosts', true); }
+    if (i >= 0) { dropAgent(id); hosts().splice(i, 1); mem.delete(id + ':pw'); mem.delete(id + ':pp'); write('hosts', true); }
     return true;
   });
   ipcMain.handle('ssh:duplicate', (_e, id) => {
@@ -696,11 +698,78 @@ module.exports = function registerSsh({ ipcMain, dialog, getWin, send, sendTo, D
     return { ok: true };
   });
 
+  /* ---------------- Claude / Codex (agentlink.js) ----------------
+     The agent gives a host id and a command; the connection is made here with the saved secrets
+     (or the ones given in this run) and only the output goes back. One client per host, shared by
+     the sessions and closed after a while without use. */
+  const agentConns = new Map(); // hostId -> { ready: Promise<client>, dead, last }
+  const AGENT_IDLE = 10 * 60 * 1000;
+  function dropAgent(id) { const x = agentConns.get(id); if (!x) return; agentConns.delete(id); x.dead = true; x.ready.then(c => { try { c.end(); } catch (_) {} }, () => {}); }
+  setInterval(() => {
+    for (const [id, x] of agentConns) if (!x.busy && Date.now() - x.last > AGENT_IDLE) { agentConns.delete(id); x.ready.then(c => { try { c.end(); } catch (_) {} }, () => {}); }
+  }, 60 * 1000).unref();
+  function agentClient(h) {
+    const old = agentConns.get(h.id);
+    if (old && !old.dead) return old.ready;
+    const x = { dead: false, last: Date.now(), busy: 0 };
+    x.ready = connectClient(h, {}, () => { x.dead = true; if (agentConns.get(h.id) === x) agentConns.delete(h.id); }).then(r => {
+      if (r.client) { r.client.on('error', () => {}); return r.client; }
+      x.dead = true;
+      if (r.needPassword) throw new Error(`“${h.name || 'Bu sunucu'}” için ${r.what === 'pp' ? 'anahtar parolası' : 'parola'} kayıtlı değil. Kullanıcının VoxStorm’un SSH modunda bu sunucuya bir kez bağlanması gerekiyor; sonra bu çalışma boyunca kullanılabilir.`);
+      if (r.hostKey) throw new Error(`Sunucunun anahtarı ${r.changed ? 'değişmiş' : 'henüz onaylanmamış'}. Kullanıcının VoxStorm’un SSH modunda bu sunucuya bir kez bağlanıp anahtarı onaylaması gerekiyor.`);
+      throw new Error(r.error || 'Bağlanılamadı.');
+    });
+    x.ready.catch(() => { if (agentConns.get(h.id) === x) agentConns.delete(h.id); });
+    agentConns.set(h.id, x);
+    return x.ready;
+  }
+  async function agentExec(hostId, cmd, { stdin, timeout = 120000, maxBytes = 1024 * 1024 } = {}) {
+    const h = hostById(hostId);
+    if (!h || h.kind !== 'ssh') throw new Error('Sunucu bulunamadı.');
+    if (h.aiAccess === 'deny') throw new Error('Bu sunucu ajanlara kapalı.');
+    const c = await agentClient(h);
+    const x = agentConns.get(h.id) || { busy: 0 };
+    x.busy++; x.last = Date.now();
+    try {
+      return await new Promise((resolve, reject) => {
+        c.exec(cmd, (err, stream) => {
+          if (err) { reject(new Error('Komut başlatılamadı: ' + err.message)); return; }
+          const out1 = [], out2 = []; let n1 = 0, n2 = 0, done = false, cut = false;
+          const fin = code => {
+            if (done) return; done = true; clearTimeout(t);
+            resolve({ code, cut, stdout: Buffer.concat(out1).toString('utf8'), stderr: Buffer.concat(out2).toString('utf8') });
+          };
+          const t = setTimeout(() => { try { stream.signal('KILL'); } catch (_) {} try { stream.close(); } catch (_) {} fin(-2); }, timeout);
+          stream.on('data', d => { n1 += d.length; if (n1 <= maxBytes) out1.push(d); else cut = true; });
+          stream.stderr.on('data', d => { n2 += d.length; if (n2 <= maxBytes / 4) out2.push(d); });
+          stream.on('exit', code => { stream.exitCode = code; });
+          stream.on('close', () => fin(stream.exitCode == null ? 0 : stream.exitCode));
+          if (typeof stdin === 'string' && stdin) stream.end(stdin); else stream.end();
+        });
+      });
+    } finally { x.busy--; x.last = Date.now(); }
+  }
+  // what an agent may see: no host name, user, port or secret
+  const agentList = () => hosts().filter(h => h.kind === 'ssh' && h.aiAccess !== 'deny').map(h => ({
+    id: h.id, name: h.name || `Adsız sunucu ${h.id}`, group: h.group, aiAccess: h.aiAccess || '', label: label(h),
+  }));
+  function setAiAccess(id, v) {
+    const h = hostById(id); if (!h) return;
+    h.aiAccess = ['allow', 'deny'].includes(v) ? v : '';
+    write('hosts', true);
+  }
+
   return {
+    agentList, agentExec, setAiAccess,
     addChannel, execPty, execOut, execStream,
     hasSession: sid => sessions.has(sid),
     sessionWc: sid => (sessions.get(sid) || {}).wc,
     hostLabel: sid => { const x = sessions.get(sid); const h = x && hostById(x.hostId); return h ? label(h) : ''; },
-    shutdown() { for (const sid of [...sessions.keys()]) closeSession(sid, ''); writeNow('state'); },
+    shutdown() {
+      for (const sid of [...sessions.keys()]) closeSession(sid, '');
+      for (const x of agentConns.values()) x.ready.then(c => { try { c.end(); } catch (_) {} }, () => {});
+      agentConns.clear();
+      writeNow('state');
+    },
   };
 };

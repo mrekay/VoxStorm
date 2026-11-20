@@ -761,6 +761,7 @@
         <label class="db-f full ssh-only"><span>Yerel klasör (bu bilgisayar)</span><input name="localDir" value="${esc(v.localDir || '')}" placeholder="Son kullanılan klasör" spellcheck="false"></label>
         <label class="db-f full ssh-only"><span>Tüneller (yerel port yönlendirme) · her satır: <code>yerelPort hedef:port</code></span><textarea name="tunnels" rows="2" spellcheck="false" placeholder="3307 127.0.0.1:3306">${esc(tun)}</textarea></label>
         <label class="db-ck full ssh-only"><input type="checkbox" name="tunAuto"${chk((v.tunnels || []).some(t => t.auto))}><span>Bağlanınca tünelleri otomatik aç (örn. DB modunda <code>localhost:3307</code> ile bağlan)</span></label>
+        <label class="db-f full ssh-only"><span>Claude / Codex erişimi · bağlantıyı VoxStorm kurar, adres ve parola ajana verilmez</span><select name="aiAccess"><option value=""${sel(v.aiAccess || '', '')}>Her oturumda ilk kullanımda sor</option><option value="allow"${sel(v.aiAccess, 'allow')}>Her zaman izin ver</option><option value="deny"${sel(v.aiAccess, 'deny')}>Asla izin verme (ajanlar bu bağlantıyı görmez)</option></select></label>
         <label class="db-ck full rdp-only"><input type="checkbox" name="fullscreen"${chk(v.fullscreen)}><span>Tam ekran aç</span></label>
         <label class="db-ck full rdp-only"><input type="checkbox" name="admin"${chk(v.admin)}><span>Yönetici oturumu (/admin)</span></label>
         <div class="db-f full"><span>Renk</span><div class="db-colors">${COLORS.map(([k, l]) => `<label title="${l}"><input type="radio" name="color" value="${k}"${chk((v.color || '') === k)}><span class="db-sw db-c-${k || 'none'}"></span></label>`).join('')}</div></div>
@@ -1191,6 +1192,7 @@
     renderOver(t); renderTabs(); renderHosts();
   });
   api.on('ssh:xfer', onXfer);
+  api.on('agent-access', kind => { if (kind === 'ssh') loadHosts(); }); // "her zaman hatırla" in a Claude / Codex question
   api.on('ssh:xferAsk', onXferAsk);
   api.on('ssh:tunnels', (sid, list) => {
     const t = tabBySid(sid); if (!t) return;

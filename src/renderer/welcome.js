@@ -96,16 +96,18 @@ function render() {
     return;
   }
   if (!view.length) { $('#wlList').innerHTML = `<div class="wl-empty">“${esc($('#wlQ').value)}” ile eşleşen proje yok.</div>`; return; }
-  $('#wlList').innerHTML = view.map((p, i) => `
+  const favs = view.filter(p => p.fav).length;
+  const head = i => (!favs ? '' : i === 0 ? '<div class="wl-sec"><i class="fa-solid fa-star"></i> Favoriler</div>' : i === favs && favs < view.length ? '<div class="wl-sec">Diğer projeler</div>' : '');
+  $('#wlList').innerHTML = view.map((p, i) => `${head(i)}
     <div class="wl-row ${i === sel ? 'sel' : ''}" role="option" aria-selected="${i === sel}" data-i="${i}">
       <div class="wl-av" style="background:${hueOf(p.name)}">${esc(initials(p.name))}</div>
       <div class="wl-info">
-        <div class="wl-name">${mark(p.name, q)}</div>
+        <div class="wl-name">${mark(p.name, q)}<button class="wl-star ${p.fav ? 'on' : ''}" data-fav="${i}" title="${p.fav ? 'Favorilerden çıkar' : 'Favorilere ekle: listenin başında durur'}" aria-label="${p.fav ? 'Favorilerden çıkar' : 'Favorilere ekle'}"><i class="fa-${p.fav ? 'solid' : 'regular'} fa-star"></i></button></div>
         <div class="wl-path">${mark(p.path, q)}</div>
         ${p.missing ? '<div class="wl-miss">Klasör bulunamadı</div>' : p.lastTitle ? `<div class="wl-last" title="${esc(p.lastTitle)}">Son: ${esc(p.lastTitle)}</div>` : ''}
       </div>
       <div class="wl-right">
-        <div class="wl-meta">${p.last ? rel(p.last) : 'oturum yok'}${p.count ? `<br>${p.count} oturum` : ''}</div>
+        <div class="wl-meta">${p.last ? rel(p.last) : p.added ? 'yeni eklendi' : 'oturum yok'}${p.count ? `<br>${p.count} oturum` : ''}</div>
         <div class="wl-btns"><button class="btn primary" data-act="claude" data-i="${i}" title="Ctrl+Enter">+ Oturum</button>${p.restore
           ? `<button class="btn" data-act="restore" data-i="${i}" title="Son kapanışta bu projede açık olan ${p.restore} terminali yeniden açar">Geri yükle (${p.restore})</button>`
           : p.last ? `<button class="btn" data-act="restore" data-i="${i}" title="${esc(p.lastTitle)}">Son oturuma devam</button>` : ''}<button class="btn" data-act="ide" data-i="${i}">IDE'de aç</button></div>
@@ -158,7 +160,9 @@ $('#wlQ').addEventListener('keydown', e => {
 document.addEventListener('keydown', e => {
   if (e.key === 'Escape') { if ($('#wlQ').value) { $('#wlQ').value = ''; render(); } else api.send('welcome:close'); }
 });
-$('#wlList').addEventListener('click', e => {
+$('#wlList').addEventListener('click', async e => {
+  const f = e.target.closest('[data-fav]');
+  if (f) { const p = view[+f.dataset.fav]; if (p) { await api.invoke('project:fav', p.id, !p.fav); await load(); } return; }
   const b = e.target.closest('[data-act]');
   if (b) { open(+b.dataset.i, b.dataset.act); return; }
   const row = e.target.closest('.wl-row');

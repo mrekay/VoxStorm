@@ -49,3 +49,11 @@
 .wl-btns .btn{padding:4px 10px;white-space:nowrap}
 .wl-miss{color:var(--danger);font-size:11px}
 .wl-empty{color:var(--muted);text-align:center;padding:40px 10px;font-size:13px;line-height:1.7}
+
+/* ---------- favourite projects ---------- */
+.wl-sec{font-size:10.5px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);padding:10px 10px 4px}
+.wl-sec i{color:var(--warn);margin-right:3px}
+.wl-star{border:0;background:none;color:var(--muted);padding:2px 5px;margin-left:4px;border-radius:5px;cursor:pointer;opacity:0;font-size:12px;vertical-align:1px}
+.wl-row:hover .wl-star,.wl-row.sel .wl-star,.wl-star.on{opacity:1}
+.wl-star:hover{color:var(--warn);background:var(--hover)}
+.wl-star.on{color:var(--warn)}

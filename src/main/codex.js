@@ -87,6 +87,7 @@ module.exports = function setupCodex({ config, hookPort, buildPrompt, encodeProj
     else if (s.mode === 'never') a.push('-a', 'never');
     else if (s.mode === 'full') a.push('--dangerously-bypass-approvals-and-sandbox');
     if (s.search) a.push('--search');
+    if (opts.extra) a.push(...opts.extra); // VoxStorm's MCP server (agentlink.js)
     const prompt = buildPrompt();
     if (prompt && prompt.includes('\n-')) a.push('-c', `developer_instructions=${toml(prompt)}`);
     return a;

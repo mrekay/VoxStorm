@@ -609,7 +609,7 @@ kbd{font:10.5px var(--f-mono);opacity:.75;margin-left:4px}
 .sp-search i{font-size:12px}
 .sp-search input{flex:1;min-width:0;border:0;background:none;outline:none;color:var(--fg);font:13px var(--f-body);padding:8px 0}
 .sp-list{overflow:auto;padding:0 4px 4px;flex:1;min-height:0}
-.sp-row{display:grid;grid-template-columns:minmax(0,1fr) auto auto;align-items:center;gap:8px;padding:6px 6px 6px 10px;border-radius:7px;cursor:pointer}
+.sp-row{display:grid;grid-template-columns:minmax(0,1fr) auto auto auto;align-items:center;gap:8px;padding:6px 6px 6px 10px;border-radius:7px;cursor:pointer}
 .sp-row:hover,.sp-row.sel{background:var(--hover)}
 .sp-info{min-width:0;display:grid}
 .sp-info b{font-size:13px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -789,14 +789,17 @@ kbd{font:10.5px var(--f-mono);opacity:.75;margin-left:4px}
 .diff tr.hunk td{background:var(--accent-soft);color:var(--muted);padding-top:3px;padding-bottom:3px}
 .diff-note{padding:10px 12px;color:var(--muted);font-size:12px}
 /* git line under an open project */
-.proj-git{display:flex;align-items:center;flex-wrap:wrap;gap:4px 5px;margin:-1px 0 4px 20px;padding:2px 4px 2px 2px;font-size:11px;color:var(--muted);min-width:0}
+.proj-git{display:flex;align-items:center;flex-wrap:nowrap;overflow:hidden;gap:5px;margin:-1px 0 4px 20px;padding:2px 4px 2px 2px;font-size:11px;color:var(--muted);min-width:0}
 .pg-br{display:flex;align-items:center;gap:5px;border:0;background:none;color:var(--muted);padding:1px 4px;border-radius:4px;font:11px var(--f-mono);min-width:0;max-width:110px}
 .pg-br span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .pg-br i{font-size:10px;flex:none}
 .pg-br:hover{background:var(--hover);color:var(--fg)}
-.proj-git .gchip{font-size:10.5px;padding:0 5px}
+.proj-git .gchip{display:block;font-size:10.5px;padding:0 5px;min-width:0;flex:0 1 auto;overflow:hidden;text-overflow:ellipsis}
+.pg-br{flex:0 1 auto}
+.pg-act,.pg-ref,.pg-busy,.pg-err{flex:none}
+.pg-sp{min-width:0}
 .pg-sp{flex:1}
-.pg-act{display:flex;align-items:center;gap:5px;border:1px solid var(--line);background:var(--surface);color:var(--fg);border-radius:5px;padding:1px 8px;font-size:11px;font-weight:600}
+.pg-act{display:flex;align-items:center;gap:5px;white-space:nowrap;border:1px solid var(--line);background:var(--surface);color:var(--fg);border-radius:5px;padding:1px 8px;font-size:11px;font-weight:600}
 .pg-act i{font-size:10px}
 .pg-act:hover{border-color:var(--accent);color:var(--accent)}
 .pg-act.warn{color:var(--warn)}
@@ -804,7 +807,7 @@ kbd{font:10.5px var(--f-mono);opacity:.75;margin-left:4px}
 .pg-ref{border:0;background:none;color:var(--muted);width:20px;height:20px;border-radius:4px;display:grid;place-items:center;font-size:10px;padding:0}
 .pg-ref:hover{background:var(--hover);color:var(--fg)}
 .pg-err{color:var(--warn);font-size:11px}
-.pg-busy{display:flex;align-items:center;gap:5px;font-size:11px}
+.pg-busy{display:flex;align-items:center;gap:5px;white-space:nowrap;font-size:11px}
 /* GitHub: create a repo */
 .nr{display:grid;gap:10px;padding:4px 2px 4px}
 .nr-h{display:flex;gap:10px;align-items:flex-start;font-size:13px;font-weight:600}
@@ -1320,3 +1323,49 @@ html.is-mac.is-fullscreen .titlebar .tb-left{padding-left:10px}
 .days.codex .day.today i{background:#10a37f}
 .plan-src{margin-top:6px;font-size:11.5px}
 .seg button.dis{opacity:.45;cursor:not-allowed}
+
+/* ---------- workflow window ---------- */
+.settings.wfwin{grid-template-columns:1fr;width:1040px;max-height:720px}
+.wf-body{gap:12px;display:flex;flex-direction:column;min-height:0}
+.wf-head{display:flex;gap:14px;align-items:flex-start}
+.wf-head .t{flex:1;min-width:0}
+.wf-head h3{margin:0;font-size:16px;font-weight:600;font-family:var(--f-mono);color:var(--accent)}
+.wf-head p{margin:3px 0 0;color:var(--muted);font-size:12.5px}
+.wf-head .meta{display:flex;flex-direction:column;align-items:flex-end;gap:4px;flex:none;font-size:12px;color:var(--muted);font-variant-numeric:tabular-nums}
+.wf-st{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;padding:2px 8px;border-radius:999px}
+.wf-st.running{background:var(--accent-soft);color:var(--accent)}
+.wf-st.done{background:var(--ok-soft);color:var(--ok)}
+.wf-st.failed{background:color-mix(in srgb,var(--danger) 18%,transparent);color:var(--danger)}
+.wf-err{border:1px solid var(--danger);color:var(--danger);border-radius:8px;padding:8px 10px;font-size:12.5px;white-space:pre-wrap}
+.wf-main{display:grid;grid-template-columns:200px minmax(0,1fr);gap:12px;min-height:0;flex:1}
+.wf-phases{border:1px solid var(--line);border-radius:9px;padding:6px;display:flex;flex-direction:column;gap:2px;overflow:auto}
+.wf-phases h4,.wf-agents h4{margin:2px 6px 6px;font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);font-weight:600}
+.wf-ph{display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:6px;background:none;border:0;color:inherit;font:inherit;font-size:12.5px;text-align:left;cursor:pointer}
+.wf-ph:hover{background:var(--hover)} .wf-ph.on{background:var(--surface-2);box-shadow:inset 2px 0 0 var(--accent)}
+.wf-ph .n{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.wf-ph .c{color:var(--muted);font-size:11.5px;font-variant-numeric:tabular-nums}
+.wf-ic{width:16px;text-align:center;flex:none;font-size:12px}
+.wf-ic.done{color:var(--ok)} .wf-ic.running{color:var(--accent)} .wf-ic.failed{color:var(--danger)} .wf-ic.wait{color:var(--muted)}
+.wf-agents{border:1px solid var(--line);border-radius:9px;padding:6px;overflow:auto;min-height:0}
+.wf-ag{border-radius:7px;padding:7px 8px}
+.wf-ag+.wf-ag{border-top:1px solid var(--line)}
+.wf-ag .row{display:flex;align-items:center;gap:8px;font-size:12.5px;cursor:pointer}
+.wf-ag .row b{font-weight:600;font-family:var(--f-mono)}
+.wf-ag .row .m{color:var(--muted);font-size:11.5px}
+.wf-ag .row .sp{flex:1}
+.wf-ag .row .d{color:var(--muted);font-size:11.5px;font-variant-numeric:tabular-nums}
+.wf-ag .now{margin:4px 0 0 24px;color:var(--muted);font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.wf-ag .res{margin:6px 0 2px 24px;background:var(--surface-2);border:1px solid var(--line);border-radius:7px;padding:8px 10px;font-size:12px;white-space:pre-wrap;max-height:260px;overflow:auto;user-select:text}
+.wf-ag .res code{display:block;font-size:11.5px;color:var(--ok)}
+.wf-none{color:var(--muted);font-size:12.5px;padding:10px}
+.wf-foot{display:flex;gap:8px;align-items:center;font-size:11.5px;color:var(--muted)}
+.wf-foot .sp{flex:1}
+
+/* ---------- favourite projects (start panel) ---------- */
+.sp-sec{font-size:10.5px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);padding:8px 10px 4px}
+.sp-sec i{color:var(--warn);margin-right:3px}
+.sp-star{border:0;background:none;color:var(--muted);width:24px;height:24px;border-radius:5px;display:grid;place-items:center;opacity:0}
+.sp-row:hover .sp-star,.sp-row.sel .sp-star,.sp-star.on{opacity:1}
+.sp-star:hover{background:var(--surface-2);color:var(--warn)}
+.sp-star.on{color:var(--warn)}
+.sp-star i{font-size:11px}

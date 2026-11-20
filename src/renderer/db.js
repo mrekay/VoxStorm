@@ -186,6 +186,7 @@
     D.conns = r.connections || [];
     D.canEncrypt = r.canEncrypt !== false;
   }
+  api.on('agent-access', kind => { if (kind === 'db') loadConns(); }); // "her zaman hatırla" in a Claude / Codex question
   async function loadState() {
     const r = await inv('db:getState');
     const st = r && r.state;
@@ -821,6 +822,7 @@
           <label class="db-ck"><input type="checkbox" name="trustCert"${chk(v.trustCert)}><span class="mssql-only">Sunucu sertifikasına güven (trustServerCertificate)</span><span class="other-only">Sertifikayı doğrulama (kendinden imzalı sertifikalar için)</span></label>
           <label class="db-ck"><input type="checkbox" name="readOnly"${chk(v.readOnly)}><span><b>Salt okunur:</b> INSERT, UPDATE, DELETE, DROP gibi yazma ifadelerini engelle</span></label>
         </div>
+        <label class="db-f full"><span>Claude / Codex erişimi · sorguyu VoxStorm çalıştırır, adres ve parola ajana verilmez</span><select name="aiAccess"><option value=""${sel(v.aiAccess || '', '')}>Her oturumda ilk kullanımda sor</option><option value="allow"${sel(v.aiAccess, 'allow')}>Her zaman izin ver</option><option value="deny"${sel(v.aiAccess, 'deny')}>Asla izin verme (ajanlar bu bağlantıyı görmez)</option></select></label>
         <label class="db-f"><span>Zaman aşımı (sn)</span><input name="timeout" value="${esc(v.timeout || 15)}" inputmode="numeric"></label>
         <div class="db-f wide"><span>Renk etiketi</span><div class="db-colors">${COLORS.map(([k, l]) => `<label title="${l}"><input type="radio" name="color" value="${k}"${chk((v.color || '') === k)}><i class="db-sw db-c-${k || 'none'}"></i></label>`).join('')}</div></div>
         <p class="db-note full mssql-only"><i class="fa-solid fa-circle-info"></i> Windows tümleşik kimlik doğrulaması (kullanıcı adı ve parola girmeden oturumdaki Windows kimliğiyle) yerel sürücü gerektirdiği için desteklenmiyor; alan hesabıyla bağlanmak için NTLM seçeneğini kullan.</p>
@@ -834,7 +836,7 @@
       form.classList.toggle('a-ntlm', type === 'mssql' && form.querySelector('[name=auth]').value === 'ntlm');
       form.querySelector('[name=port]').placeholder = DEF_PORT[type];
     };
-    const draft = f => ({ id: c ? c.id : undefined, name: f.name, type: f.type, host: f.host, port: f.port, user: f.user, database: f.database, auth: f.auth, domain: f.domain, ssl: f.ssl, trustCert: f.trustCert, readOnly: f.readOnly, color: f.color, askPassword: f.askPassword, timeout: f.timeout });
+    const draft = f => ({ id: c ? c.id : undefined, name: f.name, type: f.type, host: f.host, port: f.port, user: f.user, database: f.database, auth: f.auth, domain: f.domain, ssl: f.ssl, trustCert: f.trustCert, readOnly: f.readOnly, color: f.color, askPassword: f.askPassword, timeout: f.timeout, aiAccess: f.aiAccess });
     const r = await modal({
       title: c ? 'Bağlantıyı düzenle' : 'Yeni bağlantı', icon: 'fa-plug', wide: true, body,
       buttons: [['test', 'Bağlantıyı test et'], ['cancel', 'Vazgeç'], ['ok', 'Kaydet', 'primary']],

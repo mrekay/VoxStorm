@@ -87,6 +87,7 @@ const DEFAULTS = {
     claude: { model: '', effort: '', permissionMode: '', remoteControl: false, chrome: false, command: '' },
     // Codex CLI sessions (src/main/codex.js); mode: '' | readonly | never | full
     codex: { model: '', effort: '', mode: '', search: false, command: '' },
+    agentLink: true, // Claude / Codex may use the SSH hosts and databases saved in VoxStorm (src/main/agentlink.js), asking first
     defaultAgent: 'claude', // the AI a new session starts with: 'claude' | 'codex'
     notif: { done: true, decision: true, subagent: true, workflow: true, quiet: false },
     skin: 'mono', mode: 'claude', termColors: 'windows',
@@ -521,6 +522,109 @@ function workflowState(sessionId, runId) {
   const st = String(snap.status || '');
   if (/^(running|pending|starting|queued)$/i.test(st)) return { done: false };
   return { done: true, status: st, error: snap.error ? String(snap.error).slice(0, 300) : '' };
+}
+/* Everything the workflow window shows, read from what Claude Code writes while a run goes on:
+   <session>/workflows/scripts/<name>-<runId>.js (meta: name, description, phases),
+   <session>/subagents/workflows/<runId>/journal.jsonl (agent started / result),
+   agent-<id>.meta.json (model, phase) and agent-<id>.jsonl (tokens, time, what it is doing now),
+   <session>/workflows/<runId>.json (the snapshot when the run has ended).
+   Without a runId (a run that has not answered yet) the newest run of the session is shown. */
+const wfAgentCache = new Map(); // transcript file -> { size, first, last, out, ctx, now }
+function wfAgentStats(file) {
+  let st; try { st = fs.statSync(file); } catch (_) { return null; }
+  let c = wfAgentCache.get(file);
+  if (!c || st.size < c.size) c = { size: 0, first: 0, last: 0, out: 0, ctx: 0, now: '', rest: '' };
+  if (st.size > c.size) {
+    let text = '';
+    try {
+      const fd = fs.openSync(file, 'r');
+      const buf = Buffer.alloc(st.size - c.size);
+      fs.readSync(fd, buf, 0, buf.length, c.size); fs.closeSync(fd);
+      text = c.rest + buf.toString('utf8');
+    } catch (_) { return c; }
+    const lines = text.split('\n');
+    c.rest = lines.pop(); // a line still being written
+    for (const line of lines) {
+      if (!line) continue;
+      let o; try { o = JSON.parse(line); } catch (_) { continue; }
+      const ts = Date.parse(o.timestamp) || 0;
+      if (ts) { if (!c.first) c.first = ts; c.last = ts; }
+      if (o.type !== 'assistant' || !o.message) continue;
+      const u = o.message.usage;
+      if (u) { c.out += u.output_tokens || 0; c.ctx = (u.input_tokens || 0) + (u.cache_read_input_tokens || 0) + (u.cache_creation_input_tokens || 0); }
+      for (const b of Array.isArray(o.message.content) ? o.message.content : []) {
+        if (b.type === 'tool_use') {
+          const i = b.input || {};
+          const what = i.description || i.command || i.file_path || i.pattern || i.url || i.query || '';
+          c.now = `${b.name}${what ? ': ' + String(what).replace(/\s+/g, ' ').slice(0, 160) : ''}`;
+        } else if (b.type === 'text' && b.text.trim()) c.now = b.text.replace(/\s+/g, ' ').trim().slice(0, 160);
+      }
+    }
+    c.size = st.size;
+    wfAgentCache.set(file, c);
+  }
+  return c;
+}
+function wfScriptMeta(dir, runId) {
+  let src = '';
+  try {
+    const f = fs.readdirSync(dir).find(n => n.endsWith('-' + runId + '.js') || n === runId + '.js');
+    if (f) src = fs.readFileSync(path.join(dir, f), 'utf8').slice(0, 200000);
+  } catch (_) {}
+  const str = re => { const m = re.exec(src); return m ? m[2] : ''; };
+  const meta = { name: str(/\bname\s*:\s*(['"`])((?:\\.|(?!\1).)*)\1/), description: str(/\bdescription\s*:\s*(['"`])((?:\\.|(?!\1).)*)\1/), phases: [] };
+  const ph = /\bphases\s*:\s*\[([\s\S]*?)\]/.exec(src);
+  if (ph) { const re = /\btitle\s*:\s*(['"`])((?:\\.|(?!\1).)*)\1/g; let m; while ((m = re.exec(ph[1]))) meta.phases.push(m[2]); }
+  return meta;
+}
+function workflowDetail(sessionId, runId) {
+  if (!SID_RE.test(sessionId || '') || (runId && !RUN_ID_RE.test(runId))) return null;
+  const f = transcriptOf(sessionId); if (!f) return null;
+  const base = f.slice(0, -'.jsonl'.length);
+  const runsDir = path.join(base, 'subagents', 'workflows');
+  if (!runId) {
+    try {
+      runId = fs.readdirSync(runsDir).filter(n => RUN_ID_RE.test(n))
+        .map(n => ({ n, t: fs.statSync(path.join(runsDir, n)).ctimeMs })).sort((a, b) => b.t - a.t).map(x => x.n)[0];
+    } catch (_) {}
+    if (!runId) return { missing: true };
+  }
+  const dir = path.join(runsDir, runId);
+  const meta = wfScriptMeta(path.join(base, 'workflows', 'scripts'), runId);
+  const agents = new Map(); let started = 0;
+  try {
+    started = fs.statSync(path.join(dir, 'journal.jsonl')).birthtimeMs || 0;
+    for (const line of fs.readFileSync(path.join(dir, 'journal.jsonl'), 'utf8').split('\n')) {
+      if (!line.trim()) continue;
+      let e; try { e = JSON.parse(line); } catch (_) { continue; }
+      if (!e.agentId || !AGENT_ID_RE.test(e.agentId)) continue;
+      const a = agents.get(e.agentId) || { id: e.agentId, label: e.label || '', phase: e.phase || '', state: 'running' };
+      if (e.label) a.label = e.label;
+      if (e.phase) a.phase = e.phase;
+      if (e.type === 'result') {
+        a.state = 'done';
+        const r = e.result;
+        a.result = (typeof r === 'string' ? r : r && typeof r === 'object' ? (r.summary || r.result || JSON.stringify(r, null, 1)) : String(r == null ? '' : r)).slice(0, 4000);
+        if (r && Array.isArray(r.commits)) a.commits = r.commits.slice(0, 20).map(String);
+      } else if (/error|fail|cancel|abort/i.test(e.type)) { a.state = 'failed'; a.result = String(e.error || e.message || e.type).slice(0, 2000); }
+      agents.set(e.agentId, a);
+    }
+  } catch (_) {}
+  const list = [...agents.values()].map(a => {
+    const m = agentMeta(dir, a.id) || {};
+    const s = wfAgentStats(path.join(dir, `agent-${a.id}.jsonl`)) || {};
+    return { ...a, phase: a.phase || m.workflowPhase || '', model: m.model || '', tokens: (s.ctx || 0) + (s.out || 0), first: s.first || 0, last: s.last || 0, now: a.state === 'running' ? s.now || '' : '' };
+  });
+  for (const a of list) if (a.first && (!started || a.first < started)) started = a.first;
+  let snap = null;
+  try { snap = JSON.parse(fs.readFileSync(path.join(base, 'workflows', runId + '.json'), 'utf8')); } catch (_) {}
+  const status = snap ? String(snap.status || '') : 'running';
+  const running = !snap || /^(running|pending|starting|queued)$/i.test(status);
+  return {
+    runId, name: meta.name || runId, description: meta.description, phases: meta.phases, agents: list,
+    started, ended: running ? 0 : Math.max(0, ...list.map(a => a.last)), running, status,
+    error: snap && snap.error ? String(snap.error).slice(0, 1000) : '',
+  };
 }
 async function tailTranscript(sessionId, offset, agent) {
   if (!SID_RE.test(sessionId || '')) return null;
@@ -1019,7 +1123,8 @@ function spawnTerminal(opts, owner) {
   const cwd = opts.cwd && fs.existsSync(opts.cwd) ? opts.cwd : os.homedir();
   if (opts.kind === 'claude' && opts.agent === 'codex') {
     writeAppendPrompt();
-    const l = CODEX.launch({ resume: opts.resume, overrides: opts.overrides }, id);
+    const l = CODEX.launch({ resume: opts.resume, overrides: opts.overrides, extra: AGENT ? AGENT.codexArgs(id) : [] }, id);
+    ptyMeta.set(id, { agent: 'Codex', cwd });
     file = l.file; args = l.args; sessionId = opts.resume || null; // a new session's id comes with its first hook
   } else if (opts.kind === 'claude') {
     const launch = claudeLaunch();
@@ -1028,6 +1133,8 @@ function spawnTerminal(opts, owner) {
     if (opts.resume) { args.push('--resume', opts.resume); sessionId = opts.resume; }
     else { sessionId = crypto.randomUUID(); args.push('--session-id', sessionId); }
     args.push('--settings', HOOK_SETTINGS);
+    if (AGENT) args.push(...AGENT.claudeArgs(id));
+    ptyMeta.set(id, { agent: 'Claude', cwd });
     const cs = { ...(config.settings.claude || {}), ...(opts.overrides || {}) };
     if (cs.model) args.push('--model', cs.model);
     if (cs.effort) args.push('--effort', cs.effort);
@@ -1063,6 +1170,7 @@ function spawnTerminal(opts, owner) {
   });
   p.onExit(({ exitCode }) => {
     ptys.delete(id);
+    if (ptyMeta.delete(id) && AGENT) AGENT.release(id);
     const wc = ptyOwner.get(id);
     if (wc === null) { ptyGone.set(id, exitCode); return; } // moving between windows: the new one is told when it takes it
     sendTo(wc, 'pty:exit', id, exitCode);
@@ -1074,6 +1182,26 @@ function spawnTerminal(opts, owner) {
 /* ---------------- updates (GitHub Releases) ---------------- */
 let U = null;
 let SSH = null;
+let DB = null;
+let AGENT = null;
+const ptyMeta = new Map(); // pty id -> { agent: 'Claude' | 'Codex', cwd } for the AI sessions
+// SSH hosts and databases for Claude / Codex, through VoxStorm (the agent never sees addresses or passwords)
+function setupAgentLink() {
+  AGENT = require('./agentlink')({
+    DATA, dialog, version: app.getVersion(),
+    getSsh: () => SSH, getDb: () => DB,
+    enabled: () => config.settings.agentLink !== false,
+    sessionInfo: id => {
+      const m = ptyMeta.get(id) || { agent: 'Ajan', cwd: '' };
+      const pr = m.cwd && config.projects.find(x => norm(x.path) === norm(m.cwd));
+      const wc = ptyOwner.get(id);
+      return { agent: m.agent, project: (pr && pr.name) || (m.cwd ? path.basename(m.cwd) : '?'), win: (wc && !wc.isDestroyed() && BrowserWindow.fromWebContents(wc)) || ownerWin('claude') };
+    },
+    notify: (title, body) => { try { new Notification({ title, body, icon: appIcon(64, 1) }).show(); } catch (_) {} },
+    onAccessChanged: kind => send('agent-access', kind),
+  });
+  return AGENT.start();
+}
 let DOCKER = null;
 // Codex CLI sessions (OpenAI), shown and handled like Claude's
 const CODEX = require('./codex')({ config: () => config, hookPort: () => hookPort, buildPrompt: () => buildAppendPrompt(), encodeProjectDir });
@@ -1156,9 +1284,9 @@ async function welcomeData() {
   const projects = await Promise.all(config.projects.map(async p => {
     const list = fs.existsSync(p.path) ? await listSessions(p.path) : [];
     const restore = (config.lastTabs || []).filter(t => t.projectId === p.id).length;
-    return { ...p, last: list[0] ? list[0].mtime : 0, lastTitle: list[0] ? list[0].title : '', count: list.length, restore, missing: !fs.existsSync(p.path) };
+    return { ...p, last: list[0] ? list[0].mtime : 0, used: Math.max(list[0] ? list[0].mtime : 0, p.added || 0), lastTitle: list[0] ? list[0].title : '', count: list.length, restore, missing: !fs.existsSync(p.path) };
   }));
-  projects.sort((a, b) => b.last - a.last);
+  projects.sort((a, b) => (!!b.fav - !!a.fav) || b.used - a.used); // favourites first
   const ids = new Set(config.projects.map(p => p.id));
   const restoreAll = (config.lastTabs || []).filter(t => ids.has(t.projectId)).length;
   return { projects, restoreAll, name: config.settings.name || '', skin: config.settings.skin, usage: usageCache ? usageCache.total : null, cost: usageCache ? usageCache.cost : null, open: ptys.size };
@@ -1489,6 +1617,7 @@ function registerIpc() {
   ipcMain.handle('live:tail', (_e, sid, offset, agent) => tailTranscript(sid, offset, agent && typeof agent === 'object' ? { agentId: String(agent.agentId || ''), toolUseId: String(agent.toolUseId || '') } : null));
   ipcMain.handle('live:takeover', (_e, sid) => takeOver(sid));
   ipcMain.handle('workflow:state', (_e, sid, runId) => workflowState(sid, runId));
+  ipcMain.handle('workflow:detail', (_e, sid, runId) => workflowDetail(sid, runId));
   ipcMain.handle('mirror:start', (e, sid) => startMirror(sid, e.sender));
   ipcMain.on('mirror:input', (_e, id, data) => mirrorInput(id, data));
   ipcMain.on('mirror:stop', (_e, id) => stopMirror(id));
@@ -1521,6 +1650,14 @@ function registerIpc() {
   });
 
   ipcMain.handle('welcome:data', () => welcomeData());
+  // favourite projects: listed first on the welcome screen and in the start panel
+  ipcMain.handle('project:fav', (_e, id, on) => {
+    const p = config.projects.find(x => x.id === id); if (!p) return false;
+    if (on) p.fav = true; else delete p.fav;
+    saveConfig();
+    send('projects-changed', config.projects);
+    return true;
+  });
   ipcMain.handle('welcome:addFolder', async () => {
     const r = await dialog.showOpenDialog(welcome || win, { title: 'Proje klasörü seç', properties: ['openDirectory'] });
     if (r.canceled || !r.filePaths[0]) return null;
@@ -1618,7 +1755,7 @@ function registerIpc() {
   // quick open, project search, rename / new folder / Recycle Bin, git colours, folder watcher
   require('./ide')({ ipcMain, shell, insideProject, send: (ch, ...a) => sendTo(ownerWin('ide') && ownerWin('ide').webContents, ch, ...a), isProjectRoot: p => config.projects.some(pr => norm(pr.path) === norm(p)) });
   // DB mode: connections, explorer, queries (closes its connections on quit)
-  require('./db')({ ipcMain, app, dialog, getWin: () => ownerWin('db'), DATA, getProjects: () => config.projects });
+  DB = require('./db')({ ipcMain, app, dialog, getWin: () => ownerWin('db'), DATA, getProjects: () => config.projects });
   // SSH mode: terminal + SFTP (PuTTY / WinSCP), tunnels, Remote Desktop launcher
   SSH = require('./ssh')({ ipcMain, dialog, getWin: () => ownerWin('ssh'), sendTo, DATA });
   // Docker: containers on this computer and on open SSH sessions
@@ -1639,7 +1776,8 @@ function addProject(p, auto) {
   if (!auto) config.removedProjects = (config.removedProjects || []).filter(r => norm(r) !== norm(full));
   const existing = config.projects.find(x => norm(x.path) === norm(full));
   if (existing) return existing;
-  const proj = { id: crypto.randomUUID().slice(0, 8), name: path.basename(full) || full, path: full };
+  // added: a new project counts as just used, so it is listed at the top until it has sessions
+  const proj = { id: crypto.randomUUID().slice(0, 8), name: path.basename(full) || full, path: full, added: Date.now() };
   config.projects.push(proj);
   saveConfig();
   return proj;
@@ -1705,6 +1843,7 @@ app.whenReady().then(async () => {
   try { await session.defaultSession.clearCache(); } catch (_) {}
   appMenu();
   await startHookServer();
+  await setupAgentLink();
   writeAppendPrompt();
   // bring in every folder that has Claude Code history (on first launch and whenever a new one appears)
   await syncDiscovered().catch(() => {});
