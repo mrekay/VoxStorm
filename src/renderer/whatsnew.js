@@ -8,6 +8,15 @@
   // try: what the "Dene" button does (optional)
   const NOTES = [
     {
+      id: '2026-11-20c', title: 'Sürüm 0.9.0', date: '20 Kasım 2026',
+      items: [
+        { icon: 'fa-solid fa-plug-circle-check', title: 'Claude ve Codex, SSH ve veritabanlarını VoxStorm üzerinden kullanır', text: 'Ajanlar VoxStorm’da kayıtlı SSH sunucularında komut, veritabanlarında sorgu çalıştırabilir. Bağlantıyı VoxStorm kurar; adres, kullanıcı adı ve parola ajana hiç verilmez, ajan yalnızca bağlantının adını ve komutun çıktısını görür. Bir bağlantıyı ilk kullanmak istediğinde sorulur: Evet / Hayır, istersen “her zaman hatırla”. Salt okunur bağlantılar korunur; DROP, TRUNCATE ve WHERE’siz UPDATE/DELETE her seferinde ayrıca sorulur. Kararları bağlantının düzenleme penceresinden değiştirebilir, özelliği Ayarlar’dan kapatabilirsin.', try: () => openSettings() },
+        { icon: 'fa-solid fa-diagram-project', title: 'Workflow ayrıntıları', text: 'Ajan panelinde bir workflow’a tıklayınca oturumuna geçilir ve ayrıntı penceresi açılır: fazlar, her fazdaki ajanlar, model, token, süre, ajanın o an ne yaptığı; biten ajanların sonucu ve commit’leri. Pencere açıkken canlı güncellenir.' },
+        { icon: 'fa-solid fa-star', title: 'Favori projeler', text: 'Karşılama ekranında ve Proje Başlat panelinde projeyi yıldızla; favoriler listenin başında durur. Yeni eklenen proje de artık oturumu olmadığı için en alta düşmüyor.', try: () => showPanel('side').then(() => openStartPanel()) },
+      ],
+      small: ['Bir oturumun sekmesine bakınca o oturumun bildirimleri zildeki listeden de kalkıyor.', 'Ajan panelinde workflow’lar “Workflow” yerine kendi adıyla görünüyor.', 'Proje altındaki git satırı dar panelde taşmıyor.'],
+    },
+    {
       id: '2026-11-20b', title: 'Sürüm 0.8.1', date: '20 Kasım 2026',
       items: [
         { icon: 'fa-solid fa-folder-plus', title: 'Yeni proje ekleme penceresi', text: 'Klasörü sürükle-bırak, seç ya da yolunu yapıştır. Claude’un çalıştığı klasörler aranabilir listede; art arda birkaç tane ekleyebilirsin. IDE gezgininde proje seçicinin yanındaki + ile de açılır.', try: () => openDiscover() },
