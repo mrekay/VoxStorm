@@ -15,7 +15,7 @@ const CODEX_HOME = () => process.env.CODEX_HOME || path.join(os.homedir(), '.cod
 const SESSIONS = () => path.join(CODEX_HOME(), 'sessions');
 const ID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 // PreToolUse is left out: nothing needs it, and every hook costs a shell start
-const EVENTS = ['SessionStart', 'UserPromptSubmit', 'PermissionRequest', 'PostToolUse', 'Stop'];
+const EVENTS = ['SessionStart', 'UserPromptSubmit', 'PermissionRequest', 'PreToolUse', 'PostToolUse', 'SubagentStart', 'SubagentStop', 'Stop'];
 // Codex writes Windows folders as \\?\C:\…
 const cleanPath = p => String(p || '').replace(/^\\\\\?\\/, '');
 const samePath = (a, b) => {

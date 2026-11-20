@@ -530,11 +530,21 @@ api.on('hook', ev => {
 
 /* Codex CLI hook events (main.js tags them vs_agent/vs_pty). The terminal id finds the tab even
    before the session id is known; SessionStart (or any later event) brings the session id. */
+// Codex runs most commands to completion in a moment; one still going after this long is shown
+// in the agents list as a background terminal until its PostToolUse arrives
+const CX_TERM_SHOW = 4000;
+const shownAgents = () => S.agents.filter(a => a.kind !== 'term' || (Date.now() - a.t >= CX_TERM_SHOW && (tabById(a.tabId) || {}).status !== 'waiting'));
 function codexHook(ev) {
   const t = (ev.vs_pty && tabById(ev.vs_pty)) || tabBySession(ev.session_id);
   if (!t || t.agent !== 'codex') return;
-  if (ev.session_id && t.sessionId !== ev.session_id) { t.sessionId = ev.session_id; saveOpenTabs(); }
   const name = ev.hook_event_name, input = ev.tool_input || {};
+  // a subagent shares the terminal: its own session id must not replace the tab's, and only its
+  // commands matter here (its start and end arrive from the parent as SubagentStart / SubagentStop)
+  if (t.cxKids && t.cxKids.has(ev.session_id)) {
+    if (name === 'PreToolUse' && ev.tool_name === 'Bash' && ev.tool_use_id) { addAgent(t, 'term', input.command || 'Komut', ev.tool_use_id); setTimeout(renderAll, CX_TERM_SHOW + 100); }
+    else if (name === 'PostToolUse' && ev.tool_use_id) S.agents = S.agents.filter(x => !(x.kind === 'term' && x.toolUseId === ev.tool_use_id));
+    return renderAll();
+  } else if (ev.session_id && t.sessionId !== ev.session_id) { t.sessionId = ev.session_id; saveOpenTabs(); }
   const where = () => `${t.title} · ${(proj(t.projectId) || {}).name || ''}`;
   if (name === 'SessionStart' && t.pendingPrompt) sendPendingPrompt(t);
   else if (name === 'UserPromptSubmit') {
@@ -545,11 +555,31 @@ function codexHook(ev) {
     const what = input.command || input.file_path || toolSummary(input);
     addPending(t, { kind: 'permission', agent: 'codex', q: input.description || 'Codex izin istiyor', detail: (ev.tool_name ? ev.tool_name + ': ' : '') + String(what || '').slice(0, 600) });
     notify('decision', 'Codex izin istiyor', `${t.title}: ${input.description || what || ''}`, t.id);
+  } else if (name === 'PreToolUse') {
+    const tool = String(ev.tool_name || '');
+    // a shell command: listed only if it is still running a few seconds later (a background terminal)
+    if (tool === 'Bash' && ev.tool_use_id) {
+      addAgent(t, 'term', input.command || 'Komut', ev.tool_use_id);
+      setTimeout(renderAll, CX_TERM_SHOW + 100);
+    } else if (/spawn_agent$/.test(tool)) (t.cxSpawn = t.cxSpawn || []).push(input.task_name || input.agent_type || '');
+  } else if (name === 'SubagentStart') {
+    if (ev.agent_id) (t.cxKids = t.cxKids || new Set()).add(ev.agent_id);
+    const q = t.cxSpawn || [];
+    const n = String(q.shift() || '').replace(/^\/?root\//, '').replace(/[_-]+/g, ' ').trim() || 'Alt ajan';
+    S.agents.push({ id: 'a' + (seq++), tabId: t.id, sessionId: t.sessionId, kind: 'subagent', agent: 'codex', agentId: ev.agent_id, name: shorten(n, 80), type: ev.agent_type && ev.agent_type !== 'default' ? ev.agent_type : '', t: Date.now() });
+    notify('subagent', 'Alt ajan açıldı', `${shorten(n, 60)} · ${t.title}`, t.id);
+  } else if (name === 'SubagentStop') {
+    const a = S.agents.find(x => x.tabId === t.id && x.kind === 'subagent' && x.agentId === ev.agent_id);
+    if (a) { S.agents = S.agents.filter(x => x !== a); notify('subagent', 'Alt ajan bitti', `${shorten(a.name, 60)} · ${t.title}`, t.id); }
   } else if (name === 'PostToolUse') {
     clearPending(t);
+    if (ev.tool_use_id) S.agents = S.agents.filter(x => !(x.kind === 'term' && x.toolUseId === ev.tool_use_id));
     if (t.status === 'waiting' || t.status === 'idle' || t.status === 'done') t.status = 'running';
   } else if (name === 'Stop') {
     clearPending(t);
+    // a turn's end leaves no command or subagent of it running that we could still hear about
+    S.agents = S.agents.filter(x => x.tabId !== t.id);
+    t.cxSpawn = [];
     const was = t.status;
     t.status = 'done';
     if (was === 'running' || was === 'waiting') notify('done', 'İş bitti' + (addr() ? ', ' + addr() : ''), where(), t.id);
@@ -985,11 +1015,17 @@ function renderQueue() {
       ${d.kind === 'question' && (d.multi || d.more) ? `<div class="card-d">${d.options.map(esc).join('\n')}</div>` : ''}
       <div class="acts">${acts}</div></div>`;
   }).join('') : '<div class="q-empty">Bekleyen karar yok. Bir oturum izin, plan onayı ya da cevap isteyince burada görünür.</div>';
-  $('#agents').innerHTML = S.agents.length ? S.agents.map(a => {
+  const ags = shownAgents();
+  $('#agents').innerHTML = ags.length ? ags.map(a => {
     const t = tabById(a.tabId) || {};
-    const tip = a.kind === 'subagent' ? `${a.name}${a.type ? ' · ' + a.type : ''}${a.bg ? ' · arka planda' : ''}\nKonuşmasını açmak için tıkla` : `${a.name}\nOturuma gitmek için tıkla`;
-    return `<button class="agent-row" ${a.kind === 'subagent' ? `data-agent="${a.id}"` : `data-tab="${a.tabId}"`} title="${esc(tip)}"><span class="k ${a.kind}">${a.kind === 'subagent' ? 'Ajan' : 'Workflow'}</span><span class="n">${esc(a.name)}</span><span class="s">${esc(t.title || '')}</span></button>`;
-  }).join('') : '<div class="none">Şu an çalışan alt ajan ya da workflow yok.</div>';
+    // a Codex subagent's conversation is not in Claude's format: its row leads to the session instead
+    const view = a.kind === 'subagent' && a.agent !== 'codex';
+    const tip = a.kind === 'term' ? `Arka planda çalışan komut:\n${a.name}\nOturuma gitmek için tıkla`
+      : view ? `${a.name}${a.type ? ' · ' + a.type : ''}${a.bg ? ' · arka planda' : ''}\nKonuşmasını açmak için tıkla`
+      : `${a.name}${a.type ? ' · ' + a.type : ''}\nOturuma gitmek için tıkla`;
+    const label = a.kind === 'subagent' ? 'Ajan' : a.kind === 'term' ? 'Terminal' : 'Workflow';
+    return `<button class="agent-row" ${view ? `data-agent="${a.id}"` : `data-tab="${a.tabId}"`} title="${esc(tip)}"><span class="k ${a.kind}">${label}</span><span class="n">${esc(a.name)}</span><span class="s">${esc(t.title || '')}</span></button>`;
+  }).join('') : '<div class="none">Şu an çalışan alt ajan, workflow ya da arka plan komutu yok.</div>';
 }
 /* The usage view has two modes: tokens counted from the session logs on this machine, or the plan
    limits as Claude Code's /usage shows them (percent of the weekly allowance, when it resets). */
@@ -1079,7 +1115,7 @@ function renderStatus() {
   const claudeOk = INFO && INFO.claude;
   const u = S.usage;
   const usageChip = u ? `<button class="sb-chip" data-report="1" title="Bu hafta · aylık rapor için tıkla (Ctrl+Shift+R)"><i class="fa-solid fa-chart-column"></i> ${fmtTok(u.total)} token${u.cost != null ? ' · ≈ ' + fmtUsd(u.cost) : ''}</button>` : '';
-  $('#statusbar').innerHTML = `<span><b>${running}</b> çalışıyor</span><span><b>${pendingCount()}</b> karar bekliyor</span>${S.live.length ? `<span title="VoxStorm dışında açık Claude oturumları"><b>${S.live.length}</b> dışarıda</span>` : ''}<span><b>${S.agents.length}</b> ajan / workflow</span><span><b>${S.tabs.filter(t => !t.exited && t.kind !== 'agent').length}</b> açık terminal</span>`
+  $('#statusbar').innerHTML = `<span><b>${running}</b> çalışıyor</span><span><b>${pendingCount()}</b> karar bekliyor</span>${S.live.length ? `<span title="VoxStorm dışında açık Claude oturumları"><b>${S.live.length}</b> dışarıda</span>` : ''}<span><b>${shownAgents().length}</b> ajan / workflow</span><span><b>${S.tabs.filter(t => !t.exited && t.kind !== 'agent').length}</b> açık terminal</span>`
     + (window.pluginHost ? pluginHost.statusHtml() : '') + `<span style="margin-left:auto"></span>${usageChip}`
     + `<button class="sb-chip" data-settab="claude" title="Yeni Claude oturumlarının varsayılanları · değiştirmek için tıkla"><i class="fa-solid fa-sliders"></i> ${esc(claudeSummary())}</button>`
     + `<span class="${claudeOk ? '' : 'warn'}">${claudeOk ? 'Claude Code bağlı' : 'claude komutu bulunamadı'} · bildirim portu ${INFO ? INFO.hookPort : '-'}</span>`

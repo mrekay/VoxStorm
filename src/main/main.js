@@ -915,7 +915,7 @@ function startHookServer() {
         // Codex hooks: /hook?agent=codex&pty=<terminal id> (the terminal is known before the session id)
         try { const q = new URL(req.url, 'http://x').searchParams; if (q.get('agent') === 'codex') { ev.vs_agent = 'codex'; ev.vs_pty = q.get('pty') || ''; } } catch (_) {}
         if (ev.hook_event_name === 'UserPromptSubmit' && ev.prompt) learnAddress(ev.prompt);
-        if (ev.hook_event_name === 'SubagentStop') { try { enrichSubagentStop(ev); } catch (_) {} }
+        if (ev.hook_event_name === 'SubagentStop' && !ev.vs_agent) { try { enrichSubagentStop(ev); } catch (_) {} }
         send('hook', ev);
       });
     });

@@ -255,6 +255,7 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
 .agent-row .k{font-size:10.5px;font-weight:600;text-transform:uppercase;letter-spacing:.04em;padding:1px 6px;border-radius:4px;flex:none}
 .agent-row .k.subagent{background:var(--violet-soft);color:var(--violet)}
 .agent-row .k.workflow{background:var(--accent-soft);color:var(--accent)}
+.agent-row .k.term{background:var(--hover);color:var(--muted)}
 .agent-row .n{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .agent-row .s{color:var(--muted);font-size:11px;flex:none;max-width:90px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .agents .none{padding:4px 12px 12px;color:var(--muted);font-size:12px}

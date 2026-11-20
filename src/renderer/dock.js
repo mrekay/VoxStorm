@@ -214,7 +214,7 @@ function dockRenderBar(D, side) {
     + hidden.map(k => { const inf = dockInfo(k); return `<button class="act-btn off" data-dact="${dockEsc(k)}" title="${dockEsc(inf.name)} (kapalı · göstermek için tıkla)"><i class="${dockEsc(inf.icon)}"></i></button>`; }).join('');
 }
 function renderPanelBadges() {
-  const n = typeof pendingCount === 'function' ? pendingCount() : 0, a = S && S.agents ? S.agents.length : 0;
+  const n = typeof pendingCount === 'function' ? pendingCount() : 0, a = typeof shownAgents === 'function' ? shownAgents().length : 0;
   document.querySelectorAll('[data-badge="queue"]').forEach(b => { b.hidden = !n; b.textContent = n; b.classList.add('warn'); });
   document.querySelectorAll('[data-badge="agents"]').forEach(b => { b.hidden = !a; b.textContent = a; });
 }
