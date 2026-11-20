@@ -292,7 +292,7 @@ function imItems(id) {
   }
   if (id === 'term') return [
     E('Yeni Claude oturumu', 'fa-solid fa-robot', '', () => imTerminal('claude'), { dis: !hasProj }),
-    E('Yeni Codex oturumu', 'fa-brands fa-openai', '', () => imTerminal('claude', 'codex'), { dis: !hasProj || !(INFO && INFO.codex) }),
+    ...(INFO && INFO.codex ? [E('Yeni Codex oturumu', 'fa-brands fa-openai', '', () => imTerminal('claude', 'codex'), { dis: !hasProj })] : []),
     // this system's shells: PowerShell / Komut İstemi / Git Bash on Windows, zsh / bash elsewhere
     ...Object.keys(SHELLS).map(k => E('Yeni ' + SHELLS[k].name, k === 'bash' && IS_WIN ? 'fa-brands fa-git-alt' : 'fa-solid fa-terminal', '', () => imTerminal('shell', k), { dis: !hasProj })),
     '-',

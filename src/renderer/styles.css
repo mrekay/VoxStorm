@@ -1266,3 +1266,4 @@ html.is-mac.is-fullscreen .titlebar .tb-left{padding-left:10px}
 .days.codex .day i{background:color-mix(in srgb,#10a37f 45%,var(--line))}
 .days.codex .day.today i{background:#10a37f}
 .plan-src{margin-top:6px;font-size:11.5px}
+.seg button.dis{opacity:.45;cursor:not-allowed}

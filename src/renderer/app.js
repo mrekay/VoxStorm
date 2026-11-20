@@ -80,9 +80,9 @@ function codexSummary() {
   return parts.join(' · ');
 }
 function agentPickHtml() {
-  const cur = (CFG.settings.defaultAgent === 'codex') ? 'codex' : 'claude';
+  const cur = defaultAgent(); // Codex chosen but not installed: Claude is what is used
   return `<h4>Varsayılan yapay zekâ</h4>
-    <div class="seg"><button class="${cur === 'claude' ? 'on' : ''}" data-defagent="claude"><i class="fa-brands fa-claude"></i> Claude</button><button class="${cur === 'codex' ? 'on' : ''}" data-defagent="codex" ${INFO.codex ? '' : 'disabled title="Codex CLI kurulu değil"'}><i class="fa-brands fa-openai"></i> Codex</button></div>
+    <div class="seg"><button class="${cur === 'claude' ? 'on' : ''}" data-defagent="claude"><i class="fa-brands fa-claude"></i> Claude</button><button class="${cur === 'codex' ? 'on' : ''}${INFO.codex ? '' : ' dis'}" data-defagent="codex" ${INFO.codex ? '' : 'aria-disabled="true" title="Codex kurulu değil. Kurmak için: npm i -g @openai/codex, ardından codex login. Kurduktan sonra VoxStorm’u yeniden başlat."'}><i class="fa-brands fa-openai"></i> Codex</button></div>
     <p class="set-note">Ctrl+Shift+N, Proje Başlat ve projeye tıklayınca açılan yeni oturumlar bununla başlar. “+ Oturum ▾” menüsünden ikisini de ayrıca seçebilirsin; Codex için kısayol Ctrl+Shift+X.</p>`;
 }
 // "Claude'a sor" becomes "Codex'e sor" when Codex is the default (IDE, DB mode)
@@ -995,7 +995,7 @@ function renderQueue() {
    limits as Claude Code's /usage shows them (percent of the weekly allowance, when it resets). */
 const usageMode = () => ((CFG && CFG.settings.usageMode) === 'plan' ? 'plan' : 'tokens');
 // whose usage the view shows: Claude or Codex, one at a time (settings.usageAgent)
-const usageAgent = () => ((CFG && CFG.settings.usageAgent) === 'codex' ? 'codex' : 'claude');
+const usageAgent = () => ((CFG && CFG.settings.usageAgent) === 'codex' && INFO && INFO.codex ? 'codex' : 'claude');
 const PLAN = { data: null, loading: false };
 function loadPlan(force) {
   if (PLAN.loading) return;
@@ -1056,6 +1056,7 @@ function renderUsageView() {
     mb.setAttribute('aria-pressed', String(plan));
   }
   const ag = usageAgent();
+  document.querySelectorAll('.usage-ai').forEach(g => { g.hidden = !(INFO && INFO.codex); }); // Codex not installed: no switch
   document.querySelectorAll('[data-usageai]').forEach(b => { const on = b.dataset.usageai === ag; b.classList.toggle('on', on); b.setAttribute('aria-pressed', String(on)); });
   const cxu = S.usage && S.usage.codex;
   if (usageMode() === 'plan') return ag === 'codex' ? renderCodexPlan(cxu) : renderPlanUsage();
@@ -2229,7 +2230,7 @@ function openNewMenu(btn, pid, withHistory) {
   m.innerHTML = `<button data-newkind="claude" data-pid="${pid}"><span class="mi"><i class="mic fa-solid fa-terminal"></i>Claude oturumu</span><code class="ell" title="${esc(claudeSummary())}">${esc(claudeSummary())}</code></button>`
     + `<div class="has-sub"><button class="sub-open" type="button"><span class="mi"><i class="mic fa-solid fa-user-shield"></i>İzin moduyla başlat</span><i class="fa-solid fa-chevron-right sub-ar"></i></button>`
     + `<div class="sub">${QUICK_MODES.map(([k, l]) => `<button data-newkind="claude" data-pm="${k}" data-pid="${pid}" class="${k === 'bypassPermissions' ? 'danger' : ''}"><span>${l}</span><code>${k}</code></button>`).join('')}</div></div>`
-    + `<button data-newkind="codex" data-pid="${pid}" title="${INFO.codex ? 'OpenAI Codex CLI oturumu (Ctrl+Shift+X)' : 'Codex CLI bulunamadı: npm i -g @openai/codex ile kurulabilir'}"><span class="mi"><i class="mic fa-brands fa-openai"></i>Codex oturumu</span><code class="ell" title="${esc(codexSummary())}">${INFO.codex ? esc(codexSummary()) : 'kurulu değil'}</code></button>`
+    + (INFO.codex ? `<button data-newkind="codex" data-pid="${pid}" title="OpenAI Codex CLI oturumu (Ctrl+Shift+X)"><span class="mi"><i class="mic fa-brands fa-openai"></i>Codex oturumu</span><code class="ell" title="${esc(codexSummary())}">${esc(codexSummary())}</code></button>` : '')
     + `<div class="sep"></div>`
     + Object.keys(SHELLS).map(k => `<button data-newkind="${k}" data-pid="${pid}"><span class="mi">${SHELL_ICONS[k]}${SHELLS[k].name}</span><code>${SHELLS[k].exe}</code></button>`).join('');
   if (withHistory) {
@@ -2444,8 +2445,7 @@ function renderSettings() {
       <p class="set-note">Claude Code, bu süreden eski oturum kayıtlarını siler; silinen oturumlar geçmişte ve proje listesinde görünmez. Bu, <code>~/.claude/settings.json</code> içindeki <code>cleanupPeriodDays</code> ayarıdır; VoxStorm dışında açtığın oturumlar için de geçerlidir. Daha önce silinenleri geri getirmez.</p>`;
   } {
     const c = CFG.settings.codex || {};
-    h3 = (INFO.codex ? '' : '<p class="set-warn">Codex CLI bulunamadı. Kurmak için: <code>npm i -g @openai/codex</code>, sonra bir terminalde <code>codex login</code>. Kurduktan sonra VoxStorm’u yeniden başlat.</p>')
-      + `<h4>Varsayılan model</h4>
+    h3 = !INFO.codex ? '<p class="set-note">Codex kurulu değil.</p>' : `<h4>Varsayılan model</h4>
       <input type="text" id="xModel" spellcheck="false" placeholder="Boş: Codex’in varsayılanı (ör. gpt-6.2-sol)" value="${esc(c.model || '')}">
       <h4>Akıl yürütme eforu</h4>
       <div class="seg">${CODEX_EFFORTS.map(([k, l]) => `<button class="${(c.effort || '') === k ? 'on' : ''}" data-xeffort="${k}">${l}</button>`).join('')}</div>
@@ -2644,7 +2644,7 @@ function bindEvents() {
   });
   // Codex settings and the default AI
   document.addEventListener('click', e => {
-    const b = e.target.closest('#setBody [data-defagent],#setBody [data-xeffort],#setBody [data-xmode],#setBody [data-xset]'); if (!b || b.disabled) return;
+    const b = e.target.closest('#setBody [data-defagent],#setBody [data-xeffort],#setBody [data-xmode],#setBody [data-xset]'); if (!b || b.disabled || b.getAttribute('aria-disabled') === 'true') return;
     const d = b.dataset, c = CFG.settings.codex || {};
     const done = () => { renderSettings(); renderStatus(); };
     if (d.defagent) setCfg({ settings: { defaultAgent: d.defagent } }).then(done);
@@ -2918,7 +2918,7 @@ const SHORTCUTS = [
   { group: 'Paneller', keys: 'Ctrl+Shift+U', label: 'Haftalık kullanım paneli', run: () => togglePanel('usage') },
   { group: 'Paneller', keys: 'Ctrl+Shift+J', label: 'Aktif ajanlar bölümü', run: () => togglePanel('agents') },
   { group: 'Terminaller', keys: 'Ctrl+Shift+N', label: 'Yeni oturum, varsayılan yapay zekâyla (seçili proje)', run: () => { const p = projectHere(); if (p) openTerminal({ kind: 'claude', projectId: p }); } },
-  { group: 'Terminaller', keys: 'Ctrl+Shift+X', label: 'Yeni Codex oturumu (seçili proje)', when: () => S.mode === 'claude' || S.mode === 'ide', run: () => { const p = projectHere(); if (!p) return; if (!INFO.codex) { toast('Codex CLI bulunamadı', 'npm i -g @openai/codex ile kurabilirsin'); return; } openTerminal({ kind: 'claude', agent: 'codex', projectId: p }); } },
+  { group: 'Terminaller', keys: 'Ctrl+Shift+X', label: 'Yeni Codex oturumu (seçili proje)', when: () => !!(INFO && INFO.codex) && (S.mode === 'claude' || S.mode === 'ide'), run: () => { const p = projectHere(); if (!p) return; if (!INFO.codex) { toast('Codex CLI bulunamadı', 'npm i -g @openai/codex ile kurabilirsin'); return; } openTerminal({ kind: 'claude', agent: 'codex', projectId: p }); } },
   { group: 'Terminaller', keys: 'Ctrl+Shift+T', label: !IS_WIN ? 'Yeni terminal (seçili proje)' : 'Yeni PowerShell (seçili proje)', run: () => { const p = projectHere(); if (p) openTerminal({ kind: 'shell', shell: DEFAULT_SHELL, projectId: p }); } },
   { group: 'Terminaller', keys: 'Ctrl+Shift+W', label: 'Açık terminali kapat', run: () => { if (S.active) closeTab(S.active); } },
   { group: 'Terminaller', keys: 'Ctrl+Tab', label: 'Sonraki terminal', run: () => cycleTabs(1) },
