@@ -15,6 +15,7 @@
   "scripts": {
     "start": "electron .",
     "dist": "node scripts/make-icon.js && electron-builder --win",
+    "pack": "node scripts/make-icon.js && electron-builder --win --dir",
     "dist:mac": "node scripts/make-icon.js --size 1024 && electron-builder --mac",
     "dist:linux": "node scripts/make-icon.js --size 512 && electron-builder --linux --x64"
   },
