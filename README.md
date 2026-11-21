@@ -2,7 +2,7 @@
 
 Claude Code ve Codex oturumlarını tek pencereden yöneten masaüstü uygulaması. IDE, veritabanı, SSH, Docker ve git aynı yerde; üstelik Claude ve Codex de VoxStorm'u kullanabiliyor: dosyayı senin önünde açar, değişikliği gösterip onay ister, soru sorar, iş bitince haber verir.
 
-Windows, macOS ve Linux'ta çalışır.
+Windows, macOS ve Linux'ta çalışır. Arayüz Türkçe, İngilizce, Almanca, İspanyolca ve Fransızca. · *English: [README.en.md](README.en.md)*
 
 > Resmi bir Anthropic ürünü değildir. Bilgisayarında kurulu [Claude Code](https://claude.com/claude-code) (ve/veya OpenAI Codex) ile çalışır.
 
@@ -50,10 +50,24 @@ Haftalık ve aylık token, API fiyatıyla dolar karşılığı, proje ve model k
 
 - **Modlar ayrı pencerede:** AI, IDE, DB ya da SSH'yi kendi penceresine al (ör. ikinci monitör).
 - **Eklentiler:** Kendi panelini, düğmeni, menü öğeni, komutunu ekle; Claude'a araç sun. Rehber: [`src/plugin-sdk/REHBER.md`](src/plugin-sdk/REHBER.md).
-- **Kişiselleştirme:** Hitap, ton ve dil; temalar; dock düzeninde sürüklenip bölünebilen yan paneller; kısayollar (F1).
+- **Kişiselleştirme:** Hitap ve ton; dock düzeninde sürüklenip bölünebilen yan paneller; kısayollar (F1).
 - **Otomatik güncelleme:** Yeni sürüm indirilir, SHA-256 ile doğrulanır, yeniden başlatınca kurulur.
 
 ![Karşılama ekranı](docs/screenshots/karsilama.png)
+
+### Temalar
+
+Dört hazır tema (Gece moru, Deniz, Grafit, Kağıt) ve kendi temaların:
+
+- **Tema düzenleyici:** On temel rengi seç (zemin, yüzey, yazı, vurgu, uyarı, terminal…); ara tonları VoxStorm hesaplar, değişiklik anında önizlenir.
+- **Arka plan resmi:** Bir resim seç; görünürlüğünü ve bulanıklığını ayarla, paneller resmin üstünde yarı saydam durur.
+- **Claude ile tasarla:** "Gün batımı, sıcak turuncu vurgulu koyu tema" de; Claude renkleri seçer, okunur kontrastı gözetir ve temayı kaydedip uygular.
+
+![Tema düzenleyici: renkler ve arka plan resmi](docs/screenshots/tema-duzenleyici.png)
+
+### Dil
+
+Arayüz Türkçe, İngilizce, Almanca, İspanyolca ve Fransızca. İlk açılışta sistem diline göre seçilir; **Ayarlar → Dil**'den değişir. Claude ve Codex'in yanıt dili ayrıca seçilir. Yeni dil eklemek tek bir çeviri dosyası: [`src/i18n/README.md`](src/i18n/README.md).
 
 ## Claude ve Codex VoxStorm'u kullanır
 
@@ -85,6 +99,7 @@ Yaptığı değişikliği git penceresinde gösterip onay isteyebilir. **Geri al
 | `list_connections`, `ssh_exec`, `ssh_upload`, `ssh_download` | Kayıtlı SSH sunucularında komut ve SFTP |
 | `db_query`, `show_query` | Kayıtlı veritabanlarında sorgu; sonucu DB modunda tablo olarak gösterme |
 | `list_plugin_tools`, `call_plugin_tool` | Eklentilerin sunduğu araçlar |
+| `get_theme`, `save_theme` | Arayüz temasını okur; yeni tema tasarlayıp kaydeder ve uygular |
 
 **Güvenlik:** SSH ve veritabanı bağlantılarının adresi, kullanıcı adı ve parolası ajana hiç verilmez; bağlantıyı VoxStorm kurar, ajan yalnızca çıktıyı görür. Bir bağlantı ilk kullanılırken sorulur (istersen "her zaman hatırla"). Salt okunur bağlantılarda yazma engellenir; DROP, TRUNCATE ve WHERE'siz UPDATE/DELETE her seferinde ayrıca sorulur. SSH ve DB araçlarını Ayarlar'dan kapatabilirsin; diğer araçlar açık kalır.
 
@@ -167,5 +182,7 @@ npm run dist:linux # Linux: .AppImage ve .deb (x64); Linux'ta çalıştır
 | `src/renderer/agentapi.js` | Ajan araçlarının pencere tarafı |
 | `src/renderer/termpaths.js` | Terminaldeki yolları tıklanabilir yapar |
 | `src/renderer/ui.js` | Temalı diyaloglar ve ipuçları |
+| `src/renderer/themes.js`, `src/main/themes.js` | Özel temalar, tema düzenleyici, arka plan resimleri |
+| `src/i18n/` | Arayüz dilleri: çekirdek ve çeviri dosyaları; denetim: `node scripts/i18n-check.js` |
 | `src/plugin-sdk/` | Eklenti SDK'sı, örnek eklenti ve rehber |
 | `scripts/make-icon.js` | Uygulama simgesini üretir |
