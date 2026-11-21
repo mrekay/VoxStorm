@@ -26,46 +26,72 @@
 
 const DOCK_SIDES = ['left', 'right'];
 const DOCK_VIEWS = {
-  side: { el: '#sidePanel', name: 'Projeler', icon: 'fa-solid fa-folder-tree', side: 'left', size: 3 },
+  side: { el: '#sidePanel', name: __('Projeler'), icon: 'fa-solid fa-folder-tree', side: 'left', size: 3 },
   // fit: the group is as tall as the view's content by default, and never shorter (it can be made taller)
-  usage: { el: '#usage', name: 'Haftalık kullanım', short: 'Kullanım', icon: 'fa-solid fa-chart-column', side: 'left', size: 1.4, fit: true },
-  queue: { el: '#queuePanel', name: 'Kararını bekleyenler', short: 'Kararlar', icon: 'fa-solid fa-hand', side: 'right', size: 2 },
-  agents: { el: '#agentsPanel', name: "Aktif ajanlar ve workflow'lar", short: 'Ajanlar', icon: 'fa-solid fa-robot', side: 'right', size: 1 },
+  usage: { el: '#usage', name: __('Haftalık kullanım'), short: __('Kullanım'), icon: 'fa-solid fa-chart-column', side: 'left', size: 1.4, fit: true },
+  queue: { el: '#queuePanel', name: __('Kararını bekleyenler'), short: __('Kararlar'), icon: 'fa-solid fa-hand', side: 'right', size: 2 },
+  agents: { el: '#agentsPanel', name: __("Aktif ajanlar ve workflow'lar"), short: __('Ajanlar'), icon: 'fa-solid fa-robot', side: 'right', size: 1 },
 };
-const DOCK_W = { left: 290, right: 310 };
-const dockEsc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-const dockSideEl = side => document.getElementById(side === 'left' ? 'leftCol' : 'rightCol');
-const dockBarEl = side => document.getElementById(side === 'left' ? 'leftRail' : 'rightRail');
+/* IDE mode has a dock of its own (its explorer views around the editor); same code, other views,
+   other elements, its layout kept apart in CFG.settings.ui.ideDock. `avail`: shown only while true. */
+const IDE_DOCK_VIEWS = {
+  ifiles: { el: '#ideFiles', name: __('Dosyalar'), icon: 'fa-regular fa-folder', side: 'left', size: 3 },
+  isearch: { el: '#psearch', name: __('Projede ara'), short: __('Ara'), icon: 'fa-solid fa-magnifying-glass', side: 'left', size: 2 },
+  idb: { el: '#idbSide', name: __('Veritabanı'), short: 'DB', icon: 'fa-solid fa-database', side: 'left', size: 2 },
+  iplug: { el: '#plugSideIde', name: __('Eklentiler'), icon: 'fa-solid fa-puzzle-piece', side: 'left', size: 1.5, avail: el => !!el && !el.hidden },
+};
+const DOCK_CTX = {
+  claude: {
+    key: 'claude', root: '#claudeView', center: '#claudeView .center', cfg: 'dock', views: DOCK_VIEWS, plugins: true,
+    ids: { left: 'leftCol', right: 'rightCol', lrail: 'leftRail', rrail: 'rightRail', park: 'dockPark', peek: 'dockPeek' },
+    W: { left: 290, right: 310 }, def: { left: [['side'], ['usage']], right: [['queue'], ['agents']] },
+  },
+  ide: {
+    key: 'ide', root: '#ideBody', center: '#ideView .editor', cfg: 'ideDock', views: IDE_DOCK_VIEWS, plugins: false,
+    ids: { left: 'ideLeftCol', right: 'ideRightCol', lrail: 'ideLeftRail', rrail: 'ideRightRail', park: 'ideDockPark', peek: 'ideDockPeek' },
+    W: { left: 270, right: 300 }, def: { left: [['ifiles', 'isearch', 'idb'], ['iplug']], right: [] },
+  },
+};
+let DK = DOCK_CTX.claude; // the dock of the mode in view (dockUse)
 let DOCK_PEEK = ''; // the unpinned (auto-hidden) view sliding over the terminal right now
 let DOCK_SIG = '';
+function dockUse(mode) {
+  const n = DOCK_CTX[(mode || (typeof S !== 'undefined' && S.mode)) === 'ide' ? 'ide' : 'claude'];
+  if (n !== DK) { DK = n; DOCK_PEEK = ''; DOCK_SIG = ''; }
+  return DK;
+}
+const dockEsc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const dockSideEl = side => document.getElementById(side === 'left' ? DK.ids.left : DK.ids.right);
+const dockBarEl = side => document.getElementById(side === 'left' ? DK.ids.lrail : DK.ids.rrail);
+const dockRoot = () => document.querySelector(DK.root);
 
 /* ---------- views ---------- */
-function dockPlugSec(k) { return [...document.querySelectorAll('#claudeView .psec[data-maxkey]')].find(x => x.dataset.maxkey === k) || null; }
+function dockPlugSec(k) { return DK.plugins ? [...document.querySelectorAll('#claudeView .psec[data-maxkey]')].find(x => x.dataset.maxkey === k) || null : null; }
 // a view that can show right now: built-in, or a plugin section that is loaded and meant for the project in view
-function dockAvail(k) { if (DOCK_VIEWS[k]) return true; const s = dockPlugSec(k); return !!(s && !s.hidden); }
+function dockAvail(k) { const v = DK.views[k]; if (v) return !v.avail || v.avail($(v.el)); const s = dockPlugSec(k); return !!(s && !s.hidden); }
 function dockInfo(k) {
-  if (DOCK_VIEWS[k]) { const v = DOCK_VIEWS[k]; return { el: $(v.el), name: v.name, short: v.short || v.name, icon: v.icon, side: v.side, size: v.size }; }
+  if (DK.views[k]) { const v = DK.views[k]; return { el: $(v.el), name: v.name, short: v.short || v.name, icon: v.icon, side: v.side, size: v.size }; }
   const s = dockPlugSec(k), t = s && s.querySelector('.psec-t'), i = t && t.querySelector('i');
-  const name = t ? t.textContent.trim() : 'Eklenti';
+  const name = t ? t.textContent.trim() : __('Eklenti');
   return { el: s, name, short: name, icon: i ? i.className : 'fa-solid fa-puzzle-piece', side: (window.pluginHost && pluginHost.defaultCol && pluginHost.defaultCol(k)) || 'right', size: 1.5, plugin: true };
 }
-const dockKnown = () => [...Object.keys(DOCK_VIEWS), ...[...document.querySelectorAll('#claudeView .psec[data-maxkey]')].map(x => x.dataset.maxkey)];
+const dockKnown = () => [...Object.keys(DK.views), ...(DK.plugins ? [...document.querySelectorAll('#claudeView .psec[data-maxkey]')].map(x => x.dataset.maxkey) : [])];
 
 /* ---------- state ---------- */
 function dockDefault() {
-  const side = (s, groups) => ({ open: true, cols: [{ w: DOCK_W[s], max: '', groups: groups.map(v => ({ views: [v], active: v, size: DOCK_VIEWS[v].size })) }] });
-  return { left: side('left', ['side', 'usage']), right: side('right', ['queue', 'agents']), hidden: [], auto: [] };
+  const side = s => ({ open: true, cols: DK.def[s].length ? [{ w: DK.W[s], max: '', groups: DK.def[s].map(vs => ({ views: vs.slice(), active: vs[0], size: DK.views[vs[0]].size })) }] : [] });
+  return { left: side('left'), right: side('right'), hidden: [], auto: [] };
 }
 // a clean copy of the stored layout: known shape, no duplicates, every known view placed or hidden
 function dockState() {
-  const raw = (CFG && CFG.settings.ui && CFG.settings.ui.dock) || null;
+  const raw = (CFG && CFG.settings.ui && CFG.settings.ui[DK.cfg]) || null;
   const D = raw ? JSON.parse(JSON.stringify(raw)) : dockDefault();
   const seen = new Set();
   D.hidden = (Array.isArray(D.hidden) ? D.hidden : []).filter(k => typeof k === 'string' && !seen.has(k) && seen.add(k));
   for (const s of DOCK_SIDES) {
     const sd = D[s] = Object.assign({ open: true, cols: [] }, D[s] || {});
     sd.cols = (Array.isArray(sd.cols) ? sd.cols : []).map(c => ({
-      w: Math.max(180, Math.min(700, +c.w || DOCK_W[s])), max: c.max || '',
+      w: Math.max(180, Math.min(700, +c.w || DK.W[s])), max: c.max || '',
       groups: (Array.isArray(c.groups) ? c.groups : []).map(g => {
         const views = (Array.isArray(g.views) ? g.views : []).filter(k => typeof k === 'string' && !seen.has(k) && seen.add(k));
         return { views, active: views.includes(g.active) ? g.active : views[0], size: +g.size > 0 ? +g.size : 1, folded: !!g.folded, fixed: !!g.fixed };
@@ -77,7 +103,7 @@ function dockState() {
   D.auto = [...new Set(Array.isArray(D.auto) ? D.auto : [])].filter(k => dockFind(D, k));
   return D;
 }
-function dockSave(D) { DOCK_SIG = ''; return setCfg({ settings: { ui: { dock: D } } }).then(() => applyPanels()); }
+function dockSave(D) { DOCK_SIG = ''; const ctx = DK; return setCfg({ settings: { ui: { [ctx.cfg]: D } } }).then(() => { if (ctx.key === 'ide') dockIdeExSync(D); applyPanels(); }); }
 function dockFind(D, k) {
   for (const s of DOCK_SIDES) D[s].cols.forEach((c, ci) => c.groups.forEach((g, gi) => { if (g.views.includes(k)) k = { side: s, ci, gi, col: c, group: g }; }));
   return typeof k === 'object' ? k : null;
@@ -96,7 +122,7 @@ function dockRemove(D, k) {
 // a new group for a view on a side: 'end' = under the others in the innermost column, 'col' = a new full-height column at the window edge
 function dockAddGroup(D, k, side, where) {
   const sd = D[side], g = { views: [k], active: k, size: dockInfo(k).size || 1 };
-  if (where === 'col' || !sd.cols.length) sd.cols.unshift({ w: DOCK_W[side], max: '', groups: [g] });
+  if (where === 'col' || !sd.cols.length) sd.cols.unshift({ w: DK.W[side], max: '', groups: [g] });
   else sd.cols[sd.cols.length - 1].groups.push(g);
 }
 // does the view show right now (side visible, group visible, its tab active)?
@@ -110,6 +136,7 @@ const dockDocked = (D, k) => dockAvail(k) && !D.auto.includes(k);
 /* ---------- render ---------- */
 function applyPanels() {
   if (!CFG) return;
+  dockUse();
   const D = dockState();
   const sig = JSON.stringify([D, DOCK_PEEK, dockKnown().map(k => k + (dockAvail(k) ? 1 : 0))]);
   if (sig !== DOCK_SIG) { DOCK_SIG = sig; dockRender(D); }
@@ -123,8 +150,8 @@ function dockRender(D) {
   const keep = document.activeElement;
   dockActsHome();
   // park every view, then put each back where it belongs
-  let park = document.getElementById('dockPark');
-  if (!park) { park = document.createElement('div'); park.id = 'dockPark'; park.hidden = true; $('#claudeView').appendChild(park); }
+  let park = document.getElementById(DK.ids.park);
+  if (!park) { park = document.createElement('div'); park.id = DK.ids.park; park.hidden = true; dockRoot().appendChild(park); }
   for (const [, el] of dockKnown().map(k => [k, dockInfo(k).el])) { if (el && el.parentElement !== park) park.appendChild(el); if (el) el.classList.add('dock-view'); }
   for (const side of DOCK_SIDES) {
     const sd = D[side], host = dockSideEl(side);
@@ -150,14 +177,14 @@ function dockRender(D) {
         sec.dataset.side = side; sec.dataset.ci = ci; sec.dataset.gi = x.gi;
         sec.style.flex = min ? '0 0 auto' : `${x.g.size} 1 0`;
         // a content-sized view: as tall as its content unless the user made it taller (see dockFit)
-        if (!min && DOCK_VIEWS[active] && DOCK_VIEWS[active].fit) {
+        if (!min && DK.views[active] && DK.views[active].fit) {
           sec.classList.add('dg-fit');
           if (x.g.fixed) sec.dataset.fixed = '1'; else if (!maxed) sec.style.flex = '0 0 auto';
         }
         const tabs = x.views.map(k => { const inf = dockInfo(k); return `<button class="dg-tab ${k === active ? 'on' : ''}" draggable="true" data-dview="${dockEsc(k)}" title="${dockEsc(inf.name)}"><i class="${dockEsc(inf.icon)}"></i><span>${dockEsc(x.views.length > 1 ? inf.short : inf.name)}</span><b class="dg-n" data-badge="${dockEsc(k)}" hidden></b></button>`; }).join('');
-        sec.innerHTML = `<header class="dg-head" draggable="true" data-dview="${dockEsc(active)}"><button class="dg-fold" data-dfold="${dockEsc(active)}" title="${min ? 'Aç' : 'Katla (yerinde kalır)'}" aria-expanded="${!min}"><i class="fa-solid fa-chevron-${min ? 'right' : 'down'}"></i></button><div class="dg-tabs ${x.views.length > 1 ? 'multi' : ''}">${tabs}</div><span class="dg-acts">`
-          + `<button class="ghost icon" data-dpin="${dockEsc(active)}" title="Sabitlendi · otomatik gizlemek için tıkla"><i class="fa-solid fa-thumbtack dg-pin-on"></i></button>`
-          + `<button class="ghost icon" data-dclose="${dockEsc(active)}" title="Kapat"><i class="fa-solid fa-xmark"></i></button></span></header><div class="dg-body"></div>`;
+        sec.innerHTML = `<header class="dg-head" draggable="true" data-dview="${dockEsc(active)}"><button class="dg-fold" data-dfold="${dockEsc(active)}" title="${dockEsc(min ? __('Aç') : __('Katla (yerinde kalır)'))}" aria-expanded="${!min}"><i class="fa-solid fa-chevron-${min ? 'right' : 'down'}"></i></button><div class="dg-tabs ${x.views.length > 1 ? 'multi' : ''}">${tabs}</div><span class="dg-acts">`
+          + `<button class="ghost icon" data-dpin="${dockEsc(active)}" title="${dockEsc(__('Sabitlendi · otomatik gizlemek için tıkla'))}"><i class="fa-solid fa-thumbtack dg-pin-on"></i></button>`
+          + `<button class="ghost icon" data-dclose="${dockEsc(active)}" title="${dockEsc(__('Kapat'))}"><i class="fa-solid fa-xmark"></i></button></span></header><div class="dg-body"></div>`;
         const body = sec.querySelector('.dg-body');
         // (look the elements up before moving them: the group is not in the page yet)
         const els = x.views.map(k => [k, dockInfo(k).el]);
@@ -179,15 +206,15 @@ function dockRender(D) {
 }
 // the auto-hidden view that was clicked: slides over the terminal next to its activity bar
 function dockRenderPeek(D) {
-  let p = document.getElementById('dockPeek');
+  let p = document.getElementById(DK.ids.peek);
   const k = DOCK_PEEK;
   if (!k || !D.auto.includes(k) || !dockAvail(k)) { if (p) p.remove(); DOCK_PEEK = ''; return; }
   const f = dockFind(D, k), inf = dockInfo(k);
-  if (!p) { p = document.createElement('div'); p.id = 'dockPeek'; $('#claudeView').appendChild(p); }
+  if (!p) { p = document.createElement('div'); p.id = DK.ids.peek; dockRoot().appendChild(p); }
   p.className = `dock-peek dock-${f.side}`;
   p.style.width = f.col.w + 'px';
   p.innerHTML = `<section class="dock-group dg-peek" data-side="${f.side}"><header class="dg-head" draggable="true" data-dview="${dockEsc(k)}"><div class="dg-tabs"><button class="dg-tab on" draggable="true" data-dview="${dockEsc(k)}" title="${dockEsc(inf.name)}"><i class="${dockEsc(inf.icon)}"></i><span>${dockEsc(inf.name)}</span><b class="dg-n" data-badge="${dockEsc(k)}" hidden></b></button></div>`
-    + `<span class="dg-acts"><button class="ghost icon" data-dpin="${dockEsc(k)}" title="Otomatik gizli · sabitlemek (yerine geri koymak) için tıkla"><i class="fa-solid fa-thumbtack-slash"></i></button><button class="ghost icon" data-dclose="${dockEsc(k)}" title="Kapat"><i class="fa-solid fa-xmark"></i></button></span></header><div class="dg-body"></div></section>`;
+    + `<span class="dg-acts"><button class="ghost icon" data-dpin="${dockEsc(k)}" title="${dockEsc(__('Otomatik gizli · sabitlemek (yerine geri koymak) için tıkla'))}"><i class="fa-solid fa-thumbtack-slash"></i></button><button class="ghost icon" data-dclose="${dockEsc(k)}" title="${dockEsc(__('Kapat'))}"><i class="fa-solid fa-xmark"></i></button></span></header><div class="dg-body"></div></section>`;
   if (inf.el) { inf.el.classList.remove('dv-off'); p.querySelector('.dg-body').appendChild(inf.el); dockLendActs(p.querySelector('.dock-group'), inf.el); }
 }
 // content-sized groups: never shorter than their content (header + view)
@@ -208,10 +235,10 @@ function dockRenderBar(D, side) {
   const bar = dockBarEl(side), sd = D[side];
   const views = sd.cols.flatMap(c => c.groups.flatMap(g => g.views)).filter(dockAvail);
   const hidden = D.hidden.filter(k => dockAvail(k) && dockInfo(k).side === side);
-  bar.hidden = false;
+  bar.hidden = !views.length && !hidden.length && DK.key === 'ide';
   bar.className = `rail act-bar rail-${side}`;
-  bar.innerHTML = views.map(k => { const inf = dockInfo(k), auto = D.auto.includes(k); return `<button class="act-btn ${dockShowing(D, k) ? 'on' : ''} ${auto ? 'auto' : ''}" draggable="true" data-dact="${dockEsc(k)}" title="${dockEsc(inf.name)}${auto ? ' (otomatik gizli)' : ''}"><i class="${dockEsc(inf.icon)}"></i><b class="rail-n" data-badge="${dockEsc(k)}" hidden></b></button>`; }).join('')
-    + hidden.map(k => { const inf = dockInfo(k); return `<button class="act-btn off" data-dact="${dockEsc(k)}" title="${dockEsc(inf.name)} (kapalı · göstermek için tıkla)"><i class="${dockEsc(inf.icon)}"></i></button>`; }).join('');
+  bar.innerHTML = views.map(k => { const inf = dockInfo(k), auto = D.auto.includes(k); return `<button class="act-btn ${dockShowing(D, k) ? 'on' : ''} ${auto ? 'auto' : ''}" draggable="true" data-dact="${dockEsc(k)}" title="${dockEsc(auto ? __('{name} (otomatik gizli)', { name: inf.name }) : inf.name)}"><i class="${dockEsc(inf.icon)}"></i><b class="rail-n" data-badge="${dockEsc(k)}" hidden></b></button>`; }).join('')
+    + hidden.map(k => { const inf = dockInfo(k); return `<button class="act-btn off" data-dact="${dockEsc(k)}" title="${dockEsc(__('{name} (kapalı · göstermek için tıkla)', { name: inf.name }))}"><i class="${dockEsc(inf.icon)}"></i></button>`; }).join('');
 }
 function renderPanelBadges() {
   const n = typeof pendingCount === 'function' ? pendingCount() : 0, a = typeof shownAgents === 'function' ? shownAgents().length : 0;
@@ -221,6 +248,7 @@ function renderPanelBadges() {
 
 /* ---------- actions ---------- */
 function showPanel(k) {
+  dockUse();
   const D = dockState();
   if (D.auto.includes(k)) { DOCK_PEEK = k; DOCK_SIG = ''; applyPanels(); return Promise.resolve(); }
   if (!dockFind(D, k)) { dockRemove(D, k); dockAddGroup(D, k, dockInfo(k).side, 'end'); }
@@ -231,11 +259,13 @@ function showPanel(k) {
   return dockSave(D);
 }
 function dockHide(k) {
+  dockUse();
   const D = dockState();
   dockRemove(D, k); D.hidden.push(k); dockPrune(D);
   return dockSave(D);
 }
 function dockToggleSide(side) {
+  dockUse();
   const D = dockState();
   D[side].open = !D[side].open;
   DOCK_PEEK = '';
@@ -243,6 +273,7 @@ function dockToggleSide(side) {
 }
 // pin / unpin one view (Visual Studio auto-hide)
 function dockPin(k) {
+  dockUse();
   const D = dockState(), f = dockFind(D, k);
   if (!f) return;
   if (D.auto.includes(k)) { D.auto = D.auto.filter(x => x !== k); f.group.active = k; D[f.side].open = true; }
@@ -252,6 +283,7 @@ function dockPin(k) {
 }
 // activity icon: show the view; clicking the one already showing closes the side
 function dockActivate(k) {
+  dockUse();
   const D = dockState();
   if (D.hidden.includes(k)) return showPanel(k);
   if (D.auto.includes(k)) { DOCK_PEEK = DOCK_PEEK === k ? '' : k; DOCK_SIG = ''; applyPanels(); return Promise.resolve(); }
@@ -260,6 +292,7 @@ function dockActivate(k) {
   return showPanel(k);
 }
 function dockFold(k) {
+  dockUse();
   const D = dockState(), f = dockFind(D, k); if (!f) return;
   const max = f.group.views.includes(f.col.max);
   if (f.col.max) f.col.max = ''; // folding out of full height: back to the normal layout
@@ -267,22 +300,26 @@ function dockFold(k) {
   return dockSave(D);
 }
 function dockToggleMax(k) {
+  dockUse();
   const D = dockState(), f = dockFind(D, k); if (!f) return;
   f.col.max = f.group.views.includes(f.col.max) ? '' : f.group.active;
   f.group.folded = false;
   return dockSave(D);
 }
 function dockMoveSide(k) {
+  dockUse();
   const D = dockState(), f = dockFind(D, k); if (!f) return;
   const to = f.side === 'left' ? 'right' : 'left';
   dockRemove(D, k); dockPrune(D); dockAddGroup(D, k, to, 'end');
   D[to].open = true; DOCK_PEEK = '';
   return dockSave(D);
 }
-function dockReset() { DOCK_PEEK = ''; return setCfg({ settings: { ui: { dock: dockDefault() } } }).then(() => { DOCK_SIG = ''; applyPanels(); }); }
+function dockReset() { DOCK_PEEK = ''; const D = dockDefault(), ctx = DK; return setCfg({ settings: { ui: { [ctx.cfg]: D } } }).then(() => { DOCK_SIG = ''; if (ctx.key === 'ide') dockIdeExSync(D); applyPanels(); }); }
 // the old panel API: 'left' / 'right' = a whole side, otherwise a view
 function togglePanel(name) {
-  if (S.mode === 'ide' && ['side', 'left', 'queue', 'right'].includes(name)) { toolbar(name === 'side' || name === 'left' ? 'ex' : 'panel'); return; }
+  dockUse();
+  // IDE: 'side' / 'left' = the explorer side, 'queue' = the Claude panel under the editor
+  if (S.mode === 'ide') { if (name === 'queue') { toolbar('panel'); return; } if (name === 'side') name = 'left'; if (name === 'left' || name === 'right') return dockToggleSide(name); }
   if (name === 'left' || name === 'right') return dockToggleSide(name);
   const D = dockState();
   return dockShowing(D, name) ? dockHide(name) : showPanel(name);
@@ -299,7 +336,7 @@ function dockTarget(e) {
   const tile = t.closest('#dockHelper [data-dock]');
   if (tile) {
     const [side, where] = tile.dataset.dock.split(':');
-    const host = dockSideEl(side), r = !host.hidden ? rect(host) : null, c = rect($('#claudeView .center'));
+    const host = dockSideEl(side), r = !host.hidden ? rect(host) : null, c = rect($(DK.center));
     let area;
     if (where === 'col') area = r ? { left: side === 'left' ? r.left : r.right - 260, top: r.top, width: 260, height: r.height } : { left: side === 'left' ? c.left : c.right - 280, top: c.top, width: 280, height: c.height };
     else area = r ? { left: r.left, top: r.bottom - r.height / 3, width: r.width, height: r.height / 3 } : { left: side === 'left' ? c.left : c.right - 280, top: c.top + c.height * 2 / 3, width: 280, height: c.height / 3 };
@@ -352,22 +389,23 @@ function dockDragUi(on) {
   document.querySelectorAll('#dockHelper,#grpCompass').forEach(x => x.remove());
   document.body.classList.toggle('dock-dragging', on);
   if (!on) return;
-  const c = $('#claudeView .center');
+  const c = $(DK.center);
   if (c) {
-    const tile = (side, where, label) => `<div class="dk-tile" data-dock="${side}:${where}" title="${label}"><span class="dk-ic ${side} ${where}"><b></b></span><small>${label}</small></div>`;
+    const tile = (side, where, label) => `<div class="dk-tile" data-dock="${side}:${where}" title="${dockEsc(label)}"><span class="dk-ic ${side} ${where}"><b></b></span><small>${dockEsc(label)}</small></div>`;
     const d = document.createElement('div');
     d.id = 'dockHelper';
-    d.innerHTML = `<div class="dk-side">${tile('left', 'col', 'Sola tam boy')}${tile('left', 'end', 'Sol panele')}</div>`
+    d.innerHTML = `<div class="dk-side">${tile('left', 'col', __('Sola tam boy'))}${tile('left', 'end', __('Sol panele'))}</div>`
       + '<div class="dk-mid"><i class="fa-solid fa-up-down-left-right"></i></div>'
-      + `<div class="dk-side">${tile('right', 'col', 'Sağa tam boy')}${tile('right', 'end', 'Sağ panele')}</div>`;
+      + `<div class="dk-side">${tile('right', 'col', __('Sağa tam boy'))}${tile('right', 'end', __('Sağ panele'))}</div>`;
     c.appendChild(d);
   }
   const cp = document.createElement('div');
   cp.id = 'grpCompass'; cp.hidden = true;
-  cp.innerHTML = ['top', 'left', 'center', 'right', 'bottom'].map(z => `<div class="gc-t gc-${z}" data-zone="${z}" title="${{ top: 'Üstüne böl', left: 'Soluna böl', center: 'Sekme olarak ekle', right: 'Sağına böl', bottom: 'Altına böl' }[z]}"><b></b></div>`).join('');
+  cp.innerHTML = ['top', 'left', 'center', 'right', 'bottom'].map(z => `<div class="gc-t gc-${z}" data-zone="${z}" title="${dockEsc({ top: __('Üstüne böl'), left: __('Soluna böl'), center: __('Sekme olarak ekle'), right: __('Sağına böl'), bottom: __('Altına böl') }[z])}"><b></b></div>`).join('');
   document.body.appendChild(cp);
 }
 function dockDrop(k, t) {
+  dockUse();
   const D = dockState();
   let side = t.side;
   if (t.op === 'col' || t.op === 'end') { dockRemove(D, k); dockPrune(D); dockAddGroup(D, k, side, t.op); }
@@ -398,6 +436,7 @@ function dockDrop(k, t) {
 
 /* ---------- resizing: column width and the split between two groups ---------- */
 function dockResizeStart(e, h) {
+  dockUse();
   e.preventDefault();
   const D = dockState(), side = h.dataset.side, ci = +h.dataset.ci, col = D[side].cols[ci];
   if (!col) return;
@@ -430,19 +469,21 @@ function dockResizeStart(e, h) {
 
 /* ---------- right-click menu (shown in the shared #ideMenu) ---------- */
 function dockMenuHtml(ctx, it, sep) {
+  dockUse();
   const D = dockState(), f = dockFind(D, ctx.view);
-  if (!f) return it('dshow', 'fa-solid fa-eye', `${dockEsc(dockInfo(ctx.view).name)} göster`) + sep + it('dreset', 'fa-solid fa-rotate-left', 'Varsayılan düzene dön');
+  if (!f) return it('dshow', 'fa-solid fa-eye', __('{name} göster', { name: dockEsc(dockInfo(ctx.view).name) })) + sep + it('dreset', 'fa-solid fa-rotate-left', dockEsc(__('Varsayılan düzene dön')));
   const sd = D[f.side], max = f.group.views.includes(f.col.max), auto = D.auto.includes(ctx.view);
-  return it('dmax', 'fa-solid ' + (max ? 'fa-down-left-and-up-right-to-center' : 'fa-up-right-and-down-left-from-center'), max ? 'Eski boyutuna döndür' : 'Tam boy')
-    + it('dfold', 'fa-solid ' + (f.group.folded ? 'fa-chevron-down' : 'fa-chevron-up'), f.group.folded ? 'Aç' : 'Katla (yerinde kalır)')
-    + it('dmove', 'fa-solid ' + (f.side === 'left' ? 'fa-arrow-right' : 'fa-arrow-left'), f.side === 'left' ? 'Sağ panele taşı' : 'Sol panele taşı')
-    + it('dclose', 'fa-solid fa-xmark', 'Kapat')
-    + sep + it('dpin', 'fa-solid ' + (auto ? 'fa-thumbtack' : 'fa-thumbtack-slash'), auto ? 'Sabitle (yerine geri koy)' : 'Otomatik gizle')
-    + it('dside', 'fa-solid ' + (f.side === 'left' ? 'fa-angles-left' : 'fa-angles-right'), (f.side === 'left' ? 'Sol' : 'Sağ') + ' paneli kapat', f.side === 'left' ? 'Ctrl+Shift+E' : 'Ctrl+Shift+D')
-    + (D.hidden.length ? sep + D.hidden.filter(dockAvail).map(k => it('dshow:' + k, 'fa-solid fa-eye', `${dockEsc(dockInfo(k).name)} göster`)).join('') : '')
-    + sep + it('dreset', 'fa-solid fa-rotate-left', 'Varsayılan düzene dön');
+  return it('dmax', 'fa-solid ' + (max ? 'fa-down-left-and-up-right-to-center' : 'fa-up-right-and-down-left-from-center'), dockEsc(max ? __('Eski boyutuna döndür') : __('Tam boy')))
+    + it('dfold', 'fa-solid ' + (f.group.folded ? 'fa-chevron-down' : 'fa-chevron-up'), dockEsc(f.group.folded ? __('Aç') : __('Katla (yerinde kalır)')))
+    + it('dmove', 'fa-solid ' + (f.side === 'left' ? 'fa-arrow-right' : 'fa-arrow-left'), dockEsc(f.side === 'left' ? __('Sağ panele taşı') : __('Sol panele taşı')))
+    + it('dclose', 'fa-solid fa-xmark', dockEsc(__('Kapat')))
+    + sep + it('dpin', 'fa-solid ' + (auto ? 'fa-thumbtack' : 'fa-thumbtack-slash'), dockEsc(auto ? __('Sabitle (yerine geri koy)') : __('Otomatik gizle')))
+    + it('dside', 'fa-solid ' + (f.side === 'left' ? 'fa-angles-left' : 'fa-angles-right'), dockEsc(f.side === 'left' ? __('Sol paneli kapat') : __('Sağ paneli kapat')), f.side === 'left' ? 'Ctrl+Shift+E' : 'Ctrl+Shift+D')
+    + (D.hidden.length ? sep + D.hidden.filter(dockAvail).map(k => it('dshow:' + k, 'fa-solid fa-eye', __('{name} göster', { name: dockEsc(dockInfo(k).name) }))).join('') : '')
+    + sep + it('dreset', 'fa-solid fa-rotate-left', dockEsc(__('Varsayılan düzene dön')));
 }
 function dockMenuAction(act, ctx) {
+  dockUse();
   const k = ctx.view, D = dockState(), f = dockFind(D, k);
   if (act === 'dmax') dockToggleMax(k);
   else if (act === 'dfold') dockFold(k);
@@ -478,7 +519,7 @@ function bindDock() {
     const h = e.target.closest('.dc-resize,.dg-split');
     if (h && e.button === 0) { dockResizeStart(e, h); return; }
     // an auto-hidden view slides back when you click elsewhere
-    if (DOCK_PEEK && !e.target.closest('#dockPeek,.act-btn,#ideMenu,.ui-dlg-bg,.ui-tip,#startPanel')) { DOCK_PEEK = ''; DOCK_SIG = ''; applyPanels(); }
+    if (DOCK_PEEK && !e.target.closest('.dock-peek,.act-btn,#ideMenu,.ui-dlg-bg,.ui-tip,#startPanel')) { DOCK_PEEK = ''; DOCK_SIG = ''; applyPanels(); }
   }, true);
   document.addEventListener('keydown', e => { if (e.key === 'Escape' && DOCK_PEEK) { DOCK_PEEK = ''; DOCK_SIG = ''; applyPanels(); } });
   document.addEventListener('dragstart', e => {
@@ -516,3 +557,24 @@ function bindDock() {
   });
 }
 function dockEndDrag() { DDRAG.view = ''; DDRAG.overGroup = null; dockMark(null); dockDragUi(false); }
+
+/* ---------- IDE: the explorer ---------- */
+// IDE.ui.ex ("explorer shown", the Ctrl+Shift+E toggle and older code) is the side the files view is on
+function dockIdeExSync(D) {
+  if (typeof IDE === 'undefined') return;
+  const f = dockFind(D, 'ifiles'), v = !!(f && D[f.side].open && !D.auto.includes('ifiles'));
+  if (IDE.ui.ex !== v) { IDE.ui.ex = v; setCfg({ ide: { ui: { ex: v } } }); }
+}
+function dockIdeExplorer(on) {
+  const prev = DK; dockUse('ide');
+  const D = dockState(), f = dockFind(D, 'ifiles');
+  if (f && D[f.side].open !== !!on) { D[f.side].open = !!on; if (on) f.group.folded = false; dockSave(D); }
+  else if (!f && on) showPanel('ifiles');
+  if (prev.key !== 'ide' && typeof S !== 'undefined' && S.mode !== 'ide') dockUse('claude');
+}
+// show one of the IDE explorer views (files / search / db)
+function dockIdeShow(view) {
+  const k = { files: 'ifiles', search: 'isearch', db: 'idb' }[view] || view;
+  dockUse('ide');
+  return showPanel(k);
+}

@@ -109,22 +109,9 @@
         <button class="tb accent" data-tb="ask" title="Açık dosyayı ya da seçili satırları Claude'a sor"><i class="fa-solid fa-comment-dots"></i><span>Claude'a sor</span></button>
       </div>
     </div>
-    <aside class="explorer" aria-label="Dosya gezgini">
-      <div class="panel-h">Projeler</div>
-      <div class="ex-proj" id="exProj"><div class="ex-proj-row"><select id="ideProjSel" aria-label="Proje"></select><button class="ex-add" id="ideAddProj" title="Proje ekle" aria-label="Proje ekle"><i class="fa-solid fa-plus"></i></button></div><div class="ex-path" id="ideProjPath"></div></div>
-      <div class="ex-bar">
-        <div class="ex-views" role="tablist" aria-label="Gezgin görünümü"><button role="tab" data-exview="files" class="on" aria-selected="true"><i class="fa-regular fa-folder"></i>Dosyalar</button><button role="tab" data-exview="search" aria-selected="false" title="Projede ara (Ctrl+Shift+F)"><i class="fa-solid fa-magnifying-glass"></i>Ara</button><button role="tab" data-exview="db" aria-selected="false" title="Veritabanı bağlantıları"><i class="fa-solid fa-database"></i>DB</button></div>
-        <span class="ex-acts" id="exFileActs"><button class="ghost icon" id="exNewFile" title="Yeni dosya" aria-label="Yeni dosya"><i class="fa-solid fa-file-circle-plus"></i></button><button class="ghost icon" id="exNewDir" title="Yeni klasör" aria-label="Yeni klasör"><i class="fa-solid fa-folder-plus"></i></button><button class="ghost icon" id="exCollapse" title="Tümünü daralt" aria-label="Tüm klasörleri daralt"><i class="fa-solid fa-angles-up"></i></button><button class="ghost icon" id="refreshTree" title="Yenile" aria-label="Dosya listesini yenile"><i class="fa-solid fa-arrows-rotate"></i></button></span>
-      </div>
-      <div class="tree" id="tree" role="tree" aria-label="Dosyalar"></div>
-      <div class="psearch" id="psearch" hidden>
-        <div class="ps-box"><i class="fa-solid fa-magnifying-glass"></i><input id="psIn" placeholder="Projede ara" autocomplete="off" spellcheck="false" aria-label="Projede ara"><span class="ps-opts"><button class="ps-opt" data-psopt="case" title="Büyük / küçük harfe duyarlı" aria-label="Büyük / küçük harfe duyarlı" aria-pressed="false">Aa</button><button class="ps-opt" data-psopt="word" title="Yalnızca tam sözcük" aria-label="Yalnızca tam sözcük" aria-pressed="false"><u>ab</u></button><button class="ps-opt" data-psopt="regex" title="Düzenli ifade (regex)" aria-label="Düzenli ifade" aria-pressed="false">.*</button></span></div>
-        <div class="ps-sum" id="psSum" aria-live="polite"></div>
-        <div class="ps-res" id="psRes"></div>
-      </div>
-      <div class="db idb-side" id="idbSide" hidden></div>
-      <div class="plug-side plug-side-ide" id="plugSideIde" hidden></div>
-    </aside>
+    <div class="ide-body" id="ideBody">
+    <nav class="rail act-bar rail-left" id="ideLeftRail" aria-label="Sol panel"></nav>
+    <div class="dock-side dock-left" id="ideLeftCol"></div>
     <main class="editor">
       <div class="etabs" id="etabs" role="tablist" aria-label="Açık dosyalar"></div>
       <div class="crumb" id="crumb"></div>
@@ -163,6 +150,24 @@
         <div class="term-slot" id="ideSlot"></div>
       </section>
     </main>
+    <div class="dock-side dock-right" id="ideRightCol"></div>
+    <nav class="rail act-bar rail-right" id="ideRightRail" aria-label="Sağ panel"></nav>
+    <!-- IDE explorer views; dock.js (IDE dock) moves each into its place around the editor -->
+    <div id="ideDockPark" hidden>
+    <aside class="explorer ex-files" id="ideFiles" aria-label="Dosyalar">
+      <div class="panel-h"><span class="ph-t">Dosyalar</span> <span class="ph-acts ex-acts" id="exFileActs"><button class="ghost icon" id="exNewFile" title="Yeni dosya" aria-label="Yeni dosya"><i class="fa-solid fa-file-circle-plus"></i></button><button class="ghost icon" id="exNewDir" title="Yeni klasör" aria-label="Yeni klasör"><i class="fa-solid fa-folder-plus"></i></button><button class="ghost icon" id="exCollapse" title="Tümünü daralt" aria-label="Tüm klasörleri daralt"><i class="fa-solid fa-angles-up"></i></button><button class="ghost icon" id="refreshTree" title="Yenile" aria-label="Dosya listesini yenile"><i class="fa-solid fa-arrows-rotate"></i></button></span></div>
+      <div class="ex-proj" id="exProj"><div class="ex-proj-row"><select id="ideProjSel" aria-label="Proje"></select><button class="ex-add" id="ideAddProj" title="Proje ekle" aria-label="Proje ekle"><i class="fa-solid fa-plus"></i></button></div><div class="ex-path" id="ideProjPath"></div></div>
+      <div class="tree" id="tree" role="tree" aria-label="Dosyalar"></div>
+    </aside>
+    <div class="psearch" id="psearch">
+        <div class="ps-box"><i class="fa-solid fa-magnifying-glass"></i><input id="psIn" placeholder="Projede ara" autocomplete="off" spellcheck="false" aria-label="Projede ara"><span class="ps-opts"><button class="ps-opt" data-psopt="case" title="Büyük / küçük harfe duyarlı" aria-label="Büyük / küçük harfe duyarlı" aria-pressed="false">Aa</button><button class="ps-opt" data-psopt="word" title="Yalnızca tam sözcük" aria-label="Yalnızca tam sözcük" aria-pressed="false"><u>ab</u></button><button class="ps-opt" data-psopt="regex" title="Düzenli ifade (regex)" aria-label="Düzenli ifade" aria-pressed="false">.*</button></span></div>
+        <div class="ps-sum" id="psSum" aria-live="polite"></div>
+        <div class="ps-res" id="psRes"></div>
+      </div>
+    <div class="db idb-side" id="idbSide"></div>
+    <div class="plug-side plug-side-ide" id="plugSideIde" hidden></div>
+    </div>
+    </div>
     <div class="qo-bg" id="qoBg" hidden>
       <div class="qo" role="dialog" aria-modal="true" aria-labelledby="qoTitle">
         <div class="qo-title" id="qoTitle" hidden></div>

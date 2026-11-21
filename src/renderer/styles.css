@@ -278,9 +278,10 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
 .statusbar .warn{color:var(--warn)}
 
 /* IDE mode */
-.ide{display:grid;grid-template-columns:260px minmax(0,1fr);grid-template-rows:auto minmax(0,1fr);flex:1;min-height:0}
-.ide.no-ex{grid-template-columns:minmax(0,1fr)}
-.ide.no-ex .explorer{display:none}
+.ide{display:grid;grid-template-columns:minmax(0,1fr);grid-template-rows:auto minmax(0,1fr);flex:1;min-height:0}
+/* under the toolbar: the IDE dock (dock.js) around the editor, like AI mode */
+.ide-body{position:relative;display:flex;min-height:0;min-width:0}
+.ide-body > .editor{flex:1}
 .itool{grid-column:1/-1;display:flex;flex-wrap:wrap;align-items:center;gap:6px 14px;padding:5px 8px;border-bottom:1px solid var(--line);background:var(--surface-2)}
 .tg{display:flex;align-items:center;gap:2px}
 .tb{display:flex;align-items:center;gap:5px;border:0;background:none;border-radius:6px;padding:4px 7px;font-size:12px;color:var(--muted);white-space:nowrap}
@@ -352,9 +353,8 @@ kbd{font:10.5px var(--f-mono);opacity:.75;margin-left:4px}
 .bp-grip{position:absolute;left:0;right:0;top:-3px;height:6px;cursor:row-resize;z-index:5}
 .bp-grip:hover,.bp-grip.drag{background:color-mix(in srgb,var(--accent) 45%,transparent)}
 /* Claude panel docked to the right of the editor */
-.ide.dock-r{grid-template-columns:260px minmax(0,1fr) var(--pw,440px)}
-.ide.dock-r.no-ex{grid-template-columns:minmax(0,1fr) var(--pw,440px)}
-.ide.dock-r > .bpanel{height:auto;border-top:0;border-left:1px solid var(--line)}
+/* the Claude panel docked right: next to the editor, before the right dock */
+.ide.dock-r .ide-body > .bpanel{flex:none;width:var(--pw,440px);height:auto;border-top:0;border-left:1px solid var(--line)}
 .ide.dock-r .bp-grip{top:0;bottom:0;left:-3px;right:auto;width:6px;height:auto;cursor:col-resize}
 .ide.dragging{user-select:none}
 .ide.dragging .term-slot,.ide.dragging .code{pointer-events:none}
@@ -860,6 +860,10 @@ kbd{font:10.5px var(--f-mono);opacity:.75;margin-left:4px}
 /* ---------- IDE: explorer views, quick open, search, git colours, status strip ---------- */
 .ide{position:relative}
 .ide .explorer .panel-h{padding:10px 12px 6px}
+.ex-files{flex:1;min-height:0}
+.ex-files .ex-proj{padding-top:8px}
+.dg-head > .ex-acts{gap:0}
+.dg-head > .ex-acts .ghost.icon{width:23px;height:24px;display:grid;place-items:center;padding:0}
 .ide .ex-bar{display:flex;align-items:center;justify-content:space-between;gap:4px;padding:6px 4px 6px 8px;border-top:1px solid var(--line);flex:none}
 .ide .ex-views{display:inline-flex;gap:2px;background:var(--surface);border:1px solid var(--line);border-radius:7px;padding:2px}
 .ide .ex-views button{display:flex;align-items:center;gap:5px;border:0;background:none;color:var(--muted);font-size:12px;padding:3px 8px;border-radius:5px}

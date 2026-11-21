@@ -1644,11 +1644,12 @@ function switchIdeProject(pid) {
   if (t) { $$('.term-pane').forEach(x => x.classList.toggle('on', x === t.el)); requestAnimationFrame(fitActive); }
 }
 function applyIdeUi() {
-  $('#ideView').classList.toggle('no-ex', !IDE.ui.ex);
+  // the explorer is the IDE dock's side that holds the files view (dock.js)
+  if (typeof dockIdeExplorer === 'function' && S.mode === 'ide') dockIdeExplorer(IDE.ui.ex);
   const bp = $('#bpanel'), right = IDE.ui.dock === 'right';
   bp.hidden = !IDE.ui.panel;
   // docked right: the panel becomes its own grid column next to the editor
-  if (right && bp.parentElement !== $('#ideView')) $('.editor').after(bp);
+  if (right && bp.parentElement !== $('#ideBody')) $('.editor').after(bp);
   else if (!right && bp.parentElement !== $('.editor')) $('.editor').appendChild(bp);
   $('#ideView').classList.toggle('dock-r', right && IDE.ui.panel);
   $('#ideView').style.setProperty('--pw', IDE.ui.pw + 'px');
@@ -1691,12 +1692,10 @@ async function askClaude(target, targetIsDir) {
 
 /* ---------- explorer: files / search views ---------- */
 function setExView(v) {
+  // the explorer views are panels of the IDE dock (dock.js): show the one asked for
   IDE.view = v;
-  $('[data-exview]').forEach(b => { b.classList.toggle('on', b.dataset.exview === v); b.setAttribute('aria-selected', b.dataset.exview === v); });
-  $('#tree').hidden = v !== 'files';
-  $('#psearch').hidden = v !== 'search';
-  $('#exFileActs').hidden = v !== 'files';
-  if (window.ideDb) ideDb.showSide(v === 'db');
+  if (window.ideDb && v === 'db') ideDb.showSide(true);
+  if (typeof dockIdeShow === 'function' && S.mode === 'ide') dockIdeShow(v);
   if (v === 'search') { renderSearch(); requestAnimationFrame(() => { $('#psIn').focus(); $('#psIn').select(); }); }
 }
 function openProjectSearch() {
@@ -2167,7 +2166,9 @@ function setMode(m, initial) {
     }
     applyIdeUi();
     showFile();
+    if (window.ideDb && !IDE.dbBuilt) { IDE.dbBuilt = true; ideDb.showSide(true); } // the DB panel of the IDE dock
   } else if (!tabById(S.active) && S.tabs.length) S.active = S.tabs[S.tabs.length - 1].id;
+  if (typeof applyPanels === 'function') applyPanels(); // the dock of this mode (AI or IDE)
   const t = tabById(S.active);
   $$('.term-pane').forEach(x => x.classList.toggle('on', !!t && x === t.el));
   if (!initial && !ONLY) setCfg({ settings: { mode: m } });
