@@ -82,7 +82,7 @@ if (window.I18N) { I18N.translateDom(document.body); document.documentElement.la
     if (open) open.finish(false);
     return show(opts);
   }
-  function show({ title, message = '', detail = '', ok = __('Tamam'), cancel = __('Vazgeç'), danger = false, icon, alert = false, input = null, placeholder = '', maxLength = 200, choices = null, radio = false, code = '', check = '', keep = false, focusCancel = false }) {
+  function show({ title, message = '', detail = '', ok = __('Tamam'), cancel = __('Vazgeç'), danger = false, icon, alert = false, input = null, placeholder = '', maxLength = 200, choices = null, radio = false, code = '', check = '', keep = false, focusCancel = false, password = false }) {
     hideTip();
     return new Promise(resolve => {
       const prev = document.activeElement;
@@ -91,7 +91,7 @@ if (window.I18N) { I18N.translateDom(document.body); document.documentElement.la
       const ic = icon || (danger ? 'fa-triangle-exclamation' : alert ? 'fa-circle-info' : 'fa-circle-question');
       bg.innerHTML = `<div class="ui-dlg${danger ? ' danger' : ''}" role="${alert ? 'alertdialog' : 'dialog'}" aria-modal="true" aria-labelledby="uiDlgT" aria-describedby="uiDlgM">
         <div class="ui-dlg-h"><i class="fa-solid ${ic}"></i><b id="uiDlgT">${escT(title || 'VoxStorm')}</b></div>
-        <div class="ui-dlg-m" id="uiDlgM">${escT(message).replace(/\n/g, '<br>')}${detail ? `<p>${escT(detail).replace(/\n/g, '<br>')}</p>` : ''}${code ? `<pre class="ui-dlg-code">${escT(code)}</pre>` : ''}${check ? `<label class="ui-dlg-c ui-dlg-chk"><input type="checkbox" data-chk><span><b>${escT(check)}</b></span></label>` : ''}${choices ? `<div class="ui-dlg-ch" role="group" aria-label="${escT(title || message)}">${choices.map((c, i) => `<label class="ui-dlg-c"><input type="${radio ? 'radio' : 'checkbox'}" name="uiDlgCh" data-ci="${i}"${c.checked ? ' checked' : ''}><span><b>${escT(c.label)}</b>${c.hint ? `<small>${escT(c.hint)}</small>` : ''}</span></label>`).join('')}</div>` : ''}${input != null ? `<input class="ui-dlg-in" type="text" spellcheck="false" maxlength="${+maxLength || 200}" value="${escT(input)}" placeholder="${escT(placeholder)}" aria-label="${escT(title || message)}">` : ''}</div>
+        <div class="ui-dlg-m" id="uiDlgM">${escT(message).replace(/\n/g, '<br>')}${detail ? `<p>${escT(detail).replace(/\n/g, '<br>')}</p>` : ''}${code ? `<pre class="ui-dlg-code">${escT(code)}</pre>` : ''}${check ? `<label class="ui-dlg-c ui-dlg-chk"><input type="checkbox" data-chk><span><b>${escT(check)}</b></span></label>` : ''}${choices ? `<div class="ui-dlg-ch" role="group" aria-label="${escT(title || message)}">${choices.map((c, i) => `<label class="ui-dlg-c"><input type="${radio ? 'radio' : 'checkbox'}" name="uiDlgCh" data-ci="${i}"${c.checked ? ' checked' : ''}><span><b>${escT(c.label)}</b>${c.hint ? `<small>${escT(c.hint)}</small>` : ''}</span></label>`).join('')}</div>` : ''}${input != null ? `<input class="ui-dlg-in" type="${password ? 'password' : 'text'}" spellcheck="false" maxlength="${+maxLength || 200}" value="${escT(input)}" placeholder="${escT(placeholder)}" aria-label="${escT(title || message)}">` : ''}</div>
         <div class="ui-dlg-f">${alert ? '' : `<button class="btn" data-r="0">${escT(cancel)}</button>`}<button class="btn primary${danger ? ' danger' : ''}" data-r="1">${escT(ok)}</button></div>
       </div>`;
       const inp = bg.querySelector('.ui-dlg-in');
@@ -106,6 +106,8 @@ if (window.I18N) { I18N.translateDom(document.body); document.documentElement.la
         // choices and a text box together (an agent's question with "something else"): { values, text }
         resolve(choices && inp ? (r ? { values: picked(), text: inp.value } : null)
           : choices ? (r ? picked() : null)
+          // a text box with a tick box (a password and "remember"): { ok, text, checked }
+          : inp && check ? { ok: !!r, text: r ? inp.value : '', checked: !!(bg.querySelector('[data-chk]') || {}).checked }
           : inp ? (r ? inp.value : null)
           : check ? { ok: !!r, checked: !!(bg.querySelector('[data-chk]') || {}).checked } : r);
         const next = waiting.shift();

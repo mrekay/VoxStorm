@@ -767,6 +767,8 @@ module.exports = function registerSsh({ ipcMain, dialog, getWin, send, sendTo, D
     finally { try { sf.end(); } catch (_) {} }
   }
   // what an agent may see: no host name, user, port or secret
+  // sudo for agents (agentlink.js): the saved login password, offered to the user, never to the agent
+  const agentLoginPassword = id => { const h = hostById(id); return h && h.kind === 'ssh' && h.auth === 'password' ? secretOf(h, 'pw') : null; };
   const agentList = () => hosts().filter(h => h.kind === 'ssh' && h.aiAccess !== 'deny').map(h => ({
     id: h.id, name: h.name || __('Adsız sunucu {id}', { id: h.id }), group: h.group, aiAccess: h.aiAccess || '', label: label(h),
   }));
@@ -777,7 +779,7 @@ module.exports = function registerSsh({ ipcMain, dialog, getWin, send, sendTo, D
   }
 
   return {
-    agentList, agentExec, agentSftp, setAiAccess,
+    agentList, agentExec, agentSftp, agentLoginPassword, setAiAccess,
     addChannel, execPty, execOut, execStream,
     hasSession: sid => sessions.has(sid),
     sessionWc: sid => (sessions.get(sid) || {}).wc,

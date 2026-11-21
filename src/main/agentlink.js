@@ -57,7 +57,7 @@ module.exports = function setupAgentLink({ DATA, getSsh, getDb, getDocker, getTh
       const wc = w.webContents;
       if (wc.isLoading()) await new Promise(r => wc.once('did-finish-load', r));
       const r = await wc.executeJavaScript(`window.uiAsk(${JSON.stringify(opts)})`, true);
-      return r && typeof r === 'object' ? { ok: !!r.ok, checked: !!r.checked } : { ok: !!r, checked: false };
+      return r && typeof r === 'object' ? { ok: !!r.ok, checked: !!r.checked, text: typeof r.text === 'string' ? r.text : '' } : { ok: !!r, checked: false, text: '' };
     } catch (_) {
       return { ok: false, checked: false };
     } finally {
@@ -117,6 +117,60 @@ module.exports = function setupAgentLink({ DATA, getSsh, getDb, getDocker, getTh
     return r.ok;
   }
   const clip = (s, n) => { s = String(s || ''); return s.length > n ? s.slice(0, n) + '…' : s; };
+  /* sudo on SSH hosts: there is no terminal to type a password into, so VoxStorm asks the user (its own
+     dialog, the command shown), and hands the password to `sudo -S` on stdin. The agent never sees it.
+     Passwordless sudo is tried first (`sudo -n`), so hosts with NOPASSWD rules don't ask at all. */
+  const sudoPw = new Map(); // pty id | host id -> password remembered for that session
+  const shq = s => "'" + String(s).replace(/'/g, "'\\''") + "'";
+  const NEEDS_PW = /a password is required|a terminal is required|no tty present|askpass/i;
+  const BAD_PW = /incorrect password|sorry, try again|authentication failure|\d+ incorrect password attempt/i;
+  async function sudoPassword(ptyId, h, cmd) {
+    const k = ptyId + '|' + h.id;
+    if (sudoPw.has(k)) return sudoPw.get(k);
+    const info = sessionInfo(ptyId);
+    const saved = getSsh().agentLoginPassword ? getSsh().agentLoginPassword(h.id) : null;
+    const r = await showBox(info, {
+      title: __('{agent} sudo yetkisi istiyor', { agent: info.agent }), icon: 'fa-user-shield',
+      message: __('{agent}, “{name}” sunucusunda bir komutu sudo ile (yönetici olarak) çalıştırmak istiyor.', { agent: info.agent, name: h.name }),
+      detail: [
+        __('Oturum: {agent} · {project}', { agent: info.agent, project: info.project }),
+        __('Parola ajana verilmez; VoxStorm komuta doğrudan iletir.'),
+        saved ? __('Boş bırakırsan bu sunucunun kayıtlı giriş parolası kullanılır.') : '',
+      ].filter(Boolean).join('\n'),
+      code: clip(cmd, 800), input: '', password: true, maxLength: 512,
+      placeholder: saved ? __('sudo parolası (boş: kayıtlı parola)') : __('sudo parolası'),
+      ok: __('Çalıştır'), cancel: __('Vazgeç'),
+      check: __('Bu oturum boyunca hatırla (sudo için yeniden sorma)'),
+    });
+    if (!r.ok) return null;
+    const pw = r.text || saved || '';
+    if (r.checked) sudoPw.set(k, pw);
+    return pw;
+  }
+  // run a command; with sudo (asked for, or a command that starts with "sudo ") as root
+  async function sshRun(ptyId, h, cmd, a) {
+    const SSH = getSsh(), timeout = secs(a.timeout_sec, 120) * 1000;
+    let body = cmd, sudo = !!a.sudo;
+    const m = /^\s*sudo\s+(?:-[a-zA-Z]+\s+)*/.exec(cmd);
+    if (m && !/^\s*sudo\s+-[a-zA-Z]*[ul]/.test(cmd)) { sudo = true; body = cmd.slice(m[0].length); } // "sudo -u x …" stays as written
+    if (!sudo) {
+      const r = await SSH.agentExec(h.id, cmd, { stdin: a.stdin, timeout });
+      if (r.code !== 0 && /\bsudo\b/.test(cmd) && NEEDS_PW.test(r.stderr)) r.stderr += '\n' + __('[VoxStorm] Bu komut sudo parolası istiyor. Komutu sudo: true ile (ya da “sudo …” ile başlayarak) yeniden gönder; VoxStorm parolayı kullanıcıdan ister.');
+      return r;
+    }
+    const wrapped = `-- sh -c ${shq(body)}`;
+    const r1 = await SSH.agentExec(h.id, `sudo -n ${wrapped}`, { stdin: a.stdin, timeout });
+    if (!(r1.code !== 0 && NEEDS_PW.test(r1.stderr))) return r1; // passwordless sudo (or a real result)
+    const pw = await sudoPassword(ptyId, h, body);
+    if (pw == null) throw new Error(__('Kullanıcı sudo ile çalıştırmaya izin vermedi.'));
+    const r2 = await SSH.agentExec(h.id, `sudo -S -p '' ${wrapped}`, { stdin: pw + '\n' + (a.stdin || ''), timeout });
+    if (r2.code !== 0 && BAD_PW.test(r2.stderr)) {
+      sudoPw.delete(ptyId + '|' + h.id);
+      r2.stderr = __('[VoxStorm] sudo parolası yanlış; komut çalışmadı. Tekrar denersen kullanıcıya yeniden sorulur.');
+    }
+    return r2;
+  }
+
   // a yes / no in VoxStorm's dialog; ticking the box remembers yes for the rest of the session
   async function askOnce(ptyId, key, opts) {
     const set = approved.get(ptyId);
@@ -136,7 +190,7 @@ module.exports = function setupAgentLink({ DATA, getSsh, getDb, getDocker, getTh
     },
     {
       name: 'ssh_exec',
-      description: __('VoxStorm’da kayıtlı bir SSH sunucusunda bir kabuk komutu çalıştırır ve çıktısını (stdout, stderr, çıkış kodu) döndürür. Bağlantıyı VoxStorm kurar. Bir sunucu bu oturumda ilk kez kullanılırken kullanıcıdan VoxStorm’da onay istenir; reddedilirse aynı isteği ısrarla tekrarlama. Etkileşimli komutlar (vim, top, sudo parola sorusu) çalışmaz. Dosya yazmak için stdin kullan: ör. command "cat > /yol/dosya", stdin içerik.'),
+      description: __('VoxStorm’da kayıtlı bir SSH sunucusunda bir kabuk komutu çalıştırır ve çıktısını (stdout, stderr, çıkış kodu) döndürür. Bağlantıyı VoxStorm kurar. Bir sunucu bu oturumda ilk kez kullanılırken kullanıcıdan VoxStorm’da onay istenir; reddedilirse aynı isteği ısrarla tekrarlama. Etkileşimli komutlar (vim, top) çalışmaz. Yönetici yetkisi gerekiyorsa sudo: true ver (ya da komutu “sudo …” ile başlat): VoxStorm önce parolasız sudo dener, parola gerekirse kullanıcıya kendi penceresinde sorar ve komuta iletir; parolayı asla isteme ya da komuta yazma. Dosya yazmak için stdin kullan: ör. command "cat > /yol/dosya", stdin içerik.'),
       inputSchema: {
         type: 'object',
         properties: {
@@ -144,6 +198,7 @@ module.exports = function setupAgentLink({ DATA, getSsh, getDb, getDocker, getTh
           command: { type: 'string', description: __('Sunucuda çalışacak komut') },
           stdin: { type: 'string', description: __('İsteğe bağlı: komutun standart girdisine yazılacak metin') },
           timeout_sec: { type: 'number', description: __('Zaman aşımı (varsayılan 120, en çok 900)') },
+          sudo: { type: 'boolean', description: __('true: komutu sudo ile (root olarak) çalıştır; parola gerekirse VoxStorm kullanıcıya sorar') },
         },
         required: ['connection', 'command'], additionalProperties: false,
       },
@@ -201,7 +256,7 @@ module.exports = function setupAgentLink({ DATA, getSsh, getDb, getDocker, getTh
       const cmd = String(a.command || '');
       if (!cmd.trim()) throw new Error(__('Komut boş.'));
       if (!(await authorize('ssh', h, ptyId, cmd))) throw new Error(__('Kullanıcı “{name}” sunucusunun kullanılmasına izin vermedi.', { name: h.name }));
-      const r = await getSsh().agentExec(h.id, cmd, { stdin: a.stdin, timeout: secs(a.timeout_sec, 120) * 1000 });
+      const r = await sshRun(ptyId, h, cmd, a);
       const parts = [r.code === -2 ? __('Zaman aşımı: komut durduruldu.') : __('Çıkış kodu: {code}', { code: r.code })];
       if (r.stdout) parts.push('--- stdout ---\n' + clip(r.stdout, MAX_TEXT) + (r.cut ? '\n' + __('… (çıktı kısaltıldı)') : ''));
       if (r.stderr) parts.push('--- stderr ---\n' + clip(r.stderr, MAX_TEXT / 4));
