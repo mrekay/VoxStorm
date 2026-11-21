@@ -8,6 +8,18 @@
   // try: what the "Dene" button does (optional)
   const NOTES = [
     {
+      id: '2026-11-22', title: __('Sürüm {v}', { v: '1.0.0' }), date: '2026-11-22',
+      items: [
+        { icon: 'fa-solid fa-language', title: __('Beş dil'), text: __('VoxStorm artık Türkçe, İngilizce, Almanca, İspanyolca ve Fransızca. İlk açılışta sistem diline göre seçilir; Ayarlar → Dil’den değişir. Claude ve Codex’in yanıt dili ayrıca seçilir.'), try: () => openSettings('dil') },
+        { icon: 'fa-solid fa-robot', title: __('Claude ve Codex VoxStorm’u kullanır'), text: __('Ajanlar dosyayı IDE’de önüne açar ve ağaçta işaretler, satırları notlarıyla işaretler, değişikliği git penceresinde gösterip “Kabul et / Geri al” diye sorar, seçenekli soru sorar, iş bitince bildirim gönderir, görünür terminalde komut çalıştırır, diğer oturumlarla haberleşir, Docker’a ve eklenti araçlarına erişir.') },
+        { icon: 'fa-solid fa-palette', title: __('Kendi temanı tasarla'), text: __('Tema düzenleyicide on rengi seç, arka plana resim koy (görünürlük ve bulanıklık ayarıyla) ya da “Claude ile tasarla” de: Claude temayı tasarlayıp uygular. Yeni hazır tema: Kağıt.'), try: () => Themes.openEditor(null) },
+        { icon: 'fa-solid fa-table-columns', title: __('IDE’de dock panelleri'), text: __('Dosyalar, Ara, Veritabanı ve Eklentiler artık AI modundaki gibi panel: sağa sola sürükle, alt alta böl, sekmele, raptiyeyle gizle.'), try: () => setMode('ide') },
+        { icon: 'fa-solid fa-user-shield', title: __('SSH’ta sudo'), text: __('Claude bir sunucuda sudo gerektiren bir komut çalıştırınca parola VoxStorm’un kendi penceresinde, komutla birlikte sorulur; ajana hiç verilmez. İstersen oturum boyunca hatırlanır.') },
+        { icon: 'fa-solid fa-link', title: __('Terminalde tıklanabilir yollar'), text: __('Terminalde geçen dosya ve klasör yollarına Ctrl+tık: klasör dosya yöneticisinde, proje dosyası IDE’de (satırıyla) açılır. Alt satıra kırılmış ve boşluklu yollar da tanınır.') },
+      ],
+      small: [__('Projeye sağ tık: aynı menü, “IDE sahnesinde göster” ile.'), __('Sorular ve onaylar artık hep VoxStorm’un kendi penceresinde; sistemin mesaj kutuları kullanılmıyor.')],
+    },
+    {
       id: '2026-11-20c', title: __('Sürüm {v}', { v: '0.9.0' }), date: '2026-11-20',
       items: [
         { icon: 'fa-solid fa-plug-circle-check', title: __('Claude ve Codex, SSH ve veritabanlarını VoxStorm üzerinden kullanır'), text: __('Ajanlar VoxStorm’da kayıtlı SSH sunucularında komut, veritabanlarında sorgu çalıştırabilir. Bağlantıyı VoxStorm kurar; adres, kullanıcı adı ve parola ajana hiç verilmez, ajan yalnızca bağlantının adını ve komutun çıktısını görür. Bir bağlantıyı ilk kullanmak istediğinde sorulur: Evet / Hayır, istersen “her zaman hatırla”. Salt okunur bağlantılar korunur; DROP, TRUNCATE ve WHERE’siz UPDATE/DELETE her seferinde ayrıca sorulur. Kararları bağlantının düzenleme penceresinden değiştirebilir, özelliği Ayarlar’dan kapatabilirsin.'), try: () => openSettings() },

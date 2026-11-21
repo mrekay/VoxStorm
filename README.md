@@ -31,7 +31,9 @@ Windows, macOS ve Linux'ta çalışır. Arayüz Türkçe, İngilizce, Almanca, �
 
 ### IDE modu
 
-Dosya ağacı, renkli düzenleyici, Markdown görünümü, bul ve değiştir (regex), çoklu imleç, kod katlama, git renkleri. "Claude'a sor" ile dosyayı ya da seçili satırları açık oturuma gönderirsin. Gezgindeki **DB** sekmesinden SQL'i düzenleyicinin içinde çalıştırırsın.
+Dosya ağacı, renkli düzenleyici, Markdown görünümü, bul ve değiştir (regex), çoklu imleç, kod katlama, git renkleri. "Claude'a sor" ile dosyayı ya da seçili satırları açık oturuma gönderirsin. **DB** panelinden SQL'i düzenleyicinin içinde çalıştırırsın.
+
+Dosyalar, Ara, Veritabanı ve Eklentiler AI modundaki gibi **dock paneli**: sağa sola sürükle, alt alta böl, sekmele, raptiyeyle gizle. IDE düzeni AI modundan ayrı saklanır.
 
 ### DB, SSH, Docker, git
 
@@ -96,12 +98,12 @@ Yaptığı değişikliği git penceresinde gösterip onay isteyebilir. **Geri al
 | `run_in_terminal`, `list_terminals`, `read_terminal` | Görünür bir sekmede komut başlatır, terminalleri listeler ve okur |
 | `send_to_session` | Başka bir Claude / Codex oturumuna mesaj gönderir (ilk seferde onay sorulur) |
 | `docker_list`, `docker_logs`, `docker_action` | Bu bilgisayardaki konteynerler; başlat / durdur / yeniden başlat onayla |
-| `list_connections`, `ssh_exec`, `ssh_upload`, `ssh_download` | Kayıtlı SSH sunucularında komut ve SFTP |
+| `list_connections`, `ssh_exec`, `ssh_upload`, `ssh_download` | Kayıtlı SSH sunucularında komut ve SFTP; `sudo` gerekirse parola VoxStorm'da sorulur |
 | `db_query`, `show_query` | Kayıtlı veritabanlarında sorgu; sonucu DB modunda tablo olarak gösterme |
 | `list_plugin_tools`, `call_plugin_tool` | Eklentilerin sunduğu araçlar |
 | `get_theme`, `save_theme` | Arayüz temasını okur; yeni tema tasarlayıp kaydeder ve uygular |
 
-**Güvenlik:** SSH ve veritabanı bağlantılarının adresi, kullanıcı adı ve parolası ajana hiç verilmez; bağlantıyı VoxStorm kurar, ajan yalnızca çıktıyı görür. Bir bağlantı ilk kullanılırken sorulur (istersen "her zaman hatırla"). Salt okunur bağlantılarda yazma engellenir; DROP, TRUNCATE ve WHERE'siz UPDATE/DELETE her seferinde ayrıca sorulur. SSH ve DB araçlarını Ayarlar'dan kapatabilirsin; diğer araçlar açık kalır.
+**Güvenlik:** SSH ve veritabanı bağlantılarının adresi, kullanıcı adı ve parolası ajana hiç verilmez; bağlantıyı VoxStorm kurar, ajan yalnızca çıktıyı görür. Bir bağlantı ilk kullanılırken sorulur (istersen "her zaman hatırla"). **sudo** gereken komutlarda VoxStorm önce parolasız sudo dener; gerekirse parolayı kendi penceresinde, çalışacak komutla birlikte sorar ve `sudo -S` ile komuta iletir; parola ajana verilmez. Salt okunur bağlantılarda yazma engellenir; DROP, TRUNCATE ve WHERE'siz UPDATE/DELETE her seferinde ayrıca sorulur. SSH ve DB araçlarını Ayarlar'dan kapatabilirsin; diğer araçlar açık kalır.
 
 ## Kurulum
 
