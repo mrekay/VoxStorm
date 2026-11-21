@@ -6,7 +6,7 @@
   const host = window.parent;
   const pending = new Map();
   const handlers = Object.create(null);
-  const buttonFns = new Map(), commandFns = new Map(), outputFns = new Map(), menuFns = new Map();
+  const buttonFns = new Map(), commandFns = new Map(), outputFns = new Map(), menuFns = new Map(), toolFns = new Map();
   let seq = 0;
 
   function call(method, params) {
@@ -44,6 +44,12 @@
     if (m.event === 'button') { const fn = buttonFns.get(m.data && m.data.id); if (fn) try { fn(); } catch (err) { report(err); } }
     if (m.event === 'shell-output') { const fn = outputFns.get(m.data && m.data.runId); if (fn) try { fn(m.data.text, m.data.stream); } catch (err) { report(err); } }
     if (m.event === 'command') { const fn = commandFns.get(m.data && m.data.id); if (fn) try { fn(); } catch (err) { report(err); } }
+    if (m.event === 'agent-call') { // a Claude / Codex session called one of this plugin's tools
+      const d = m.data || {}, fn = toolFns.get(d.tool);
+      Promise.resolve().then(() => { if (!fn) throw new Error('Araç kayıtlı değil: ' + d.tool); return fn(d.args || {}); })
+        .then(result => call('agent.result', { callId: d.callId, result }), err => call('agent.result', { callId: d.callId, error: String(err && err.message || err) }))
+        .catch(report);
+    }
     if (m.event === 'menu') { const fn = menuFns.get(m.data && m.data.id); if (fn) try { fn(m.data.context || {}); } catch (err) { report(err); } }
     fire(m.event, m.data);
   });
@@ -168,6 +174,12 @@
       },
       /** stops every command this plugin started */
       stop: () => call('shell.stop'),
+    },
+    agent: {
+      /** a tool Claude / Codex sessions can call through VoxStorm ("claude" permission):
+          { name, description, inputSchema (JSON Schema), run: async args => result } */
+      registerTool: opts => { if (opts && typeof opts.run === 'function') toolFns.set(opts.name, opts.run); const { run, ...o } = opts || {}; return call('agent.registerTool', o); },
+      unregisterTool: name => { toolFns.delete(name); return call('agent.unregisterTool', { name }); },
     },
     claude: {
       newSession: opts => call('claude.newSession', opts || {}),

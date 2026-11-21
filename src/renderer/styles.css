@@ -1084,6 +1084,8 @@ kbd{font:10.5px var(--f-mono);opacity:.75;margin-left:4px}
 .ui-dlg-c span{display:grid;min-width:0}
 .ui-dlg-c b{font-weight:500}
 .ui-dlg-c small{color:var(--muted);font-size:11.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ui-dlg-code{margin:8px 0 0;padding:8px 10px;max-height:180px;overflow:auto;background:var(--surface-2);border:1px solid var(--line);border-radius:7px;font:12px/1.45 Consolas,'Cascadia Mono',Menlo,monospace;white-space:pre-wrap;overflow-wrap:anywhere;color:var(--fg)}
+.ui-dlg-chk{margin:8px 0 0 -8px;font-size:12.5px}
 .ui-dlg-f{display:flex;justify-content:flex-end;gap:8px;padding:14px 18px 16px}
 .ui-dlg-f .btn{padding:6px 14px;font-size:12.5px;min-width:84px}
 .ui-dlg-f .btn:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
@@ -1369,3 +1371,22 @@ html.is-mac.is-fullscreen .titlebar .tb-left{padding-left:10px}
 .sp-star:hover{background:var(--surface-2);color:var(--warn)}
 .sp-star.on{color:var(--warn)}
 .sp-star i{font-size:11px}
+
+/* a file an agent points at (show_file): blinks for a few seconds with the agent's name */
+#tree .fx.agent-mark{background:color-mix(in srgb,var(--accent) 16%,transparent);box-shadow:inset 2px 0 0 var(--accent);animation:agentMark .9s ease-in-out 6}
+@keyframes agentMark{50%{background:color-mix(in srgb,var(--accent) 40%,transparent)}}
+#tree .fx .amark{margin-left:auto;display:inline-flex;align-items:center;gap:4px;flex:none;padding:0 6px;border-radius:9px;background:var(--accent);color:var(--on-accent);font-size:10.5px;line-height:16px;font-weight:600}
+@media (prefers-reduced-motion:reduce){#tree .fx.agent-mark{animation:none}}
+/* highlight_lines: an agent's marked lines and notes in the IDE editor (agentapi.js) */
+.CodeMirror .agent-hl{background:color-mix(in srgb,var(--accent) 14%,transparent);box-shadow:inset 3px 0 0 var(--accent)}
+.agent-note{display:flex;align-items:flex-start;gap:8px;margin:2px 0 6px;padding:6px 10px;border-radius:7px;background:var(--surface-2);border:1px solid color-mix(in srgb,var(--accent) 45%,var(--line));font:12.5px/1.45 var(--f-ui,system-ui,sans-serif);color:var(--fg);white-space:pre-wrap}
+.agent-note>i{color:var(--accent);margin-top:2px}
+.agent-note>b{flex:none;color:var(--accent);font-weight:600}
+.agent-note>span{flex:1;min-width:0;overflow-wrap:anywhere}
+.agent-note>button{flex:none;border:0;background:none;color:var(--muted);cursor:pointer;padding:0 2px}
+.agent-note>button:hover{color:var(--fg)}
+/* show_diff with ask: accept / reject bar over the diff in the git window */
+.agent-review{position:sticky;top:0;z-index:2;display:flex;align-items:center;gap:10px;margin:0 0 10px;padding:10px 12px;border-radius:9px;background:color-mix(in srgb,var(--accent) 14%,var(--surface));border:1px solid color-mix(in srgb,var(--accent) 50%,var(--line));font-size:13px}
+.agent-review>i{color:var(--accent)}
+.agent-review>span{flex:1;min-width:0}
+.agent-review .btn{padding:5px 12px;font-size:12.5px}

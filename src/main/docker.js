@@ -210,5 +210,19 @@ module.exports = function registerDocker({ ipcMain, shell, getSsh }) {
 
   return {
     shutdown() { for (const s of logs.values()) { try { s(); } catch (_) {} } logs.clear(); },
+    // for Claude / Codex sessions (agentlink.js): this computer's Docker only
+    agent: {
+      containers: () => listContainers('local'),
+      async logs(id, tail) {
+        if (!NAME_RE.test(String(id || ''))) return { error: 'Geçersiz konteyner adı.' };
+        const r = await run('local', ['logs', '--tail', String(Math.max(1, Math.min(5000, tail | 0 || 200))), '--timestamps', id], { timeout: 30000 });
+        return r.code === 0 ? { text: [r.stdout, r.stderr].filter(Boolean).join('\n') } : friendly(r, 'local');
+      },
+      async action(id, action) {
+        if (!NAME_RE.test(String(id || '')) || !['start', 'stop', 'restart'].includes(action)) return { error: 'Geçersiz işlem.' };
+        const r = await run('local', [action, id], { timeout: 120000 });
+        return r.code === 0 ? { ok: true } : friendly(r, 'local');
+      },
+    },
   };
 };

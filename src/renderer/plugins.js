@@ -184,6 +184,21 @@
       return api.invoke('plugin:shell', st.info.id, str(p && p.command, 8000), { cwd: (p && p.cwd) || (here && here.path) || '', timeout: p && p.timeout, runId: p && p.runId });
     },
     'shell.stop': st => (need(st, 'shell'), api.invoke('plugin:stop', st.info.id).then(() => true)),
+    // tools a plugin offers to Claude / Codex sessions (agentlink.js: list_plugin_tools / call_plugin_tool)
+    'agent.registerTool': (st, p) => {
+      need(st, 'claude');
+      if (!p || !okId(p.name)) throw new Error('Aracın geçerli bir adı (name) olmalı');
+      st.agentTools.set(p.name, { name: p.name, description: str(p.description, 2000), inputSchema: p.inputSchema && typeof p.inputSchema === 'object' ? JSON.parse(JSON.stringify(p.inputSchema)) : { type: 'object', properties: {} } });
+      return true;
+    },
+    'agent.unregisterTool': (st, p) => { st.agentTools.delete(String(p && p.name)); return true; },
+    'agent.result': (st, p) => {
+      const w = agentCalls.get(p && p.callId);
+      if (!w || w.plugin !== st.info.id) return false;
+      agentCalls.delete(p.callId); clearTimeout(w.timer);
+      w.resolve(p.error ? { error: str(p.error, 4000) } : { ok: true, result: p.result === undefined ? null : JSON.parse(JSON.stringify(p.result)) });
+      return true;
+    },
     'claude.newSession': async (st, p) => {
       need(st, 'claude');
       const pid = (p && p.projectId) || projectHere();
@@ -530,7 +545,7 @@
 
   /* ---------------- load / unload ---------------- */
   function start(info) {
-    const st = { info, frames: new Set(), buttons: new Map(), panels: new Map(), commands: new Map(), menuItems: new Map(), log: [] };
+    const st = { info, frames: new Set(), buttons: new Map(), panels: new Map(), commands: new Map(), menuItems: new Map(), agentTools: new Map(), log: [] };
     P.set(info.id, st);
     if (info.main) {
       const f = makeFrame(st, `${SCHEME}://${info.id}/__vox__/main.html`, 'plug-worker');
@@ -728,7 +743,21 @@
   });
 
   /* ---------------- hooks called by app.js ---------------- */
+  const agentCalls = new Map(); // callId -> { plugin, resolve, timer }
+  let agentSeq = 0;
   window.pluginHost = {
+    agentTools: () => [...P.values()].filter(st => st.agentTools.size).map(st => ({ plugin: st.info.id, name: st.info.name, tools: [...st.agentTools.values()] })),
+    agentCall(plugin, tool, args) {
+      const st = P.get(plugin);
+      if (!st) return Promise.resolve({ error: 'Eklenti bulunamadı ya da kapalı: ' + plugin });
+      if (!st.agentTools.has(tool)) return Promise.resolve({ error: `“${st.info.name}” eklentisinde “${tool}” adında bir araç yok.` });
+      return new Promise(resolve => {
+        const callId = 'a' + (++agentSeq);
+        const timer = setTimeout(() => { agentCalls.delete(callId); resolve({ error: 'Eklenti 5 dakika içinde cevap vermedi.' }); }, 300000);
+        agentCalls.set(callId, { plugin, resolve, timer });
+        emit(st, 'agent-call', { callId, tool, args });
+      });
+    },
     init() {
       wantMode = String(CFG.settings.mode || '');
       if (!wantMode.startsWith('plugin:')) wantMode = '';

@@ -1,29 +1,103 @@
 # VoxStorm
 
-Claude Code ve Codex oturumlarını tek pencereden yöneten Windows, macOS ve Linux masaüstü uygulaması.
+Claude Code ve Codex oturumlarını tek pencereden yöneten masaüstü uygulaması. IDE, veritabanı, SSH, Docker ve git aynı yerde; üstelik Claude ve Codex de VoxStorm'u kullanabiliyor: dosyayı senin önünde açar, değişikliği gösterip onay ister, soru sorar, iş bitince haber verir.
 
-> Resmi bir Anthropic ürünü değildir. Bilgisayarında kurulu [Claude Code](https://claude.com/claude-code) ile çalışır.
+Windows, macOS ve Linux'ta çalışır.
+
+> Resmi bir Anthropic ürünü değildir. Bilgisayarında kurulu [Claude Code](https://claude.com/claude-code) (ve/veya OpenAI Codex) ile çalışır.
+
+![AI modu: projeler, oturum geçmişi, terminaller ve kullanım paneli](docs/screenshots/ai-modu.png)
+
+## İçindekiler
+
+- [Özellikler](#özellikler)
+- [Claude ve Codex VoxStorm'u kullanır](#claude-ve-codex-voxstormu-kullanır)
+- [Kurulum](#kurulum)
+- [Geliştirme](#geliştirme)
+- [Nasıl çalışır](#nasıl-çalışır)
+- [Proje yapısı](#proje-yapısı)
 
 ## Özellikler
 
-- **Sekmeli terminaller:** Claude, PowerShell, Komut İstemi ve Git Bash yan yana (macOS ve Linux'ta zsh ve bash)
-- **Projeler ve geçmiş:** Eski oturuma tıkla, kaldığın yerden devam et; kapanışta açık olanları geri yükle
-- **Karar paneli:** İzin istekleri, plan onayları ve Claude'un soruları tek yerde
-- **Bildirimler:** İş bitince, karar beklenince, alt ajan veya workflow açılıp kapanınca
-- **Sistem tepsisi:** Kapatınca tepside çalışmaya devam eder, sadece tepsiden "Çık" ile kapanır
-- **IDE modu:** Dosya ağacı, renkli düzenleyici, Markdown görünümü, "Claude'a sor"
-- **Kullanım:** Haftalık ve aylık token, API fiyatıyla dolar karşılığı, CSV dışa aktarma
-- **Oturum ayarları:** Varsayılan model, efor, izin modu, Remote Control
-- **Kişiselleştirme:** Hitap, ton ve dil; üç tema; gizlenebilir paneller; kısayollar (F1)
+### AI modu: oturumlar
+
+- **Sekmeli terminaller:** Claude, Codex, PowerShell, Komut İstemi ve Git Bash yan yana (macOS ve Linux'ta zsh ve bash). Sekme grupları, kapatılanı geri açma, terminale dosya sürükle-bırak.
+- **Projeler ve geçmiş:** Eski oturuma tıkla, kaldığın yerden devam et; kapanışta açık olanları geri yükle. Projeye sağ tıkla: IDE'de göster, Gezgin'de aç, geçmişi yenile.
+- **Karar paneli:** İzin istekleri, plan onayları ve Claude'un soruları tek yerde.
+- **Ajanlar ve workflow'lar:** Alt ajanlar, arka plan komutları ve workflow'lar canlı listede; workflow ayrıntı penceresinde fazlar, ajanlar, token ve süre.
+- **VoxStorm dışındaki oturumlar:** Başka bir terminalde açık Claude oturumlarını izle, istersen VoxStorm'a taşı.
+- **Bildirimler ve tepsi:** İş bitince, karar beklenince haber verir. Kapatınca tepside çalışmaya devam eder.
+- **Tıklanabilir yollar:** Terminalde geçen dosya ve klasör yolları link olur. **Ctrl+tık** ile klasör Gezgin'de, proje dosyası IDE'de (`src/app.js:49` gibi satırıyla) açılır. Boşluklu yollar ve Claude'un alt satıra kırdığı uzun yollar da tanınır; yalnızca diskte gerçekten var olan yollar link olur.
+
+### IDE modu
+
+Dosya ağacı, renkli düzenleyici, Markdown görünümü, bul ve değiştir (regex), çoklu imleç, kod katlama, git renkleri. "Claude'a sor" ile dosyayı ya da seçili satırları açık oturuma gönderirsin. Gezgindeki **DB** sekmesinden SQL'i düzenleyicinin içinde çalıştırırsın.
+
+### DB, SSH, Docker, git
+
+- **DB modu:** MSSQL, PostgreSQL, MySQL ve MariaDB. Gezgin, sorgu sekmeleri, sonuç tablosu, geçmiş ve kayıtlı sorgular, CSV dışa aktarma.
+- **SSH modu:** Kayıtlı sunucular, terminal, iki panelli SFTP dosya yöneticisi, port yönlendirme tünelleri ve Uzak Masaüstü (RDP) kayıtları.
+- **Docker:** Konteynerleri başlat / durdur, canlı loglar, konteynerde terminal, compose projeleri, imajlar. Bu bilgisayarda ya da SSH ile bağlandığın sunucuda.
+- **Git:** Değişiklikler, geçmiş, stash, fark görünümü, senkronizasyon ve GitHub bilgisi.
+
+### Kullanım
+
+Haftalık ve aylık token, API fiyatıyla dolar karşılığı, proje ve model kırılımı, plan limitleri, CSV dışa aktarma. Claude ve Codex ayrı ayrı.
+
+![Kullanım raporu](docs/screenshots/kullanim.png)
+
+### Diğerleri
+
+- **Modlar ayrı pencerede:** AI, IDE, DB ya da SSH'yi kendi penceresine al (ör. ikinci monitör).
+- **Eklentiler:** Kendi panelini, düğmeni, menü öğeni, komutunu ekle; Claude'a araç sun. Rehber: [`src/plugin-sdk/REHBER.md`](src/plugin-sdk/REHBER.md).
+- **Kişiselleştirme:** Hitap, ton ve dil; temalar; dock düzeninde sürüklenip bölünebilen yan paneller; kısayollar (F1).
+- **Otomatik güncelleme:** Yeni sürüm indirilir, SHA-256 ile doğrulanır, yeniden başlatınca kurulur.
+
+![Karşılama ekranı](docs/screenshots/karsilama.png)
+
+## Claude ve Codex VoxStorm'u kullanır
+
+VoxStorm'un başlattığı her Claude Code ve Codex oturumu, VoxStorm'un yerel MCP sunucusuna bağlanır. Böylece ajan bir şeyi terminale yazıp bırakmak yerine sana **gösterir** ve **sorar**. Her şey VoxStorm'un kendi arayüzünde olur; sistemin mesaj kutuları kullanılmaz.
+
+Mesela "sipariş uç noktası nerede?" diye sorduğunda VoxStorm öne gelir, IDE'ye geçer, dosya soldaki ağaçta Claude rozetiyle yanıp söner ve editörde açılır; Claude incelemeni istediği satırları notlarıyla işaretleyebilir:
+
+![Claude dosyayı IDE'de açıp satırları notlarıyla işaretledi](docs/screenshots/ide-isaretleme.png)
+
+Bir karar gerektiğinde seçenekli soru sorar; cevabın doğrudan oturuma döner:
+
+![Claude seçenekli soru soruyor](docs/screenshots/claude-soruyor.png)
+
+Yaptığı değişikliği git penceresinde gösterip onay isteyebilir. **Geri al** dersen değişikliği kendisi geri alır:
+
+![Git penceresinde Kabul et / Geri al](docs/screenshots/git-onay.png)
+
+| Araç | Ne yapar |
+|---|---|
+| `show_file` | Dosyayı IDE'de açar, ağaçta işaretler; istenirse yalnızca yerini gösterir |
+| `highlight_lines` | Satır aralıklarını işaretler, altına not yazar |
+| `get_editor_state` | Açık dosya, imleç, seçili metin, kaydedilmemiş dosyalar |
+| `show_diff` | Git penceresinde farkı gösterir; istenirse Kabul et / Geri al diye sorar |
+| `ask_user` | Seçenekli, çok seçimli ya da yazılı cevaplı soru |
+| `notify_user` | Masaüstü bildirimi; tıklayınca oturumun sekmesine gider |
+| `run_in_terminal`, `list_terminals`, `read_terminal` | Görünür bir sekmede komut başlatır, terminalleri listeler ve okur |
+| `send_to_session` | Başka bir Claude / Codex oturumuna mesaj gönderir (ilk seferde onay sorulur) |
+| `docker_list`, `docker_logs`, `docker_action` | Bu bilgisayardaki konteynerler; başlat / durdur / yeniden başlat onayla |
+| `list_connections`, `ssh_exec`, `ssh_upload`, `ssh_download` | Kayıtlı SSH sunucularında komut ve SFTP |
+| `db_query`, `show_query` | Kayıtlı veritabanlarında sorgu; sonucu DB modunda tablo olarak gösterme |
+| `list_plugin_tools`, `call_plugin_tool` | Eklentilerin sunduğu araçlar |
+
+**Güvenlik:** SSH ve veritabanı bağlantılarının adresi, kullanıcı adı ve parolası ajana hiç verilmez; bağlantıyı VoxStorm kurar, ajan yalnızca çıktıyı görür. Bir bağlantı ilk kullanılırken sorulur (istersen "her zaman hatırla"). Salt okunur bağlantılarda yazma engellenir; DROP, TRUNCATE ve WHERE'siz UPDATE/DELETE her seferinde ayrıca sorulur. SSH ve DB araçlarını Ayarlar'dan kapatabilirsin; diğer araçlar açık kalır.
 
 ## Kurulum
 
-[Releases](../../releases) sayfasından indir:
+[Releases](../../releases) sayfasından indir.
+
+### Windows
 
 - `VoxStorm-Setup-x.y.z.exe`: normal kurulum
 - `VoxStorm-Portable-x.y.z.exe`: kurulumsuz, tek dosya
 
-Gerekenler: Windows 10/11 ve PATH'te `claude` komutu (Claude Code). Git Bash isteğe bağlı.
+Gerekenler: Windows 10/11 ve PATH'te `claude` (Claude Code) ve/veya `codex` komutu. Git Bash isteğe bağlı.
 
 Dosyalar imzasız olduğu için Windows ilk açılışta uyarı verebilir: **Ek bilgi → Yine de çalıştır**.
 
@@ -38,11 +112,11 @@ Uygulama Apple tarafından onaylanmadığı (notarize edilmediği) için ilk aç
 
 macOS'taki farklar:
 
-- Uygulama kısayolları **⌘** ile çalışır (⌘1, ⌘⇧P, ⌘P…); **⌃ Control** terminalde kalır (⌃C durdurur, ⌃R arar). Sekmeler arasında ⌃Tab.
+- Uygulama kısayolları **⌘** ile çalışır (⌘1, ⌘⇧P, ⌘P…); **⌃ Control** terminalde kalır (⌃C durdurur, ⌃R arar). Sekmeler arasında ⌃Tab. Terminal yollarını **⌘+tık** açar.
 - Sistem tepsisi yerine menü çubuğu simgesi; Dock simgesine tıklayınca pencere geri gelir.
 - Plan limitleri, Claude Code'un Anahtar Zinciri'ndeki girişiyle okunur; ilk seferde macOS izin sorabilir.
 - VoxStorm dışında açık oturumların terminaline bağlanma (ayna) yalnızca Windows'ta var; macOS'ta konuşma izlenir, **VoxStorm'a taşı** ile devam edilir.
-- Otomatik güncelleme Windows'taki gibi çalışır: yeni sürüm indirilir, GitHub'daki SHA-256 özetiyle doğrulanır, yeniden başlatınca (ya da çıkışta) kurulur. Bunun için VoxStorm Uygulamalar klasöründe olmalı; .dmg içinden ya da İndirilenler'den doğrudan açılan kopya kendini güncelleyemez.
+- Otomatik güncelleme için VoxStorm Uygulamalar klasöründe olmalı; .dmg içinden ya da İndirilenler'den doğrudan açılan kopya kendini güncelleyemez.
 
 ### Linux
 
@@ -63,24 +137,35 @@ Linux'taki farklar:
 
 ```
 npm install
-npm start        # uygulamayı çalıştır
-npm run dist     # Windows: Setup ve Portable dosyalarını dist/ klasörüne derle
-npm run dist:mac # macOS: .dmg ve .zip (arm64 + x64) dosyalarını dist/ klasörüne derle
-npm run dist:linux # Linux: .AppImage ve .deb (x64) dosyalarını dist/ klasörüne derle (Linux'ta çalıştır)
+npm start          # uygulamayı çalıştır
+npm run pack       # yalnızca dist/win-unpacked (hızlı deneme derlemesi)
+npm run dist       # Windows: Setup ve Portable dosyalarını dist/ klasörüne derle
+npm run dist:mac   # macOS: .dmg ve .zip (arm64 + x64)
+npm run dist:linux # Linux: .AppImage ve .deb (x64); Linux'ta çalıştır
 ```
 
 ## Nasıl çalışır
 
-- Claude oturumları, VoxStorm'un kendi hook ayarlarıyla (`--settings`) başlatılır. Hook'lar olayları uygulamanın yerel portuna gönderir; durumlar, bildirimler ve karar paneli buradan beslenir. `~/.claude/settings.json` ve `CLAUDE.md` dosyalarına dokunulmaz.
-- Geçmiş oturumlar ve kullanım, `~/.claude/projects` altındaki oturum kayıtlarından okunur.
-- Ayarlar, proje listesi ve günlük kullanım geçmişi `%APPDATA%\VoxStorm` (macOS'ta `~/Library/Application Support/VoxStorm`, Linux'ta `~/.config/VoxStorm`) klasöründe tutulur.
+- **Hook'lar:** Claude oturumları VoxStorm'un kendi hook ayarlarıyla (`--settings`) başlatılır. Hook'lar olayları uygulamanın yerel portuna gönderir; durumlar, bildirimler ve karar paneli buradan beslenir. `~/.claude/settings.json` ve `CLAUDE.md` dosyalarına dokunulmaz.
+- **MCP sunucusu:** Her oturuma, yalnızca `127.0.0.1`'de dinleyen ve oturuma özel bir adres verilir (Claude: `--mcp-config`, Codex: `-c mcp_servers…`). Ajanın araç çağrıları buradan VoxStorm'a gelir; pencereye düşen işler (dosya açma, soru, fark) arayüzde yapılır.
+- **Geçmiş ve kullanım:** `~/.claude/projects` altındaki oturum kayıtlarından (Codex için `~/.codex/sessions`) okunur.
+- **Ayarlar:** Proje listesi ve günlük kullanım geçmişi `%APPDATA%\VoxStorm` (macOS'ta `~/Library/Application Support/VoxStorm`, Linux'ta `~/.config/VoxStorm`) klasöründe tutulur.
 
 ## Proje yapısı
 
 | Dosya | Görevi |
 |---|---|
-| `src/main/main.js` | Pencere, tepsi, terminal süreçleri, hook dinleyicisi, geçmiş ve kullanım |
+| `src/main/main.js` | Pencereler, tepsi, terminal süreçleri, hook dinleyicisi, geçmiş ve kullanım |
+| `src/main/agentlink.js` | Oturumlara verilen MCP sunucusu; SSH / DB araçları ve izin soruları |
+| `src/main/agenttools.js` | Çalışma alanı araçları: IDE, git, soru, bildirim, terminaller, Docker, eklentiler |
+| `src/main/ssh.js`, `db.js`, `docker.js`, `git.js`, `ide.js` | SSH / SFTP, veritabanları, Docker, git ve dosya işlemleri |
+| `src/main/codex.js` | Codex oturumları, geçmişi ve kullanımı |
+| `src/main/plugins.js` | Eklentilerin yüklenmesi ve izinleri |
 | `src/main/preload.js` | Arayüze açılan sınırlı API |
 | `src/main/platform.js` | Windows / macOS / Linux farkları: PATH, kabuklar, komut bulma |
-| `src/renderer/` | Ana pencere (`index.html`, `app.js`, `styles.css`) ve karşılama ekranı (`welcome.*`) |
+| `src/renderer/` | Ana pencere (`index.html`, `app.js`, `styles.css`), modlar (`db.js`, `ssh.js`, `docker.js`), karşılama ekranı (`welcome.*`) |
+| `src/renderer/agentapi.js` | Ajan araçlarının pencere tarafı |
+| `src/renderer/termpaths.js` | Terminaldeki yolları tıklanabilir yapar |
+| `src/renderer/ui.js` | Temalı diyaloglar ve ipuçları |
+| `src/plugin-sdk/` | Eklenti SDK'sı, örnek eklenti ve rehber |
 | `scripts/make-icon.js` | Uygulama simgesini üretir |

@@ -59,7 +59,7 @@ onay ister.
 | `fs.read` | `vox.fs.read / list / stat`: VoxStorm'a ekli projelerin içindeki dosyaları okuma. |
 | `fs.write` | `vox.fs.write / mkdir`: aynı klasörlere yazma. |
 | `shell` | `vox.shell.run`: bir proje klasöründe kabuk komutu çalıştırma (Windows'ta PowerShell, macOS'ta zsh). Bu izin pratikte bilgisayarda her şeyi yapabilir. |
-| `claude` | `vox.claude.newSession / send`: Claude oturumu başlatma, açık oturuma mesaj yazma. |
+| `claude` | `vox.claude.newSession / send`: Claude oturumu başlatma, açık oturuma mesaj yazma. `vox.agent.registerTool`: Claude / Codex oturumlarına araç sunma. |
 | `net` | `fetch`, `WebSocket` ve `https:` kaynaklı resim, yazı tipi, stil. İzin yoksa ağ kapalıdır. |
 
 İzinsiz kullanılabilenler: düğme, panel, mod sekmesi, kısayol, menü, ipucu, `vox.ui.toast / confirm / prompt`,
@@ -254,6 +254,18 @@ bekler. Eklenti kapatılınca ya da yeniden yüklenince çalışan komutları du
 await vox.claude.newSession({ projectId, title: 'İnceleme', prompt: 'Bu projedeki TODO yorumlarını listele' });
 await vox.claude.send('Testleri çalıştır');              // seçili Claude oturumuna yazar ve gönderir
 await vox.claude.send('taslak', { submit: false });     // yalnızca yazar
+```
+
+Eklentin Claude ve Codex oturumlarına **araç** da sunabilir (yine `claude` izni gerekir). Oturumlar araçları `list_plugin_tools` ile görür, `call_plugin_tool` ile çağırır; `run`'ın döndürdüğü değer ajana gider, fırlattığın hata ajana hata olarak döner. Eklentinin sayfası açık (yüklü) olmalı; cevap 5 dakika içinde gelmezse çağrı zaman aşımına uğrar.
+
+```js
+await vox.agent.registerTool({
+  name: 'jira_issue',                                     // harf, rakam, . _ -
+  description: 'Bir Jira kaydının başlığını ve durumunu döndürür.',
+  inputSchema: { type: 'object', properties: { key: { type: 'string' } }, required: ['key'] },
+  run: async ({ key }) => ({ key, title: '…', status: 'In Progress' }),
+});
+await vox.agent.unregisterTool('jira_issue');
 ```
 
 ### Bildirim (`notify`)

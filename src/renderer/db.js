@@ -1415,6 +1415,7 @@
     isOpen: key => D.open.has(key), treeHtml, watchTree(fn) { treeWatchers.add(fn); return () => treeWatchers.delete(fn); },
     editConn, menu, modal, askPassword, statementAt, copyText, copySel,
     renderGrid, bindGrid, fetchMore, exportResult, openInDbMode,
+    runActive: () => run(), // the open tab's query (an agent's show_query, agentapi.js)
   };
 
   let initP = null;

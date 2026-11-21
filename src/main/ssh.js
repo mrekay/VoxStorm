@@ -749,6 +749,15 @@ module.exports = function registerSsh({ ipcMain, dialog, getWin, send, sendTo, D
       });
     } finally { x.busy--; x.last = Date.now(); }
   }
+  // SFTP for agents: 'get' copies remote -> local, 'put' local -> remote
+  async function agentSftp(hostId, op, local, remote) {
+    const h = hostById(hostId);
+    if (!h || h.kind !== 'ssh' || h.aiAccess === 'deny') throw new Error('Sunucu bulunamadı.');
+    const c = await agentClient(h);
+    const sf = await new Promise((res, rej) => c.sftp((e, x) => (e ? rej(e) : res(x))));
+    try { await new Promise((res, rej) => (op === 'put' ? sf.fastPut : sf.fastGet).call(sf, op === 'put' ? local : remote, op === 'put' ? remote : local, e => (e ? rej(e) : res()))); }
+    finally { try { sf.end(); } catch (_) {} }
+  }
   // what an agent may see: no host name, user, port or secret
   const agentList = () => hosts().filter(h => h.kind === 'ssh' && h.aiAccess !== 'deny').map(h => ({
     id: h.id, name: h.name || `Adsız sunucu ${h.id}`, group: h.group, aiAccess: h.aiAccess || '', label: label(h),
@@ -760,7 +769,7 @@ module.exports = function registerSsh({ ipcMain, dialog, getWin, send, sendTo, D
   }
 
   return {
-    agentList, agentExec, setAiAccess,
+    agentList, agentExec, agentSftp, setAiAccess,
     addChannel, execPty, execOut, execStream,
     hasSession: sid => sessions.has(sid),
     sessionWc: sid => (sessions.get(sid) || {}).wc,

@@ -1186,16 +1186,38 @@ let DB = null;
 let AGENT = null;
 const ptyMeta = new Map(); // pty id -> { agent: 'Claude' | 'Codex', cwd } for the AI sessions
 // SSH hosts and databases for Claude / Codex, through VoxStorm (the agent never sees addresses or passwords)
+const agentNotes = new Set();
 function setupAgentLink() {
   AGENT = require('./agentlink')({
-    DATA, dialog, version: app.getVersion(),
+    DATA, version: app.getVersion(),
     getSsh: () => SSH, getDb: () => DB,
     enabled: () => config.settings.agentLink !== false,
     sessionInfo: id => {
       const m = ptyMeta.get(id) || { agent: 'Ajan', cwd: '' };
       const pr = m.cwd && config.projects.find(x => norm(x.path) === norm(m.cwd));
       const wc = ptyOwner.get(id);
-      return { agent: m.agent, project: (pr && pr.name) || (m.cwd ? path.basename(m.cwd) : '?'), win: (wc && !wc.isDestroyed() && BrowserWindow.fromWebContents(wc)) || ownerWin('claude') };
+      return { agent: m.agent, cwd: m.cwd, project: (pr && pr.name) || (m.cwd ? path.basename(m.cwd) : '?'), win: (wc && !wc.isDestroyed() && BrowserWindow.fromWebContents(wc)) || ownerWin('claude') };
+    },
+    // the window that shows a mode ('ide', 'db', 'claude'…; anything else: the main window)
+    winFor: mode => ownerWin(mode),
+    getDocker: () => DOCKER,
+    // an agent's notify_user: a click brings its session's tab forward
+    notifyTab: (title, body, ptyId) => {
+      try {
+        const n = new Notification({ title, body, icon: appIcon(64, 1) });
+        n.on('click', () => {
+          const wc = ptyOwner.get(ptyId), w = (wc && !wc.isDestroyed() && BrowserWindow.fromWebContents(wc)) || win;
+          if (!alive(w)) return;
+          if (!w.isVisible()) w.show();
+          if (w.isMinimized()) w.restore();
+          w.focus();
+          sendTo(w.webContents, 'focus-tab', ptyId);
+        });
+        agentNotes.add(n); // kept alive so the click still arrives
+        n.on('close', () => agentNotes.delete(n));
+        setTimeout(() => agentNotes.delete(n), 10 * 60 * 1000);
+        n.show();
+      } catch (_) {}
     },
     notify: (title, body) => { try { new Notification({ title, body, icon: appIcon(64, 1) }).show(); } catch (_) {} },
     onAccessChanged: kind => send('agent-access', kind),
@@ -1250,12 +1272,9 @@ async function quitFlow() {
       detail: 'Terminaller kapanır. Claude oturumları geçmişte kalır, sonra kaldığın yerden devam edebilirsin.',
     };
     let yes;
-    // the app's own themed dialog; the system one only if the page cannot answer
+    // only the app's own themed dialog, never a system message box; a page that cannot answer lets the quit go on
     try { yes = await win.webContents.executeJavaScript(`window.uiConfirm(${JSON.stringify(opts)})`, true); }
-    catch (_) {
-      const r = await dialog.showMessageBox(win, { type: 'question', buttons: ['Çık', 'Vazgeç'], defaultId: 1, cancelId: 1, noLink: true, title: 'VoxStorm', message: opts.message + ' Çıkılsın mı?', detail: opts.detail });
-      yes = r.response === 0;
-    }
+    catch (_) { yes = true; }
     if (!yes) return;
   }
   isQuitting = true;
@@ -1603,6 +1622,23 @@ function registerIpc() {
     if (/^(https?|mailto):/i.test(url)) { await shell.openExternal(url); return true; }
     if (/^file:/i.test(url)) { const r = await shell.openPath(require('url').fileURLToPath(url)); return r ? { error: r } : true; }
     return false;
+  });
+  // plain paths in terminal output: which of the candidates exist (and are folders) — nothing else is read
+  ipcMain.handle('path:probe', async (_e, list) => {
+    const home = require('os').homedir();
+    return Promise.all((Array.isArray(list) ? list : []).slice(0, 60).map(async p => {
+      p = String(p || '').replace(/^~(?=[\\/]|$)/, home);
+      if (!p || !path.isAbsolute(p) || p.length > 1024) return null;
+      try { const st = await fs.promises.stat(p); return { dir: st.isDirectory() }; } catch (_) { return null; }
+    }));
+  });
+  // Ctrl+click on such a path: a folder opens in the file manager, a file is shown selected in its folder
+  ipcMain.handle('path:open', async (_e, p) => {
+    p = String(p || '').replace(/^~(?=[\\/]|$)/, require('os').homedir());
+    if (!path.isAbsolute(p)) return false;
+    let st; try { st = await fs.promises.stat(p); } catch (_) { return { error: 'Bulunamadı: ' + p }; }
+    if (st.isDirectory()) { const r = await shell.openPath(p); return r ? { error: r } : true; }
+    shell.showItemInFolder(p); return true;
   });
   ipcMain.handle('shell:openGithub', (_e, url) => { if (/^https:\/\/github\.com\//i.test(String(url))) shell.openExternal(url); });
 

@@ -267,6 +267,7 @@ async function openTerminal({ kind = 'claude', shell, projectId, resume, title, 
   // Claude Code puts the session's title in the terminal title bar: use it unless the user named the tab
   // (Codex does the same, as "title | folder")
   if (kind === 'claude') term.onTitleChange(raw => applyClaudeTitle(tab, raw));
+  attachPathLinks(term, () => (proj(tab.projectId) || {}).path); // plain paths: Ctrl+click opens them (termpaths.js)
   term.attachCustomKeyEventHandler(e => {
     if (e.type !== 'keydown') return true;
     const k = e.key.toLowerCase();
@@ -280,6 +281,21 @@ async function openTerminal({ kind = 'claude', shell, projectId, resume, title, 
   activate(tab.id);
   return tab;
 }
+// the project a file belongs to (the deepest one, for nested projects)
+function termFileProject(fp) {
+  const n = normPath(fp);
+  return S.projects.filter(x => n.startsWith(normPath(x.path).replace(/[\\/]+$/, '') + SEP))
+    .sort((a, b) => b.path.length - a.path.length)[0] || null;
+}
+// a project file opens in the IDE (at a line, counted from 1); false when it is outside every project
+function openTermFile(fp, line, col, by) {
+  const p = termFileProject(fp);
+  if (!p) return false;
+  if (S.mode !== 'ide') setMode('ide');
+  if (IDE.project !== p.id) switchIdeProject(p.id);
+  openFile(fp, line ? { line, col: col ? col - 1 : 0 } : undefined).then(() => revealInTree(fp, by));
+  return true;
+}
 /* Links in terminal output (OSC 8: Claude Code links files and web pages). xterm's own handler
    asks with the browser's plain confirm(); this one asks in VoxStorm's style and knows each kind:
    a file in a project opens in the IDE, a web page in the browser (Ctrl+click: without asking). */
@@ -290,13 +306,7 @@ const termLinkHandler = {
     if (u.protocol === 'file:') {
       const fp = IS_WIN ? decodeURIComponent(u.pathname).replace(/^\/([A-Za-z]:)/, '$1').replace(/\//g, '\\') : decodeURIComponent(u.pathname);
       const line = (/^#L?(\d+)/i.exec(u.hash) || [])[1];
-      const p = S.projects.find(x => normPath(fp).startsWith(normPath(x.path).replace(/[\\/]+$/, '') + SEP));
-      if (p) {
-        if (S.mode !== 'ide') setMode('ide');
-        if (IDE.project !== p.id) switchIdeProject(p.id);
-        openFile(fp, line ? { line: +line } : undefined); // gotoPos counts lines from 1, like #L5
-        return;
-      }
+      if (openTermFile(fp, line ? +line : 0)) return;
       if (await uiConfirm({ title: 'Dosyayı aç', icon: 'fa-file', message: fp, detail: `Bu dosya projelerinin dışında. ${IS_WIN ? 'Windows’un' : 'Sistemin'} varsayılan uygulamasıyla açılsın mı?`, ok: 'Aç' })) api.invoke('shell:openLink', uri);
       return;
     }
@@ -753,6 +763,7 @@ function mirrorTerm(t) {
     cursorBlink: true, scrollback: 0, allowProposedApi: true, theme: termTheme(), linkHandler: termLinkHandler,
   });
   term.open(box);
+  attachPathLinks(term, () => t.cwd || (proj(t.projectId) || {}).path);
   term.onData(d => { if (t.mirror) { if (t.sReq) mirrorScroll(t, 0); api.send('mirror:input', t.mirror, d); } });
   // scrolling: the history sits in the outside console's buffer, so ask the mirror for an
   // older slice of it instead of scrolling the (scrollback-less) xterm
@@ -1560,7 +1571,8 @@ async function renderTree() {
       return `<button draggable="true" class="fx dir ${open ? '' : 'closed'} ${gd ? 'g-dir' : ''}" style="--d:${d}" data-dir="${esc(e.path)}" aria-expanded="${!!open}" title="${esc(e.name)}${gd ? ' · içinde değişiklik var' : ''}"><i class="car fa-solid fa-chevron-down" aria-hidden="true"></i>${open ? FOLDER_OPEN : FOLDER}<span class="fn">${esc(e.name)}</span>${gd ? '<span class="gdot" aria-hidden="true"></span>' : ''}</button>` + (open ? walk(e.path, d + 1) : '');
     }
     const g = gitOf(e.path), m = S.modified[normPath(e.path)];
-    return `<button draggable="true" class="fx file ${e.path === cur ? 'on' : ''} ${/^(~\$|\.)/.test(e.name) ? 'dim' : ''} ${g ? 'g-' + g : ''}" style="--d:${d}" data-file="${esc(e.path)}" title="${esc(e.name)}${g ? ' · ' + GIT_TITLE[g] : ''}${m ? ' · Claude değiştirdi' : ''}">${fileIcon(e.name)}<span class="fn">${esc(e.name)}</span>${m ? '<span class="mod" aria-label="Claude değiştirdi"><i class="fa-solid fa-robot"></i></span>' : ''}${g ? `<span class="gb">${g}</span>` : ''}</button>`;
+    const mk = IDE.mark && IDE.mark.fp === normPath(e.path) && Date.now() < IDE.mark.until;
+    return `<button draggable="true" class="fx file ${mk ? 'agent-mark' : ''} ${e.path === cur ? 'on' : ''} ${/^(~\$|\.)/.test(e.name) ? 'dim' : ''} ${g ? 'g-' + g : ''}" style="--d:${d}" data-file="${esc(e.path)}" title="${esc(e.name)}${g ? ' · ' + GIT_TITLE[g] : ''}${m ? ' · Claude değiştirdi' : ''}">${fileIcon(e.name)}<span class="fn">${esc(e.name)}</span>${mk ? `<span class="amark"><i class="fa-solid fa-robot"></i>${esc(IDE.mark.by)}</span>` : ''}${m ? '<span class="mod" aria-label="Claude değiştirdi"><i class="fa-solid fa-robot"></i></span>' : ''}${g ? `<span class="gb">${g}</span>` : ''}</button>`;
   }).join('');
   const html = walk(p.path, 0);
   const tree = $('#tree');
@@ -1572,9 +1584,19 @@ async function renderTree() {
   if (keep) { const b = find(keep); if (b) b.focus({ preventScroll: true }); }
   if (IDE.reveal) { const b = find(IDE.reveal); IDE.reveal = null; if (b) b.scrollIntoView({ block: 'center' }); }
 }
-/* open the folders on the way to a file and scroll it into view */
-function revealInTree(fp) {
+/* open the folders on the way to a file and scroll it into view; `by` (an agent's name) marks it
+   for a few seconds: the row blinks with a "Claude" badge (show_file of agentlink.js) */
+let markTimer = null;
+function revealInTree(fp, by) {
   const r = projRoot(); if (!r || !under(fp, r)) return;
+  if (by) {
+    IDE.mark = { fp: normPath(fp), by, until: Date.now() + 6000 };
+    clearTimeout(markTimer);
+    markTimer = setTimeout(() => {
+      IDE.mark = null;
+      $$('#tree .agent-mark').forEach(b => { b.classList.remove('agent-mark'); const a = b.querySelector('.amark'); if (a) a.remove(); });
+    }, 6000);
+  }
   let d = dirOf(fp);
   while (d.length > r.length) { IDE.expanded[d] = true; d = dirOf(d); }
   if (IDE.view !== 'files') setExView('files');
@@ -2303,7 +2325,7 @@ function openNewMenu(btn, pid, withHistory) {
 function openProjMenu(btn, pid) {
   const m = $('#newMenu');
   const n = (CFG.lastTabs || []).filter(t => t.projectId === pid).length;
-  m.innerHTML = `<button data-pact="restore" data-pid="${pid}">${n ? `Son oturumları geri yükle <code>${n}</code>` : 'Son oturuma devam et'}</button><div class="sep"></div><button data-pact="open" data-pid="${pid}">Klasörü Gezgin'de aç</button><button data-pact="refresh" data-pid="${pid}">Oturum listesini yenile</button><div class="sep"></div><button class="danger" data-pact="remove" data-pid="${pid}">Listeden kaldır</button>`;
+  m.innerHTML = `<button data-pact="restore" data-pid="${pid}">${n ? `Son oturumları geri yükle <code>${n}</code>` : 'Son oturuma devam et'}</button><div class="sep"></div><button data-pact="ide" data-pid="${pid}">IDE sahnesinde göster</button><button data-pact="open" data-pid="${pid}">Klasörü Gezgin'de aç</button><button data-pact="refresh" data-pid="${pid}">Oturum listesini yenile</button><div class="sep"></div><button class="danger" data-pact="remove" data-pid="${pid}">Listeden kaldır</button>`;
   const p = proj(pid);
   if (p && window.pluginHost) m.innerHTML += pluginHost.menuHtml('project', { kind: 'project', projectId: p.id, name: p.name, path: p.path });
   placeMenu(m, btn);
@@ -2730,6 +2752,19 @@ function bindEvents() {
   // right click on a session (sidebar row, IDE panel tab, past session): context menu
   // (the top tab strip has its own handler in tabgroups.js)
   document.addEventListener('contextmenu', e => {
+    // right click on a project's row: the same menu as its "…" button, at the mouse
+    const row = e.target.closest('#side .proj-row');
+    if (row) {
+      const b = row.querySelector('[data-projmenu]');
+      if (!b) return;
+      e.preventDefault();
+      const at = { getBoundingClientRect: () => new DOMRect(e.clientX, e.clientY, 0, 0) };
+      $('#newMenu').dataset.for = 'p' + b.dataset.projmenu;
+      openProjMenu(at, b.dataset.projmenu);
+      const m = $('#newMenu'), w = $('#win').getBoundingClientRect(); // opens to the right of the mouse
+      m.style.left = Math.max(8, Math.min(e.clientX - w.left, w.width - m.offsetWidth - 8)) + 'px';
+      return;
+    }
     const el = e.target.closest('#tabs [data-tab], #ptabs [data-tab], #side [data-tab], #side [data-watch], #side [data-resume], #newMenu [data-resume]');
     if (!el) return;
     if (el.dataset.tab && (tabById(el.dataset.tab) || {}).kind === 'agent') return;
@@ -2775,6 +2810,7 @@ function bindEvents() {
       $('#newMenu').hidden = true;
       const p = proj(d.pid); if (!p) return;
       if (d.pact === 'restore') restoreTabs(p.id);
+      else if (d.pact === 'ide') { if (S.mode !== 'ide') setMode('ide'); switchIdeProject(p.id); }
       else if (d.pact === 'open') api.invoke('project:open', p.path);
       else if (d.pact === 'refresh') { await refreshHistory(p.id); renderSide(); }
       else if (d.pact === 'remove' && await uiConfirm({ title: 'Proje kaldırılsın mı?', message: `"${p.name}" listeden kaldırılsın mı?`, detail: 'Klasör ve oturum geçmişi silinmez.', ok: 'Kaldır', danger: true })) {

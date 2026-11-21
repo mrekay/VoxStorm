@@ -13,7 +13,7 @@ const crypto = require('crypto');
 const MAX_TEXT = 100 * 1024; // characters of tool output sent back
 const toml = s => JSON.stringify(String(s));
 
-module.exports = function setupAgentLink({ DATA, dialog, getSsh, getDb, enabled, sessionInfo, notify, onAccessChanged, version }) {
+module.exports = function setupAgentLink({ DATA, getSsh, getDb, getDocker, enabled, sessionInfo, notify, notifyTab, winFor, onAccessChanged, version }) {
   const token = crypto.randomBytes(18).toString('hex');
   const DIR = path.join(DATA, 'mcp');
   let port = 0;
@@ -23,15 +23,16 @@ module.exports = function setupAgentLink({ DATA, dialog, getSsh, getDb, enabled,
 
   /* ---------------- launch arguments ---------------- */
   const url = ptyId => `http://127.0.0.1:${port}/mcp/${token}/${encodeURIComponent(ptyId)}`;
+  // the server is always attached (show_file); the SSH / DB tools only when the setting allows them
   function claudeArgs(ptyId) {
-    if (!port || !enabled()) return [];
+    if (!port) return [];
     fs.mkdirSync(DIR, { recursive: true });
     const f = path.join(DIR, ptyId + '.json');
     fs.writeFileSync(f, JSON.stringify({ mcpServers: { voxstorm: { type: 'http', url: url(ptyId) } } }, null, 1));
     return ['--mcp-config', f];
   }
   function codexArgs(ptyId) {
-    if (!port || !enabled()) return [];
+    if (!port) return [];
     // a question waits for the user: give the tool call time
     return ['-c', `mcp_servers.voxstorm.url=${toml(url(ptyId))}`, '-c', 'mcp_servers.voxstorm.tool_timeout_sec=900'];
   }
@@ -42,13 +43,25 @@ module.exports = function setupAgentLink({ DATA, dialog, getSsh, getDb, enabled,
   }
 
   /* ---------------- asking the user ---------------- */
+  // always VoxStorm's own themed dialog (ui.js uiAsk), never a system message box;
+  // resolves to { ok, checked }. No window to ask in = no.
   async function showBox(info, opts) {
     const w = info.win && !info.win.isDestroyed() ? info.win : null;
-    if (w) { if (w.isMinimized()) w.restore(); w.flashFrame(true); }
-    if (w && !w.isFocused()) notify(opts.title || 'VoxStorm', opts.message);
-    const r = await (w ? dialog.showMessageBox(w, opts) : dialog.showMessageBox(opts));
-    if (w && !w.isDestroyed()) w.flashFrame(false);
-    return r;
+    if (!w) return { ok: false, checked: false };
+    if (!w.isVisible()) w.show();
+    if (w.isMinimized()) w.restore();
+    w.flashFrame(true);
+    if (!w.isFocused()) notify(opts.title || 'VoxStorm', opts.message);
+    try {
+      const wc = w.webContents;
+      if (wc.isLoading()) await new Promise(r => wc.once('did-finish-load', r));
+      const r = await wc.executeJavaScript(`window.uiAsk(${JSON.stringify(opts)})`, true);
+      return r && typeof r === 'object' ? { ok: !!r.ok, checked: !!r.checked } : { ok: !!r, checked: false };
+    } catch (_) {
+      return { ok: false, checked: false };
+    } finally {
+      if (!w.isDestroyed()) w.flashFrame(false);
+    }
   }
   // true when the session may use the connection
   function authorize(kind, item, ptyId, what) {
@@ -63,21 +76,21 @@ module.exports = function setupAgentLink({ DATA, dialog, getSsh, getDb, enabled,
       const info = sessionInfo(ptyId);
       const thing = kind === 'ssh' ? 'SSH sunucusunu' : 'veritabanını';
       const r = await showBox(info, {
-        type: 'question', title: `${info.agent} izin istiyor`, noLink: true,
+        title: `${info.agent} izin istiyor`, icon: kind === 'ssh' ? 'fa-server' : 'fa-database',
         message: `${info.agent}, “${item.name}” ${thing} kullanmak istiyor.`,
         detail: [
           `${kind === 'ssh' ? 'Sunucu' : 'Bağlantı'}: ${item.label}`,
           `Oturum: ${info.agent} · ${info.project}`,
-          kind === 'ssh' ? `İlk komut:\n${clip(what, 600)}` : `İlk sorgu:\n${clip(what, 600)}`,
-          '',
           'Bağlantı bilgileri ve parolalar ajana verilmez; bağlantıyı VoxStorm kurar, ajan yalnızca çıktıyı görür.',
           'Evet dersen bu oturum, kapanana kadar bu bağlantıyı yeniden sormadan kullanabilir.',
+          kind === 'ssh' ? 'İlk komut:' : 'İlk sorgu:',
         ].join('\n'),
-        buttons: ['Evet', 'Hayır'], defaultId: 1, cancelId: 1,
-        checkboxLabel: 'Bu kararı her zaman hatırla (bütün Claude ve Codex oturumları için)',
+        code: clip(what, 600),
+        ok: 'Evet', cancel: 'Hayır', focusCancel: true,
+        check: 'Bu kararı her zaman hatırla (bütün Claude ve Codex oturumları için)',
       });
-      const yes = r.response === 0;
-      if (r.checkboxChecked) {
+      const yes = r.ok;
+      if (r.checked) {
         (kind === 'ssh' ? getSsh() : getDb()).setAiAccess(item.id, yes ? 'allow' : 'deny');
         onAccessChanged(kind);
       } else if (yes) {
@@ -93,14 +106,23 @@ module.exports = function setupAgentLink({ DATA, dialog, getSsh, getDb, enabled,
   async function confirmDanger(ptyId, item, notes, sql) {
     const info = sessionInfo(ptyId);
     const r = await showBox(info, {
-      type: 'warning', title: `${info.agent} onay istiyor`, noLink: true,
+      title: `${info.agent} onay istiyor`, danger: true,
       message: `${info.agent}, “${item.name}” üzerinde veri silebilecek bir sorgu çalıştırmak istiyor.`,
-      detail: `Bağlantı: ${item.label}\n\n` + notes.map(n => '• ' + n).join('\n') + '\n\n' + clip(sql, 1500),
-      buttons: ['Çalıştır', 'Vazgeç'], defaultId: 1, cancelId: 1,
+      detail: `Bağlantı: ${item.label}\n\n` + notes.map(n => '• ' + n).join('\n'),
+      code: clip(sql, 1500),
+      ok: 'Çalıştır', cancel: 'Vazgeç',
     });
-    return r.response === 0;
+    return r.ok;
   }
   const clip = (s, n) => { s = String(s || ''); return s.length > n ? s.slice(0, n) + '…' : s; };
+  // a yes / no in VoxStorm's dialog; ticking the box remembers yes for the rest of the session
+  async function askOnce(ptyId, key, opts) {
+    const set = approved.get(ptyId);
+    if (set && set.has(key)) return true;
+    const r = await showBox(sessionInfo(ptyId), Object.assign({ focusCancel: true, check: 'Bu oturumda bir daha sorma' }, opts));
+    if (r.ok && r.checked) { if (!approved.has(ptyId)) approved.set(ptyId, new Set()); approved.get(ptyId).add(key); }
+    return r.ok;
+  }
 
   /* ---------------- tools ---------------- */
   const TOOLS = [
@@ -147,11 +169,17 @@ module.exports = function setupAgentLink({ DATA, dialog, getSsh, getDb, enabled,
     if (!x) throw new Error(`“${r}” adında bir ${what} bulunamadı. list_connections ile kayıtlı bağlantılara bak.`);
     return x;
   }
+  // workspace tools: IDE, git, questions, terminals, Docker, plugins (agenttools.js)
+  const WT = require('./agenttools')({ sessionInfo, winFor, notify, notifyTab, getDocker, getSsh, getDb, find, authorize, askOnce, clip });
   const secs = (v, def) => Math.max(5, Math.min(900, Number(v) || def));
 
   async function callTool(name, a, ptyId) {
-    if (!enabled()) throw new Error('VoxStorm bağlantılarının ajanlarla kullanımı Ayarlar’da kapatılmış.');
     a = a || {};
+    if (WT.has(name)) {
+      if (WT.needsLink(name) && !enabled()) throw new Error('VoxStorm bağlantılarının ajanlarla kullanımı Ayarlar’da kapatılmış.');
+      return WT.call(name, a, ptyId);
+    }
+    if (!enabled()) throw new Error('VoxStorm bağlantılarının ajanlarla kullanımı Ayarlar’da kapatılmış.');
     if (name === 'list_connections') {
       const ssh = getSsh().agentList(), db = getDb().agentList();
       const note = c => (c.aiAccess === 'allow' ? 'izinli' : 'ilk kullanımda sorulur');
@@ -203,7 +231,7 @@ module.exports = function setupAgentLink({ DATA, dialog, getSsh, getDb, enabled,
   }
 
   /* ---------------- MCP over HTTP ---------------- */
-  const INSTRUCTIONS = 'VoxStorm’da kayıtlı SSH sunucuları ve veritabanı bağlantıları. Önce list_connections ile hangi bağlantıların olduğuna bak. Bağlantı adresi ve parolası sana verilmez; komutu ya da sorguyu VoxStorm çalıştırır ve çıktıyı döndürür. Bir bağlantıyı ilk kullanışta kullanıcıya VoxStorm’da onay sorulur.';
+  const INSTRUCTIONS = 'Bu oturum VoxStorm’un içinde çalışıyor ve VoxStorm’u kullanabilirsin: dosyaları kullanıcının önünde IDE’de aç ya da işaretle (show_file, highlight_lines), kullanıcının açık dosyasını ve seçimini oku (get_editor_state), değişiklikleri git penceresinde göster ve onay iste (show_diff), soru sor (ask_user), iş bitince bildirim gönder (notify_user), görünür terminalde komut çalıştır ve terminalleri oku (run_in_terminal, read_terminal), diğer oturumlarla haberleş (send_to_session), Docker konteynerlerine bak (docker_*), eklenti araçlarını kullan (list_plugin_tools). Kullanıcıya bir şey göstermek ya da sormak gerektiğinde terminal metni yerine bu araçları tercih et. VoxStorm’da kayıtlı SSH sunucuları ve veritabanı bağlantıları: Önce list_connections ile hangi bağlantıların olduğuna bak. Bağlantı adresi ve parolası sana verilmez; komutu ya da sorguyu VoxStorm çalıştırır ve çıktıyı döndürür. Bir bağlantıyı ilk kullanışta kullanıcıya VoxStorm’da onay sorulur.';
   async function rpc(msg, ptyId) {
     const { id, method, params } = msg || {};
     const ok = result => ({ jsonrpc: '2.0', id, result });
@@ -218,7 +246,7 @@ module.exports = function setupAgentLink({ DATA, dialog, getSsh, getDb, enabled,
       });
     }
     if (method === 'ping') return ok({});
-    if (method === 'tools/list') return ok({ tools: TOOLS });
+    if (method === 'tools/list') return ok({ tools: enabled() ? [...WT.tools(true), ...TOOLS] : WT.tools(false) });
     if (method === 'resources/list') return ok({ resources: [] });
     if (method === 'prompts/list') return ok({ prompts: [] });
     if (method === 'tools/call') {

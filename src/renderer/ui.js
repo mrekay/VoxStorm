@@ -72,8 +72,14 @@
 
   /* ---------------- dialogs ---------------- */
   let open = null;
-  function dialog({ title, message = '', detail = '', ok = 'Tamam', cancel = 'Vazgeç', danger = false, icon, alert = false, input = null, placeholder = '', maxLength = 200, choices = null }) {
+  const waiting = []; // dialogs asked for while a kept one (an agent's question) is showing
+  function dialog(opts) {
+    // a kept dialog is never cancelled by another one: the newcomer waits its turn
+    if (open && open.keep) return new Promise(r => waiting.push(() => r(show(opts))));
     if (open) open.finish(false);
+    return show(opts);
+  }
+  function show({ title, message = '', detail = '', ok = 'Tamam', cancel = 'Vazgeç', danger = false, icon, alert = false, input = null, placeholder = '', maxLength = 200, choices = null, radio = false, code = '', check = '', keep = false, focusCancel = false }) {
     hideTip();
     return new Promise(resolve => {
       const prev = document.activeElement;
@@ -82,7 +88,7 @@
       const ic = icon || (danger ? 'fa-triangle-exclamation' : alert ? 'fa-circle-info' : 'fa-circle-question');
       bg.innerHTML = `<div class="ui-dlg${danger ? ' danger' : ''}" role="${alert ? 'alertdialog' : 'dialog'}" aria-modal="true" aria-labelledby="uiDlgT" aria-describedby="uiDlgM">
         <div class="ui-dlg-h"><i class="fa-solid ${ic}"></i><b id="uiDlgT">${escT(title || 'VoxStorm')}</b></div>
-        <div class="ui-dlg-m" id="uiDlgM">${escT(message).replace(/\n/g, '<br>')}${detail ? `<p>${escT(detail).replace(/\n/g, '<br>')}</p>` : ''}${input != null ? `<input class="ui-dlg-in" type="text" spellcheck="false" maxlength="${+maxLength || 200}" value="${escT(input)}" placeholder="${escT(placeholder)}" aria-label="${escT(title || message)}">` : ''}${choices ? `<div class="ui-dlg-ch" role="group" aria-label="${escT(title || message)}">${choices.map((c, i) => `<label class="ui-dlg-c"><input type="checkbox" data-ci="${i}"${c.checked ? ' checked' : ''}><span><b>${escT(c.label)}</b>${c.hint ? `<small>${escT(c.hint)}</small>` : ''}</span></label>`).join('')}</div>` : ''}</div>
+        <div class="ui-dlg-m" id="uiDlgM">${escT(message).replace(/\n/g, '<br>')}${detail ? `<p>${escT(detail).replace(/\n/g, '<br>')}</p>` : ''}${code ? `<pre class="ui-dlg-code">${escT(code)}</pre>` : ''}${check ? `<label class="ui-dlg-c ui-dlg-chk"><input type="checkbox" data-chk><span><b>${escT(check)}</b></span></label>` : ''}${choices ? `<div class="ui-dlg-ch" role="group" aria-label="${escT(title || message)}">${choices.map((c, i) => `<label class="ui-dlg-c"><input type="${radio ? 'radio' : 'checkbox'}" name="uiDlgCh" data-ci="${i}"${c.checked ? ' checked' : ''}><span><b>${escT(c.label)}</b>${c.hint ? `<small>${escT(c.hint)}</small>` : ''}</span></label>`).join('')}</div>` : ''}${input != null ? `<input class="ui-dlg-in" type="text" spellcheck="false" maxlength="${+maxLength || 200}" value="${escT(input)}" placeholder="${escT(placeholder)}" aria-label="${escT(title || message)}">` : ''}</div>
         <div class="ui-dlg-f">${alert ? '' : `<button class="btn" data-r="0">${escT(cancel)}</button>`}<button class="btn primary${danger ? ' danger' : ''}" data-r="1">${escT(ok)}</button></div>
       </div>`;
       const inp = bg.querySelector('.ui-dlg-in');
@@ -93,10 +99,16 @@
         bg.classList.remove('in');
         setTimeout(() => bg.remove(), 120);
         if (prev && prev.isConnected && prev.focus) try { prev.focus(); } catch (_) {}
-        resolve(choices ? (r ? [...bg.querySelectorAll('[data-ci]')].filter(c => c.checked).map(c => choices[+c.dataset.ci].value) : null)
-          : inp ? (r ? inp.value : null) : r);
+        const picked = () => [...bg.querySelectorAll('[data-ci]')].filter(c => c.checked).map(c => choices[+c.dataset.ci].value);
+        // choices and a text box together (an agent's question with "something else"): { values, text }
+        resolve(choices && inp ? (r ? { values: picked(), text: inp.value } : null)
+          : choices ? (r ? picked() : null)
+          : inp ? (r ? inp.value : null)
+          : check ? { ok: !!r, checked: !!(bg.querySelector('[data-chk]') || {}).checked } : r);
+        const next = waiting.shift();
+        if (next) setTimeout(next, 140);
       };
-      const state = { finish };
+      const state = { finish, keep };
       const onKey = e => {
         e.stopImmediatePropagation();
         if (e.key === 'Escape') { e.preventDefault(); finish(alert); }
@@ -113,8 +125,10 @@
       document.body.appendChild(bg);
       requestAnimationFrame(() => bg.classList.add('in'));
       // a text box starts focused with its text selected; destructive questions start on the safe button
-      if (inp) { inp.focus(); inp.select(); }
-      else (bg.querySelector(danger && !alert ? '[data-r="0"]' : '[data-r="1"]')).focus();
+      // with choices the first one starts focused, the text box ("or write your own") comes after
+      if (choices && choices.length) (bg.querySelector('[data-ci]:checked') || bg.querySelector('[data-ci]')).focus();
+      else if (inp) { inp.focus(); inp.select(); }
+      else (bg.querySelector((danger || focusCancel) && !alert ? '[data-r="0"]' : '[data-r="1"]')).focus();
     });
   }
   window.uiConfirm = opts => dialog(typeof opts === 'string' ? { message: opts } : opts);
@@ -122,6 +136,9 @@
   window.uiPrompt = opts => dialog(Object.assign({ input: '' }, opts));
   // resolves to the values of the ticked choices ([] when none), or null when cancelled
   window.uiChoose = opts => dialog(Object.assign({ choices: [] }, opts));
+  // a question from outside the page (an agent wants a connection): queued, never cancelled by other
+  // dialogs; with `check` it resolves to { ok, checked }
+  window.uiAsk = opts => dialog(Object.assign({}, opts, { keep: true }));
   window.uiAlert = opts => dialog(Object.assign({ alert: true }, typeof opts === 'string' ? { message: opts } : opts));
 })();
 
