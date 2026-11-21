@@ -211,6 +211,19 @@
     return pluginHost.agentCall(String(plugin || ''), String(tool || ''), args && typeof args === 'object' ? args : {});
   }
 
-  window.agentApi = { showFile, highlight, editorState, showDiff, askUser, listTerminals, readTerminal, runInTerminal, sendToSession, showQuery, pluginTools, callPluginTool };
+  /* ---------------- themes (themes.js) ---------------- */
+  const getTheme = () => Themes.current();
+  async function saveTheme({ name, dark, colors, image, by = 'Claude' }) {
+    const c = colors && typeof colors === 'object' ? colors : {};
+    const bad = Object.keys(c).filter(k => c[k] && !Themes.norm(c[k]));
+    if (bad.length) return fail('Geçersiz renk (#rrggbb olmalı): ' + bad.join(', '));
+    const known = Themes.FIELDS.map(f => f[0]), unknown = Object.keys(c).filter(k => !known.includes(k));
+    if (unknown.length) return fail('Bilinmeyen renk alanı: ' + unknown.join(', ') + '. Alanlar: ' + known.join(', '));
+    const t = await Themes.save({ name: String(name || 'Yeni tema'), dark, colors: c, image, by });
+    toast(`${by} yeni bir tema uyguladı`, `“${t.name}” · Tema menüsünden değiştirebilir ya da düzenleyebilirsin.`);
+    return { ok: true, id: t.id, name: t.name };
+  }
+
+  window.agentApi = { getTheme, saveTheme, showFile, highlight, editorState, showDiff, askUser, listTerminals, readTerminal, runInTerminal, sendToSession, showQuery, pluginTools, callPluginTool };
   window.agentShowFile = (fp, line, openTab, by) => showFile({ path: fp, line, openTab, by });
 })();

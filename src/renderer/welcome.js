@@ -126,7 +126,9 @@ function setGreeting(next) {
 
 async function load() {
   DATA = await api.invoke('welcome:data');
-  if (DATA.skin && DATA.skin !== 'violet') document.documentElement.dataset.skin = DATA.skin;
+  const own = String(DATA.skin || '').startsWith('custom:') && (DATA.customThemes || []).find(t => 'custom:' + t.id === DATA.skin);
+  if (own && window.Themes) Themes.show(own); // themes.js
+  else if (DATA.skin && DATA.skin !== 'violet' && !String(DATA.skin).startsWith('custom:')) document.documentElement.dataset.skin = DATA.skin;
   const now = new Date();
   $('#wlDate').textContent = now.toLocaleDateString('tr-TR', { weekday: 'long', day: 'numeric', month: 'long' });
   pool = greetingPool(now);

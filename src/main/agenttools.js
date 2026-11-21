@@ -57,6 +57,15 @@ const TOOLS = [
   ['call_plugin_tool', S('Bir VoxStorm eklentisinin aracını çağırır ve sonucunu döndürür.', {
     plugin: str('Eklenti kimliği (list_plugin_tools’taki "plugin")'), tool: str('Araç adı'), args: { type: 'object', description: 'Aracın parametreleri' },
   }, ['plugin', 'tool'])],
+  ['get_theme', S('VoxStorm’un şu anki arayüz temasını (on temel renk, koyu/açık, arka plan resmi), renk alanlarının ne işe yaradığını ve kullanıcının özel temalarını döndürür. save_theme’den önce bak.')],
+  ['save_theme', S('VoxStorm için yeni bir arayüz teması kaydeder ve hemen uygular (kullanıcı Tema menüsünden geri dönebilir ya da düzenleyebilir). On temel renk verilir (#rrggbb); ara tonları VoxStorm hesaplar. Yazı ile zemin arasında okunur kontrast bırak. İstersen yerel bir resmi arka plan yapabilirsin.', {
+    name: str('Temanın adı'),
+    dark: bool('Koyu tema mı (false: açık)'),
+    colors: { type: 'object', description: 'Renkler: bg, surface, fg, muted, accent, warn, ok, danger, termBg, termFg (hepsi #rrggbb). Verilmeyenler varsayılan koyu temadan gelir.', properties: Object.fromEntries(['bg', 'surface', 'fg', 'muted', 'accent', 'warn', 'ok', 'danger', 'termBg', 'termFg'].map(k => [k, { type: 'string' }])), additionalProperties: false },
+    image_path: str('İsteğe bağlı: arka plan resmi olacak yerel dosyanın tam yolu (png, jpg, webp…)'),
+    image_show: num('Resmin görünürlüğü, yüzde (5–90, varsayılan 35)'),
+    image_blur: num('Resmin bulanıklığı, piksel (0–30, varsayılan 0)'),
+  }, ['name', 'colors'])],
   // these need the "SSH / DB for agents" setting (served with the SSH / DB tools)
   ['show_query', S('Bir SQL sorgusunu VoxStorm’un DB modunda, kullanıcının önünde bir sorgu sekmesinde açar; salt okunur bir sorguysa (SELECT, WITH, SHOW…) hemen çalıştırır ve sonuç tablo olarak görünür, değilse çalıştırmayı kullanıcıya bırakır. Kullanıcıya bir sonucu göstermek istediğinde db_query yerine bunu kullan.', {
     connection: str('list_connections’taki id ya da ad'), sql: str('Sorgu'), database: str('İsteğe bağlı: veritabanı'),
@@ -69,7 +78,7 @@ const TOOLS = [
   }, ['connection', 'remote_path', 'local_path']), 'link'],
 ].map(([name, def, group]) => ({ name, group: group || 'work', ...def }));
 
-module.exports = function agentTools({ sessionInfo, winFor, notify, notifyTab, getDocker, getSsh, getDb, find, authorize, askOnce, clip }) {
+module.exports = function agentTools({ sessionInfo, winFor, notify, notifyTab, getDocker, getThemes, getSsh, getDb, find, authorize, askOnce, clip }) {
   // a call into window.agentApi; front: bring the window forward, attention: flash and notify instead
   async function ui(win, fn, args, { front = false, attention = false, title = '' } = {}) {
     const w = win && !win.isDestroyed() ? win : null;
@@ -165,6 +174,13 @@ module.exports = function agentTools({ sessionInfo, winFor, notify, notifyTab, g
     async call_plugin_tool(a) {
       const r = await ui(winFor('main'), 'callPluginTool', { plugin: a.plugin, tool: a.tool, args: a.args || {} });
       return typeof r.result === 'string' ? r.result : json(r.result);
+    },
+    async get_theme() { return json(await ui(winFor('main'), 'getTheme', {})); },
+    async save_theme(a, info) {
+      let image = null;
+      if (a.image_path) { const im = getThemes().importImage(String(a.image_path)); image = { url: im.url, file: im.file, show: a.image_show || 35, blur: a.image_blur || 0 }; }
+      const r = await ui(winFor('main'), 'saveTheme', { name: a.name, dark: a.dark, colors: a.colors, image, by: info.agent }, { front: true });
+      return `“${r.name}” teması kaydedildi ve uygulandı (custom:${r.id}).`;
     },
     async show_query(a, info, ptyId) {
       const c = find(getDb().agentList(), a.connection, 'veritabanı bağlantısı');

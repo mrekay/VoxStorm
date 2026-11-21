@@ -1,5 +1,8 @@
 /* Shared UI pieces used by every renderer page: themed tooltips and dialogs that
    replace the browser's native title bubbles and confirm()/alert() boxes. */
+// the static text of the page in the interface language (src/i18n/i18n.js)
+if (window.I18N) { I18N.translateDom(document.body); document.documentElement.lang = I18N.lang(); }
+
 (() => {
   'use strict';
   const escT = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));

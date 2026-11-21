@@ -13,7 +13,7 @@ const crypto = require('crypto');
 const MAX_TEXT = 100 * 1024; // characters of tool output sent back
 const toml = s => JSON.stringify(String(s));
 
-module.exports = function setupAgentLink({ DATA, getSsh, getDb, getDocker, enabled, sessionInfo, notify, notifyTab, winFor, onAccessChanged, version }) {
+module.exports = function setupAgentLink({ DATA, getSsh, getDb, getDocker, getThemes, enabled, sessionInfo, notify, notifyTab, winFor, onAccessChanged, version }) {
   const token = crypto.randomBytes(18).toString('hex');
   const DIR = path.join(DATA, 'mcp');
   let port = 0;
@@ -170,7 +170,7 @@ module.exports = function setupAgentLink({ DATA, getSsh, getDb, getDocker, enabl
     return x;
   }
   // workspace tools: IDE, git, questions, terminals, Docker, plugins (agenttools.js)
-  const WT = require('./agenttools')({ sessionInfo, winFor, notify, notifyTab, getDocker, getSsh, getDb, find, authorize, askOnce, clip });
+  const WT = require('./agenttools')({ sessionInfo, winFor, notify, notifyTab, getDocker, getThemes, getSsh, getDb, find, authorize, askOnce, clip });
   const secs = (v, def) => Math.max(5, Math.min(900, Number(v) || def));
 
   async function callTool(name, a, ptyId) {
@@ -231,7 +231,7 @@ module.exports = function setupAgentLink({ DATA, getSsh, getDb, getDocker, enabl
   }
 
   /* ---------------- MCP over HTTP ---------------- */
-  const INSTRUCTIONS = 'Bu oturum VoxStorm’un içinde çalışıyor ve VoxStorm’u kullanabilirsin: dosyaları kullanıcının önünde IDE’de aç ya da işaretle (show_file, highlight_lines), kullanıcının açık dosyasını ve seçimini oku (get_editor_state), değişiklikleri git penceresinde göster ve onay iste (show_diff), soru sor (ask_user), iş bitince bildirim gönder (notify_user), görünür terminalde komut çalıştır ve terminalleri oku (run_in_terminal, read_terminal), diğer oturumlarla haberleş (send_to_session), Docker konteynerlerine bak (docker_*), eklenti araçlarını kullan (list_plugin_tools). Kullanıcıya bir şey göstermek ya da sormak gerektiğinde terminal metni yerine bu araçları tercih et. VoxStorm’da kayıtlı SSH sunucuları ve veritabanı bağlantıları: Önce list_connections ile hangi bağlantıların olduğuna bak. Bağlantı adresi ve parolası sana verilmez; komutu ya da sorguyu VoxStorm çalıştırır ve çıktıyı döndürür. Bir bağlantıyı ilk kullanışta kullanıcıya VoxStorm’da onay sorulur.';
+  const INSTRUCTIONS = 'Bu oturum VoxStorm’un içinde çalışıyor ve VoxStorm’u kullanabilirsin: dosyaları kullanıcının önünde IDE’de aç ya da işaretle (show_file, highlight_lines), kullanıcının açık dosyasını ve seçimini oku (get_editor_state), değişiklikleri git penceresinde göster ve onay iste (show_diff), soru sor (ask_user), iş bitince bildirim gönder (notify_user), görünür terminalde komut çalıştır ve terminalleri oku (run_in_terminal, read_terminal), diğer oturumlarla haberleş (send_to_session), Docker konteynerlerine bak (docker_*), eklenti araçlarını kullan (list_plugin_tools), VoxStorm’un arayüz temasını tasarla (get_theme, save_theme). Kullanıcıya bir şey göstermek ya da sormak gerektiğinde terminal metni yerine bu araçları tercih et. VoxStorm’da kayıtlı SSH sunucuları ve veritabanı bağlantıları: Önce list_connections ile hangi bağlantıların olduğuna bak. Bağlantı adresi ve parolası sana verilmez; komutu ya da sorguyu VoxStorm çalıştırır ve çıktıyı döndürür. Bir bağlantıyı ilk kullanışta kullanıcıya VoxStorm’da onay sorulur.';
   async function rpc(msg, ptyId) {
     const { id, method, params } = msg || {};
     const ok = result => ({ jsonrpc: '2.0', id, result });

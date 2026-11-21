@@ -78,6 +78,7 @@ const DEFAULTS = {
   lastTabs: [], // terminals that were open last time: {projectId, kind, agent, shell, sessionId, title}
   codexNames: {}, // names given in VoxStorm to Codex sessions (Codex's own database is never written)
   settings: {
+    uiLang: '', // interface language: 'auto' | 'tr' | 'en' | 'de' | 'es' | 'fr' (src/i18n)
     name: '', tone: 'samimi', // name: filled from git / GitHub on first launch, else no form of address lang: 'tr', extra: '',
     closeToTray: true, autostart: false, sound: true, welcome: true,
     update: { check: true, auto: true }, // look for new releases on GitHub; download and install them
@@ -91,6 +92,7 @@ const DEFAULTS = {
     defaultAgent: 'claude', // the AI a new session starts with: 'claude' | 'codex'
     notif: { done: true, decision: true, subagent: true, workflow: true, quiet: false },
     skin: 'mono', mode: 'claude', termColors: 'windows',
+    customThemes: [], // themes made in the theme editor or by Claude (themes.js): { id, name, dark, colors, image }
     ui: { side: true, queue: true, usage: true }, // IDE panels; AI mode side panels live in ui.dock (dock.js)
   },
   ide: { state: {}, ui: { ex: true, panel: true, size: 13 } },
@@ -105,6 +107,18 @@ function merge(base, extra) {
 let firstRun = !fs.existsSync(CONFIG_FILE);
 let config = DEFAULTS;
 try { config = merge(DEFAULTS, JSON.parse(fs.readFileSync(CONFIG_FILE, 'utf8'))); } catch (_) { config = merge(DEFAULTS, {}); }
+/* interface language (src/i18n): settings.uiLang 'auto' follows the system; an install from before
+   1.0 (config without uiLang) stays Turkish. Read once: a change applies after a restart. */
+const I18N = require('../i18n/i18n.js');
+for (const [code] of I18N.LANGS) if (code !== 'tr') I18N.register(code, require(`../i18n/${code}.js`));
+if (!config.settings.uiLang) config.settings.uiLang = firstRun ? 'auto' : 'tr';
+let systemLangs = [];
+try { systemLangs = app.getPreferredSystemLanguages(); } catch (_) {}
+I18N.setLang(I18N.resolve(config.settings.uiLang, systemLangs));
+const __ = I18N.t;
+if (firstRun) config.settings.lang = I18N.lang(); // Claude / Codex answer in the interface language
+// every window asks for it synchronously before its first script runs (preload.js)
+ipcMain.on('i18n:lang', e => { e.returnValue = I18N.lang(); });
 let saveTimer = null;
 function saveConfig() {
   clearTimeout(saveTimer);
@@ -1101,7 +1115,7 @@ const TONES = {
   resmi: 'Resmi ve saygılı bir dille konuş.',
   kisa: 'Kısa ve öz cevap ver, gereksiz açıklama yapma.',
 };
-const LANGS = { tr: 'Türkçe', en: 'İngilizce' };
+const LANGS = { tr: 'Türkçe', en: 'İngilizce', de: 'Almanca', es: 'İspanyolca', fr: 'Fransızca' };
 function buildAppendPrompt() {
   const s = config.settings;
   const lines = ['Kullanıcı tercihleri (VoxStorm):'];
@@ -1201,6 +1215,7 @@ function setupAgentLink() {
     // the window that shows a mode ('ide', 'db', 'claude'…; anything else: the main window)
     winFor: mode => ownerWin(mode),
     getDocker: () => DOCKER,
+    getThemes: () => THEMES,
     // an agent's notify_user: a click brings its session's tab forward
     notifyTab: (title, body, ptyId) => {
       try {
@@ -1225,6 +1240,7 @@ function setupAgentLink() {
   return AGENT.start();
 }
 let DOCKER = null;
+let THEMES = null; // custom theme background images (themes.js)
 // Codex CLI sessions (OpenAI), shown and handled like Claude's
 const CODEX = require('./codex')({ config: () => config, hookPort: () => hookPort, buildPrompt: () => buildAppendPrompt(), encodeProjectDir });
 function setupUpdater() {
@@ -1308,7 +1324,7 @@ async function welcomeData() {
   projects.sort((a, b) => (!!b.fav - !!a.fav) || b.used - a.used); // favourites first
   const ids = new Set(config.projects.map(p => p.id));
   const restoreAll = (config.lastTabs || []).filter(t => ids.has(t.projectId)).length;
-  return { projects, restoreAll, name: config.settings.name || '', skin: config.settings.skin, usage: usageCache ? usageCache.total : null, cost: usageCache ? usageCache.cost : null, open: ptys.size };
+  return { projects, restoreAll, name: config.settings.name || '', skin: config.settings.skin, customThemes: config.settings.customThemes || [], usage: usageCache ? usageCache.total : null, cost: usageCache ? usageCache.cost : null, open: ptys.size };
 }
 
 function rebuildTrayMenu() {
@@ -1525,7 +1541,9 @@ function appMenu() {
 
 /* ---------------- IPC ---------------- */
 function registerIpc() {
-  ipcMain.handle('config:get', () => ({ config, info: { platform: process.platform, claude: findClaude(), codex: CODEX.installed(), hookPort, hookSettings: HOOK_SETTINGS, appendPrompt: APPEND_PROMPT, home: os.homedir() } }));
+  // a new interface language: start again (open Claude sessions come back like after any restart)
+  ipcMain.handle('app:relaunch', () => { isQuitting = true; killAll(); saveConfigNow(); app.relaunch(); app.exit(0); });
+  ipcMain.handle('config:get', () => ({ config, info: { uiLang: I18N.lang(), platform: process.platform, claude: findClaude(), codex: CODEX.installed(), hookPort, hookSettings: HOOK_SETTINGS, appendPrompt: APPEND_PROMPT, home: os.homedir() } }));
   ipcMain.handle('config:set', (e, patch) => {
     // every window reports its own open terminals; lastTabs is all of them together
     if (patch && Array.isArray(patch.lastTabs)) { tabsByWc.set(e.sender.id, patch.lastTabs); patch = { ...patch, lastTabs: [].concat(...tabsByWc.values()) }; }
@@ -1796,6 +1814,7 @@ function registerIpc() {
   SSH = require('./ssh')({ ipcMain, dialog, getWin: () => ownerWin('ssh'), sendTo, DATA });
   // Docker: containers on this computer and on open SSH sessions
   DOCKER = require('./docker')({ ipcMain, shell, getSsh: () => SSH });
+  THEMES = require('./themes')({ ipcMain, dialog, BrowserWindow, DATA });
   pluginsModule({
     app, ipcMain, protocol, shell, dialog, getWin: () => win, DATA, insideProject, getProjects: () => config.projects,
     // the plugins folder as a project, under a readable name the first time it is added

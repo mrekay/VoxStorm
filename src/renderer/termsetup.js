@@ -7,7 +7,8 @@
   if (!Base || !window.Unicode11Addon) return;
   window.Terminal = class extends Base {
     constructor(opts) {
-      super(Object.assign({ allowProposedApi: true }, opts));
+      // a theme with a background picture (themes.js) needs a see-through terminal
+      super(Object.assign({ allowProposedApi: true, allowTransparency: 'bgimg' in document.documentElement.dataset }, opts));
       try { this.loadAddon(new Unicode11Addon.Unicode11Addon()); this.unicode.activeVersion = '11'; } catch {}
     }
   };

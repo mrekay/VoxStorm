@@ -174,6 +174,7 @@ const SKINS = [
   { k: 'violet', name: 'Gece moru', sub: 'Koyu · mor vurgu', c: ['#0b0a12', '#a78bfa', '#f2b155'] },
   { k: 'teal', name: 'Deniz', sub: 'Windows temasına göre açık / koyu', c: ['#e9eeef', '#0c7a71', '#3dc0b2'] },
   { k: 'mono', name: 'Grafit', sub: 'Siyah-beyaz · durumlar renkli', c: ['#0a0a0a', '#e8e8e8', '#f2b155'] },
+  { k: 'paper', name: 'Kağıt', sub: 'Açık · sıcak kâğıt, kiremit vurgu', c: ['#f4efe6', '#b4532a', '#2f6f5e'] },
 ];
 function cssVar(n) { return getComputedStyle(document.documentElement).getPropertyValue(n).trim(); }
 /* Windows Terminal "Campbell" colours — what Claude Code looks like in a normal Windows terminal */
@@ -187,16 +188,24 @@ function termTheme() {
   return base;
 }
 function applySkin(k) {
-  if (k === 'violet') delete document.documentElement.dataset.skin; else document.documentElement.dataset.skin = k;
-  const th = termTheme();
-  S.tabs.forEach(t => { if (t.term) t.term.options.theme = th; });
+  k = String(k || 'mono');
+  const own = k.startsWith('custom:') && window.Themes ? Themes.byId(k.slice(7)) : null; // themes.js
+  if (own) Themes.show(own);
+  else {
+    if (window.Themes) Themes.show(null);
+    if (k === 'violet' || k.startsWith('custom:')) delete document.documentElement.dataset.skin; else document.documentElement.dataset.skin = k;
+  }
+  if (window.Themes) Themes.repaintTerms();
   if (window.pluginHost) pluginHost.themeChanged();
 }
 matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => applySkin(CFG.settings.skin));
 function renderSkinMenu() {
   $('#skinMenu').innerHTML = '<div class="h">Tema</div>' + skinOptions();
 }
-const skinOptions = () => SKINS.map(s => `<button class="skin-opt" data-skin="${s.k}"><span class="sw3">${s.c.map(c => `<i style="background:${c}"></i>`).join('')}</span><span class="nm">${s.name}<small>${s.sub}</small></span><span class="ck">${s.k === CFG.settings.skin ? '✓' : ''}</span></button>`).join('');
+// built-in skins, then the user's own (themes.js) with an edit button, then "new" / "design with Claude"
+const skinOptions = () => SKINS.concat((CFG.settings.customThemes || []).map(t => ({ k: 'custom:' + t.id, name: esc(t.name), sub: `${t.dark ? 'Koyu' : 'Açık'}${t.image ? ' · resimli' : ''}${t.by ? ' · ' + esc(t.by) + ' tasarladı' : ''}`, c: Themes.swatches(t), own: t.id })))
+  .map(s => `<div class="skin-row"><button class="skin-opt" data-skin="${s.k}"><span class="sw3">${s.c.map(c => `<i style="background:${c}"></i>`).join('')}</span><span class="nm">${s.name}<small>${s.sub}</small></span><span class="ck">${s.k === CFG.settings.skin ? '✓' : ''}</span></button>${s.own ? `<button class="skin-ed" data-themeedit="${s.own}" title="Temayı düzenle" aria-label="Temayı düzenle"><i class="fa-solid fa-pen"></i></button>` : ''}</div>`).join('')
+  + `<div class="skin-new"><button class="btn" data-themenew><i class="fa-solid fa-plus"></i> Yeni tema</button><button class="btn" data-themeclaude><i class="fa-solid fa-robot"></i> Claude ile tasarla</button></div>`;
 
 /* ---------------- history & usage ---------------- */
 async function refreshHistory(pid) {
@@ -2575,7 +2584,7 @@ function renderWorkflow() {
 /* ---------------- settings ---------------- */
 let setTab = 'ai';
 const TONES = { samimi: 'Samimi', resmi: 'Resmi', kisa: 'Kısa ve öz' };
-const LANGS = { tr: 'Türkçe', en: 'İngilizce' };
+const LANGS = { tr: 'Türkçe', en: 'İngilizce', de: 'Almanca', es: 'İspanyolca', fr: 'Fransızca' };
 const NOTIF_LABELS = { done: 'İş bittiğinde', decision: 'Kararını beklediğinde (izin, plan, soru)', subagent: 'Alt ajan açılınca / bitince', workflow: 'Workflow açılınca / bitince', quiet: 'Rahatsız etme (hepsini sustur)' };
 const sw = (attr, on, label) => `<button class="sw" role="switch" aria-checked="${!!on}" aria-label="${esc(label)}" ${attr}></button>`;
 /* ---------------- updates ---------------- */
@@ -2639,7 +2648,7 @@ function renderSettings() {
   if ($('#settings').hidden) return;
   if (setTab === 'claude' || setTab === 'codex' || setTab === 'hitap') { setFocus = setTab === 'hitap' ? 'ortak' : setTab; setTab = 'ai'; }
   const st = CFG.settings;
-  $('#setNav').innerHTML = [['ai', 'Yapay zekâ'], ['tema', 'Tema'], ['bildirim', 'Bildirimler'], ['pencere', 'Pencere'], ['eklenti', 'Eklentiler'], ['kisayol', 'Kısayollar'], ['hakkinda', 'Hakkında']].map(([k, l]) => `<button class="set-tab ${k === setTab ? 'on' : ''}" data-settab="${k}">${l}</button>`).join('');
+  $('#setNav').innerHTML = [['ai', 'Yapay zekâ'], ['dil', 'Dil · Language'], ['tema', 'Tema'], ['bildirim', 'Bildirimler'], ['pencere', 'Pencere'], ['eklenti', 'Eklentiler'], ['kisayol', 'Kısayollar'], ['hakkinda', 'Hakkında']].map(([k, l]) => `<button class="set-tab ${k === setTab ? 'on' : ''}" data-settab="${k}">${l}</button>`).join('');
   let h = '';
   if (setTab === 'ai') { let h1 = '', h2 = '', h3 = ''; {
     h1 = agentPickHtml() + `<h4>Sana nasıl hitap edilsin?</h4>
@@ -2696,7 +2705,15 @@ function renderSettings() {
       <input type="text" id="xCommand" spellcheck="false" placeholder="codex" value="${esc(c.command || '')}">
       <p class="set-note">Boş bırakılırsa PATH'teki <code>codex</code> çalışır. VoxStorm kendi argümanlarını (hook’lar, model, onay modu…) sonuna ekler.</p>
       <p class="set-note">VoxStorm, oturumun durumunu (çalışıyor / izin bekliyor / bitti) Codex’in hook’larıyla öğrenir. Bu hook’lar komut satırında verilir, <code>~/.codex</code> içinde hiçbir şey değişmez. Port her açılışta değiştiği için Codex’in hook onayı atlanır (<code>--dangerously-bypass-hook-trust</code>); bu yüzden VoxStorm’dan açılan oturumlarda, kendi tanımlayıp henüz onaylamadığın hook’lar da sorulmadan çalışır. Hitap ve dil tercihlerin Codex’e de iletilir.</p>`;
-  } h = aiSettingsHtml(h1, h2, h3); } else if (setTab === 'tema') {
+  } h = aiSettingsHtml(h1, h2, h3); } else if (setTab === 'dil') {
+    // interface language (src/i18n): read once at start, so a change asks for a restart
+    const cur = st.uiLang || 'tr', want = I18N.resolve(cur, navigator.languages), sys = I18N.resolve('auto', navigator.languages);
+    const nameOf = c => (I18N.LANGS.find(l => l[0] === c) || [])[1] || c;
+    h = '<h4>Arayüz dili</h4>'
+      + `<select data-field="uiLang">${[['auto', `Sistem dili (${nameOf(sys)})`], ...I18N.LANGS.map(l => [l[0], l[1]])].map(([k, l]) => `<option value="${k}" ${cur === k ? 'selected' : ''}>${esc(l)}</option>`).join('')}</select>`
+      + (want !== INFO.uiLang ? `<div class="set-row"><span>Yeni dil yeniden başlatınca uygulanır<small>Açık Claude ve Codex oturumları yeniden açılınca geri gelir.</small></span><button class="btn primary" data-relaunch>Şimdi yeniden başlat</button></div>` : '')
+      + '<p class="set-note">Claude ve Codex’in hangi dilde yanıt vereceğini Yapay zekâ sekmesindeki “Yanıt dili”nden seçersin.</p>';
+  } else if (setTab === 'tema') {
     const tc = st.termColors || 'windows';
     h = '<h4>Tema</h4>' + skinOptions()
       + `<h4>Terminal yazı renkleri</h4><div class="seg"><button class="${tc === 'windows' ? 'on' : ''}" data-termcolors="windows">Windows Terminal</button><button class="${tc === 'theme' ? 'on' : ''}" data-termcolors="theme">Temaya uyumlu</button></div><p class="set-note">Windows Terminal: Claude Code normal Windows terminalindeki renklerle görünür (beyaz yazı, mavi bağlantılar).</p>`;
@@ -2823,6 +2840,14 @@ function bindEvents() {
     else if (d.more) { S.showAll[d.more] = !S.showAll[d.more]; renderSide(); }
     else if (d.dec) decide(d.dec, d.c);
     else if (d.skin) { await setCfg({ settings: { skin: d.skin } }); applySkin(d.skin); renderSkinMenu(); renderSettings(); $('#skinMenu').hidden = true; }
+    else if (d.relaunch != null) {
+      const n = S.tabs.filter(t => t.term && !t.exited).length;
+      if (n && !(await uiConfirm({ title: 'Yeniden başlatılsın mı?', message: `${n} terminal kapanacak.`, detail: 'Claude ve Codex oturumları yeniden açılınca geri gelir.', ok: 'Yeniden başlat', icon: 'fa-rotate' }))) return;
+      api.invoke('app:relaunch');
+    }
+    else if (d.themeedit != null) { $('#skinMenu').hidden = true; Themes.openEditor(d.themeedit); }
+    else if (d.themenew != null) { $('#skinMenu').hidden = true; Themes.openEditor(null); }
+    else if (d.themeclaude != null) { $('#skinMenu').hidden = true; $('#settings').hidden = true; Themes.designWithClaude(); }
     else if (d.proj) switchIdeProject(d.proj);
     else if (d.dir) { IDE.expanded[d.dir] = !IDE.expanded[d.dir]; renderTree(); }
     else if (d.fclose) closeFile(d.fclose);
@@ -2982,7 +3007,7 @@ function bindEvents() {
   });
   document.addEventListener('input', e => {
     const f = e.target.dataset && e.target.dataset.field; if (!f) return;
-    setCfg({ settings: { [f]: e.target.value } }).then(updatePromptPreview);
+    setCfg({ settings: { [f]: e.target.value } }).then(() => { updatePromptPreview(); if (f === 'uiLang') renderSettings(); });
     if (f === 'name') $$('[data-hitap]').forEach(b => b.classList.toggle('on', b.dataset.hitap === e.target.value.trim()));
   });
   document.addEventListener('keydown', e => {
@@ -3003,7 +3028,7 @@ function bindEvents() {
   // the welcome window picked a project; take it (only once) and act on it
   api.on('open-project', async () => handleOpen(await api.invoke('app:takePendingOpen')));
   api.on('projects-changed', async list => { S.projects = list; CFG.projects = list; await refreshAllHistory(); renderAll(); });
-  api.on('config-changed', c => { const skin = CFG && CFG.settings.skin; CFG = c; if (c.settings.skin !== skin) applySkin(c.settings.skin); renderSettings(); renderStatus(); });
+  api.on('config-changed', c => { const skin = CFG && CFG.settings.skin, own = CFG && JSON.stringify(CFG.settings.customThemes || []); CFG = c; if (c.settings.skin !== skin || JSON.stringify(c.settings.customThemes || []) !== own) applySkin(c.settings.skin); renderSettings(); renderStatus(); });
   $('#updBtn').onclick = () => openSettings('hakkinda');
   api.invoke('update:state').then(st => { UPD = st; renderUpdBtn(); }).catch(() => {});
   api.on('address-learned', n => toast('Hitap güncellendi', n ? `Bundan sonra “${n}” diye hitap edilecek.` : 'Bundan sonra hitap kullanılmayacak.'));

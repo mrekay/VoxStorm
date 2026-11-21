@@ -33,6 +33,19 @@
   --shadow:0 20px 60px -20px rgba(0,0,0,.9);
 }
 
+:root[data-skin="paper"]{
+  color-scheme:light;
+  --bg:#ece6da; --surface:#fbf8f2; --surface-2:#f4efe6; --hover:#efe8da; --line:#e0d7c6;
+  --fg:#2b2620; --muted:#776c5f; --accent:#b4532a; --accent-soft:#f3dfd3; --on-accent:#ffffff; --run:var(--accent);
+  --warn:#9a5b00; --warn-soft:#f6e6c8; --ok:#2f6f5e; --ok-soft:#dbece5; --danger:#b3261e; --violet:#7a4f9e; --violet-soft:#ece2f3;
+  --term-bg:#1f1c18; --term-fg:#ebe4d8; --term-dim:#8f8678; --term-cursor:#e08a5c; --term-sel:#4a3a2e;
+  --shadow:0 18px 50px -20px rgba(60,45,25,.4);
+}
+/* custom theme with a background picture (themes.js): the picture under everything, surfaces see-through */
+:root[data-bgimg]{background:var(--bg-solid,#000)}
+:root[data-bgimg] body{background:transparent}
+:root[data-bgimg] body::before{content:"";position:fixed;inset:calc(var(--bg-blur,0px) * -2);z-index:-1;background:var(--bg-img) center/cover no-repeat;filter:blur(var(--bg-blur,0px));pointer-events:none}
+
 *{box-sizing:border-box}
 html,body{height:100%;margin:0;overflow:hidden}
 body{background:var(--bg);color:var(--fg);font:14px/1.45 var(--f-body)}
@@ -355,6 +368,7 @@ kbd{font:10.5px var(--f-mono);opacity:.75;margin-left:4px}
    so it gets its own code colours (the UI stays black and white, the code does not) */
 :root{--syn-kw:var(--accent);--syn-prop:color-mix(in srgb,var(--accent) 55%,var(--fg))}
 :root[data-skin="mono"]{--syn-kw:#7fb0ff;--syn-prop:#8fd3dc}
+:root[data-skin="paper"]{--syn-kw:#b4532a;--syn-prop:#2f6f5e}
 .cm-s-claudelot .CodeMirror-gutters{background:var(--surface-2);border-right:1px solid var(--line)}
 .cm-s-claudelot .CodeMirror-linenumber{color:var(--muted);opacity:.75}
 .cm-s-claudelot .CodeMirror-cursor{border-left:2px solid var(--accent)}
@@ -1390,3 +1404,37 @@ html.is-mac.is-fullscreen .titlebar .tb-left{padding-left:10px}
 .agent-review>i{color:var(--accent)}
 .agent-review>span{flex:1;min-width:0}
 .agent-review .btn{padding:5px 12px;font-size:12.5px}
+
+/* skin menu: own themes with an edit button, "new" / "design with Claude" (themes.js) */
+.skin-row{display:flex;align-items:center;gap:2px}
+.skin-row .skin-opt{flex:1;min-width:0}
+.skin-ed{flex:none;border:0;background:none;color:var(--muted);padding:6px 8px;border-radius:6px}
+.skin-ed:hover{background:var(--hover);color:var(--fg)}
+.skin-new{display:flex;gap:6px;flex-wrap:wrap;padding:8px 8px 4px}
+.skin-new .btn{padding:5px 10px;font-size:12px}
+/* theme editor */
+.theme-ed{width:min(620px,100%)}
+.te-body{padding:6px 18px 4px;max-height:70vh;overflow:auto}
+.te-body h4{margin:14px 0 8px;font-size:12px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted)}
+.te-name{display:flex;align-items:center;gap:10px;margin:6px 0 10px}
+.te-name span{width:40px;color:var(--muted);font-size:12.5px}
+.te-name input{flex:1;padding:7px 10px;font:inherit;font-size:13px;color:var(--fg);background:var(--surface-2);border:1px solid var(--line);border-radius:7px;outline:none}
+.te-mode{margin:0 0 12px}
+.te-grid{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.te-c{display:flex;align-items:center;gap:10px;padding:6px 8px;border:1px solid var(--line);border-radius:8px;background:var(--surface-2);cursor:pointer}
+.te-c input[type=color]{width:34px;height:26px;padding:0;border:1px solid var(--line);border-radius:6px;background:none;cursor:pointer;flex:none}
+.te-c span{display:grid;min-width:0}
+.te-c b{font-weight:500;font-size:12.5px}
+.te-c small{color:var(--muted);font:11px var(--f-mono)}
+.te-img{display:flex;gap:12px;align-items:stretch}
+.te-thumb{width:150px;flex:none;aspect-ratio:16/10;border-radius:8px;border:1px solid var(--line);background:var(--surface-2) center/cover no-repeat}
+.te-thumb.empty{background-image:repeating-linear-gradient(45deg,transparent 0 8px,var(--hover) 8px 16px)}
+.te-img-r{flex:1;display:grid;gap:8px;align-content:start}
+.te-img-b{display:flex;gap:6px;flex-wrap:wrap}
+.te-img-b .btn{padding:5px 10px;font-size:12px}
+.te-sl{display:flex;align-items:center;gap:10px;font-size:12.5px}
+.te-sl span{width:80px;color:var(--muted)}
+.te-sl input{flex:1;accent-color:var(--accent)}
+.te-sl b{width:46px;text-align:right;font-weight:500;font-variant-numeric:tabular-nums}
+.theme-ed .ui-dlg-f{align-items:center}
+.te-del{color:var(--danger)}
