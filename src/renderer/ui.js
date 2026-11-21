@@ -82,7 +82,7 @@ if (window.I18N) { I18N.translateDom(document.body); document.documentElement.la
     if (open) open.finish(false);
     return show(opts);
   }
-  function show({ title, message = '', detail = '', ok = 'Tamam', cancel = 'Vazgeç', danger = false, icon, alert = false, input = null, placeholder = '', maxLength = 200, choices = null, radio = false, code = '', check = '', keep = false, focusCancel = false }) {
+  function show({ title, message = '', detail = '', ok = __('Tamam'), cancel = __('Vazgeç'), danger = false, icon, alert = false, input = null, placeholder = '', maxLength = 200, choices = null, radio = false, code = '', check = '', keep = false, focusCancel = false }) {
     hideTip();
     return new Promise(resolve => {
       const prev = document.activeElement;
@@ -172,25 +172,55 @@ if (window.I18N) { I18N.translateDom(document.body); document.documentElement.la
   if (IS_WIN) return;
 
   document.documentElement.classList.add(IS_MAC ? 'is-mac' : 'is-linux');
-  // Linux: shortcuts stay on Ctrl; only the Windows names change
-  const LINUX_WORDS = [
-    [/Geri Dönüşüm Kutusu’na/g, 'Çöp kutusuna'], [/Geri Dönüşüm Kutusu/g, 'Çöp kutusu'],
-    [/Dosya Gezgini’nde/g, 'Dosya yöneticisinde'], [/Gezgin'de aç/g, 'Dosya yöneticisinde aç'],
-    [/Windows açılınca başlat/g, 'Oturum açılınca başlat'], [/Windows ile başlat/g, 'Oturum açılınca başlat'],
-    [/Windows bildirimi/g, 'Sistem bildirimi'], [/Windows sesi/g, 'Sistem sesi'],
-  ];
-  const WORDS = !IS_MAC ? LINUX_WORDS : [
-    [/Geri Dönüşüm Kutusu’na/g, 'Çöp Sepeti’ne'], [/Geri Dönüşüm Kutusu/g, 'Çöp Sepeti'],
-    [/Dosya Gezgini’nde/g, 'Finder’da'], [/Gezgin'de aç/g, "Finder'da aç"],
-    [/sistem tepsisindeki simgeye sağ tıkla → Çık\./g, 'menü çubuğundaki simgeye tıkla → Çık ya da ⌘Q.'],
-    [/Doğrudan sistem tepsisine başlar/g, 'Pencere açmadan menü çubuğunda başlar'],
-    [/Kapat düğmesi tepsiye küçültsün/g, 'Kapat düğmesi menü çubuğuna gizlesin'], [/Tepsiye küçült/g, 'Menü çubuğuna gizle'],
-    [/Windows açılınca başlat/g, 'Oturum açılınca başlat'], [/Windows ile başlat/g, 'Oturum açılınca başlat'],
-    [/Windows bildirimi/g, 'macOS bildirimi'], [/Windows sesi/g, 'Sistem sesi'],
-  ];
+  /* the Windows names in each interface language (the text on screen is already translated), as
+     [pattern, Linux, macOS]; longer phrases come before the words they contain. Linux: shortcuts stay
+     on Ctrl, only the Windows names change; macOS also has no tray (the menu bar). null: leave as is. */
+  const PLATFORM_WORDS = {
+    tr: [
+      [/Geri Dönüşüm Kutusu’na/g, 'Çöp kutusuna', 'Çöp Sepeti’ne'], [/Geri Dönüşüm Kutusu/g, 'Çöp kutusu', 'Çöp Sepeti'],
+      [/Dosya Gezgini’nde/g, 'Dosya yöneticisinde', 'Finder’da'], [/Gezgin'de aç/g, 'Dosya yöneticisinde aç', "Finder'da aç"],
+      [/sistem tepsisindeki simgeye sağ tıkla → Çık\./g, null, 'menü çubuğundaki simgeye tıkla → Çık ya da ⌘Q.'],
+      [/Doğrudan sistem tepsisine başlar/g, null, 'Pencere açmadan menü çubuğunda başlar'],
+      [/Kapat düğmesi tepsiye küçültsün/g, null, 'Kapat düğmesi menü çubuğuna gizlesin'], [/Tepsiye küçült/g, null, 'Menü çubuğuna gizle'],
+      [/Windows açılınca başlat/g, 'Oturum açılınca başlat', 'Oturum açılınca başlat'], [/Windows ile başlat/g, 'Oturum açılınca başlat', 'Oturum açılınca başlat'],
+      [/Windows bildirimi/g, 'Sistem bildirimi', 'macOS bildirimi'], [/Windows sesi/g, 'Sistem sesi', 'Sistem sesi'],
+    ],
+    en: [
+      [/the Recycle Bin/g, 'the Trash', 'the Trash'], [/Recycle Bin/g, 'Trash', 'Trash'],
+      [/File Explorer/g, 'the file manager', 'Finder'],
+      [/system tray/g, null, 'menu bar'], [/System tray/g, null, 'Menu bar'], [/\btray\b/g, null, 'menu bar'], [/\bTray\b/g, null, 'Menu bar'],
+      [/when Windows starts/g, 'at login', 'at login'], [/with Windows/g, 'at login', 'at login'],
+      [/Windows notification/g, 'System notification', 'macOS notification'], [/Windows sound/g, 'System sound', 'System sound'],
+    ],
+    de: [
+      [/Datei-Explorer/g, 'Dateimanager', 'Finder'],
+      [/im Infobereich/g, null, 'in der Menüleiste'], [/in den Infobereich/g, null, 'in die Menüleiste'],
+      [/Taskleisten-Infobereich/g, null, 'Menüleiste'], [/Infobereich/g, null, 'Menüleiste'],
+      [/mit Windows/g, 'bei der Anmeldung', 'bei der Anmeldung'], [/Mit Windows/g, 'Bei der Anmeldung', 'Bei der Anmeldung'], [/Windows-Start/g, 'Anmeldung', 'Anmeldung'],
+      [/Windows-Benachrichtigung/g, 'Systembenachrichtigung', 'macOS-Benachrichtigung'], [/Windows-Sound/g, 'Systemton', 'Systemton'], [/Windows-Ton/g, 'Systemton', 'Systemton'],
+    ],
+    es: [
+      [/Papelera de reciclaje/g, 'Papelera', 'Papelera'],
+      [/el Explorador de archivos/g, 'el gestor de archivos', 'Finder'], [/Explorador de archivos/g, 'gestor de archivos', 'Finder'],
+      [/bandeja del sistema/g, null, 'barra de menús'], [/Bandeja del sistema/g, null, 'Barra de menús'], [/\bbandeja\b/g, null, 'barra de menús'], [/\bBandeja\b/g, null, 'Barra de menús'],
+      [/con Windows/g, 'al iniciar sesión', 'al iniciar sesión'],
+      [/notificación de Windows/g, 'notificación del sistema', 'notificación de macOS'], [/sonido de Windows/g, 'sonido del sistema', 'sonido del sistema'],
+    ],
+    fr: [
+      [/l’Explorateur de fichiers/g, 'le gestionnaire de fichiers', 'le Finder'], [/l'Explorateur de fichiers/g, 'le gestionnaire de fichiers', 'le Finder'],
+      [/Explorateur de fichiers/g, 'gestionnaire de fichiers', 'Finder'],
+      [/la zone de notification/g, null, 'la barre des menus'], [/zone de notification/g, null, 'barre des menus'],
+      [/avec Windows/g, 'à l’ouverture de session', 'à l’ouverture de session'],
+      [/notification Windows/g, 'notification système', 'notification macOS'], [/son Windows/g, 'son système', 'son système'],
+    ],
+  };
+  const lang = window.I18N ? I18N.lang() : 'tr';
+  const WORDS = (PLATFORM_WORDS[lang] || PLATFORM_WORDS.tr)
+    .map(([re, linux, mac]) => [re, IS_MAC ? mac : linux]).filter(([, to]) => to != null);
   const fix = s => { let o = IS_MAC ? macKeys(s) : s; for (const [re, to] of WORDS) o = o.replace(re, to); return o; };
   const KBD = IS_MAC ? { Ctrl: '⌘', Shift: '⇧', Alt: '⌥' } : {};
-  const NEEDS = IS_MAC ? /Ctrl|Shift\+|Alt\+|Geri Dönüşüm|Gezgin|tepsi|Tepsi|Windows/ : /Geri Dönüşüm|Gezgin|Windows/;
+  // a quick test before rewriting: the shortcut words (macOS) or any of this language's patterns
+  const NEEDS = new RegExp([...(IS_MAC ? ['Ctrl', 'Shift\\+', 'Alt\\+'] : []), ...WORDS.map(([re]) => re.source)].join('|') || '(?!)');
   // terminals, editors and rendered Markdown show the user's own text: never rewrite those
   const SKIP = '.xterm,.CodeMirror,.md,.wm-b,.db-grid,[data-raw]';
   function fixNode(n) {

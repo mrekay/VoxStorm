@@ -5,6 +5,7 @@ const path = require('path');
 const fs = require('fs');
 const fsp = fs.promises;
 const { execFile } = require('child_process');
+const I18N = require('../i18n/i18n.js'); const __ = I18N.t;
 
 const IGNORE = new Set(['node_modules', '.git', 'dist', 'build', 'out', '.next', '.cache', '__pycache__', '.venv', 'venv', 'bin', 'obj', '.idea', '.vs']);
 const MAX_FILES = 20000;
@@ -13,7 +14,7 @@ const MAX_SEARCH_SIZE = 1024 * 1024;
 
 module.exports = function registerIde({ ipcMain, shell, insideProject, isProjectRoot, send }) {
   const guard = p => {
-    if (typeof p !== 'string' || !p || p.includes('\0') || !insideProject(p)) throw new Error('Proje dışında');
+    if (typeof p !== 'string' || !p || p.includes('\0') || !insideProject(p)) throw new Error(__('Proje dışında'));
     return path.resolve(p);
   };
 
@@ -50,7 +51,7 @@ module.exports = function registerIde({ ipcMain, shell, insideProject, isProject
     try {
       const src = opts.regex ? query : query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
       re = new RegExp(opts.word ? `\\b(?:${src})\\b` : src, opts.case ? 'g' : 'gi');
-    } catch (err) { return { error: 'Geçersiz düzenli ifade: ' + err.message }; }
+    } catch (err) { return { error: __('Geçersiz düzenli ifade: {error}', { error: err.message }) }; }
     const hits = [];
     let files = 0, truncated = false;
     await walk(root, async f => {
@@ -84,16 +85,16 @@ module.exports = function registerIde({ ipcMain, shell, insideProject, isProject
 
   ipcMain.handle('fs:mkdir', async (_e, dir) => {
     dir = guard(dir);
-    if (fs.existsSync(dir)) throw new Error('Bu adda bir dosya ya da klasör zaten var.');
+    if (fs.existsSync(dir)) throw new Error(__('Bu adda bir dosya ya da klasör zaten var.'));
     await fsp.mkdir(dir, { recursive: true });
     return true;
   });
 
   ipcMain.handle('fs:rename', async (_e, from, to) => {
     from = guard(from); to = guard(to);
-    if (isProjectRoot(from)) throw new Error('Proje klasörünün kendisi yeniden adlandırılamaz.');
+    if (isProjectRoot(from)) throw new Error(__('Proje klasörünün kendisi yeniden adlandırılamaz.'));
     // a case-only rename (a.js -> A.js) is the same file on Windows
-    if (from.toLowerCase() !== to.toLowerCase() && fs.existsSync(to)) throw new Error('Bu adda bir dosya ya da klasör zaten var.');
+    if (from.toLowerCase() !== to.toLowerCase() && fs.existsSync(to)) throw new Error(__('Bu adda bir dosya ya da klasör zaten var.'));
     await fsp.mkdir(path.dirname(to), { recursive: true });
     await fsp.rename(from, to);
     return true;
@@ -102,7 +103,7 @@ module.exports = function registerIde({ ipcMain, shell, insideProject, isProject
   /* "delete" moves to the Recycle Bin, so a mistake can be undone */
   ipcMain.handle('fs:trash', async (_e, p) => {
     p = guard(p);
-    if (isProjectRoot(p)) throw new Error('Proje klasörünün kendisi silinemez.');
+    if (isProjectRoot(p)) throw new Error(__('Proje klasörünün kendisi silinemez.'));
     await shell.trashItem(p);
     return true;
   });

@@ -6,6 +6,7 @@ const path = require('path');
 const fsp = require('fs').promises;
 const { execFile } = require('child_process');
 const { net } = require('electron');
+const I18N = require('../i18n/i18n.js'); const __ = I18N.t;
 
 const GIT_HASH = /^[0-9a-f]{4,40}$/i;
 const STASH_REF = /^stash@\{\d{1,4}\}$/;
@@ -22,7 +23,7 @@ module.exports = function gitApi({ isProject, insideProject, whereFirst, identit
   }
   const gitSafe = (cwd, args, o) => git(cwd, args, o).catch(() => '');
   function check(p) {
-    if (!p || !isProject(p)) throw new Error('Kayıtlı bir proje değil');
+    if (!p || !isProject(p)) throw new Error(__('Kayıtlı bir proje değil'));
     return p;
   }
 
@@ -87,26 +88,26 @@ module.exports = function gitApi({ isProject, insideProject, whereFirst, identit
   async function sync(p, action) {
     check(p);
     const h = await head(p);
-    if (!h.repo) throw new Error('Bu proje bir git deposu değil.');
-    if (!h.remotes.length) throw new Error('Bu deponun uzak bağlantısı (remote) yok.');
+    if (!h.repo) throw new Error(__('Bu proje bir git deposu değil.'));
+    if (!h.remotes.length) throw new Error(__('Bu deponun uzak bağlantısı (remote) yok.'));
     if (action === 'fetch') await git(p, ['fetch', '--prune', '--quiet'], NET);
     else if (action === 'pull') {
-      if (h.detached) throw new Error('Bir dalda değilsin (detached HEAD).');
-      if (!h.upstream) throw new Error('Bu dalın uzak karşılığı yok.');
-      if (h.conflicted) throw new Error('Çözülmemiş çakışmalar var.');
+      if (h.detached) throw new Error(__('Bir dalda değilsin (detached HEAD).'));
+      if (!h.upstream) throw new Error(__('Bu dalın uzak karşılığı yok.'));
+      if (h.conflicted) throw new Error(__('Çözülmemiş çakışmalar var.'));
       await git(p, ['pull', '--ff-only', '--quiet'], NET).catch(e => {
-        if (/not possible to fast-forward|diverg|fast-forward/i.test(e.message)) throw new Error('Yerel ve uzak dal ayrışmış; otomatik birleştirmedim. Önce birleştirme ya da rebase gerekiyor.');
-        if (/would be overwritten/i.test(e.message)) throw new Error('Gelen değişiklikler, commit edilmemiş dosyalarının üzerine yazacak. Önce commit ya da stash yap.');
+        if (/not possible to fast-forward|diverg|fast-forward/i.test(e.message)) throw new Error(__('Yerel ve uzak dal ayrışmış; otomatik birleştirmedim. Önce birleştirme ya da rebase gerekiyor.'));
+        if (/would be overwritten/i.test(e.message)) throw new Error(__('Gelen değişiklikler, commit edilmemiş dosyalarının üzerine yazacak. Önce commit ya da stash yap.'));
         throw e;
       });
     } else if (action === 'push') {
-      if (h.detached) throw new Error('Bir dalda değilsin (detached HEAD).');
+      if (h.detached) throw new Error(__('Bir dalda değilsin (detached HEAD).'));
       if (h.upstream) await git(p, ['push', '--quiet'], NET).catch(e => {
-        if (/rejected|fetch first|non-fast-forward/i.test(e.message)) throw new Error('Uzakta sende olmayan commitler var. Önce pull yap.');
+        if (/rejected|fetch first|non-fast-forward/i.test(e.message)) throw new Error(__('Uzakta sende olmayan commitler var. Önce pull yap.'));
         throw e;
       });
       else await git(p, ['push', '--quiet', '-u', h.remotes.includes('origin') ? 'origin' : h.remotes[0], 'HEAD'], NET);
-    } else throw new Error('Bilinmeyen işlem');
+    } else throw new Error(__('Bilinmeyen işlem'));
     return { before: h, after: await head(p) };
   }
 
@@ -144,7 +145,7 @@ module.exports = function gitApi({ isProject, insideProject, whereFirst, identit
 
   async function show(p, hash) {
     check(p);
-    if (!GIT_HASH.test(hash)) throw new Error('Geçersiz commit');
+    if (!GIT_HASH.test(hash)) throw new Error(__('Geçersiz commit'));
     const [meta, stat, patch, unpushedOut, up] = await Promise.all([
       git(p, ['log', '-1', LOG_FMT, hash]),
       git(p, ['show', '--format=', '--numstat', '-M', hash]),
@@ -158,10 +159,10 @@ module.exports = function gitApi({ isProject, insideProject, whereFirst, identit
 
   async function diff(p, kind, file) {
     check(p);
-    if (typeof file !== 'string' || !file || file.includes('\0')) throw new Error('Geçersiz dosya');
+    if (typeof file !== 'string' || !file || file.includes('\0')) throw new Error(__('Geçersiz dosya'));
     if (kind === 'untracked') {
       const full = path.join(p, file);
-      if (!insideProject(full)) throw new Error('Proje dışında');
+      if (!insideProject(full)) throw new Error(__('Proje dışında'));
       const st = await fsp.stat(full);
       if (st.isDirectory()) return { untracked: true, dir: true };
       if (st.size > PATCH_CAP) return { untracked: true, big: true };
@@ -175,7 +176,7 @@ module.exports = function gitApi({ isProject, insideProject, whereFirst, identit
 
   async function stash(p, ref) {
     check(p);
-    if (!STASH_REF.test(ref)) throw new Error('Geçersiz stash');
+    if (!STASH_REF.test(ref)) throw new Error(__('Geçersiz stash'));
     const [stat, patch] = await Promise.all([
       git(p, ['stash', 'show', '--numstat', ref]),
       git(p, ['stash', 'show', '--patch', '--no-ext-diff', ref]),
@@ -189,11 +190,11 @@ module.exports = function gitApi({ isProject, insideProject, whereFirst, identit
   async function connect(p, url) {
     check(p);
     url = String(url || '').trim();
-    if (!GH_URL.test(url)) throw new Error('Bu bir GitHub depo adresi değil. Örnek: https://github.com/kullanici/depo');
+    if (!GH_URL.test(url)) throw new Error(__('Bu bir GitHub depo adresi değil. Örnek: https://github.com/kullanici/depo'));
     const isRepo = !!(await gitSafe(p, ['rev-parse', '--git-dir'])).trim();
     if (!isRepo) await git(p, ['init', '-b', 'main']);
     const origin = (await gitSafe(p, ['remote', 'get-url', 'origin'])).trim();
-    if (origin) throw new Error('Bu projenin zaten bir origin bağlantısı var: ' + origin);
+    if (origin) throw new Error(__('Bu projenin zaten bir origin bağlantısı var: {url}', { url: origin }));
     await git(p, ['remote', 'add', 'origin', url.replace(/\/$/, '')]);
     const hasCommit = !!(await gitSafe(p, ['rev-parse', '--verify', '--quiet', 'HEAD'])).trim();
     if (!hasCommit) return { initialized: !isRepo, pushed: false };
@@ -212,7 +213,7 @@ module.exports = function gitApi({ isProject, insideProject, whereFirst, identit
     if (ghCli === null) ghCli = whereFirst('gh').length > 0;
     if (ghCli) {
       const r = await ghRun(route);
-      if (!r.err) { try { return { data: JSON.parse(r.o), via: 'gh' }; } catch (_) { return { error: 'GitHub yanıtı okunamadı', via: 'gh' }; } }
+      if (!r.err) { try { return { data: JSON.parse(r.o), via: 'gh' }; } catch (_) { return { error: __('GitHub yanıtı okunamadı'), via: 'gh' }; } }
       if (/HTTP 404/.test(r.err)) return { status: 404, via: 'gh' };
       if (!/auth login|not logged|authentication/i.test(r.err)) return { error: r.err.split('\n')[0], via: 'gh' };
       // gh is installed but not signed in: fall back to the public API

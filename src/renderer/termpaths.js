@@ -133,8 +133,8 @@
   }
 
   function tipText(dir, inProject) {
-    const k = keysLabel('Ctrl+tık');
-    return dir ? `${k}: klasörü aç` : inProject ? `${k}: IDE’de aç` : `${k}: klasöründe göster`;
+    const keys = keysLabel(__('Ctrl+tık'));
+    return dir ? __('{keys}: klasörü aç', { keys }) : inProject ? __('{keys}: IDE’de aç', { keys }) : __('{keys}: klasöründe göster', { keys });
   }
 
   window.attachPathLinks = (term, getCwd) => {
@@ -172,7 +172,7 @@
                   uiHideTip();
                   if (!c.dir && inProject && openTermFile(c.path, c.line, c.col)) return;
                   const r = await api.invoke('path:open', c.path).catch(err => ({ error: err.message }));
-                  if (r && r.error) uiAlert({ title: 'Açılamadı', message: c.path, detail: r.error });
+                  if (r && r.error) uiAlert({ title: __('Açılamadı'), message: c.path, detail: r.error });
                 },
                 hover: e => uiTipAt(new DOMRect(e.clientX - 1, e.clientY - 9, 2, 18), c.path + '\n' + tipText(c.dir, inProject)),
                 leave: () => uiHideTip(),

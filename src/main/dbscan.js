@@ -5,6 +5,7 @@
 const path = require('path');
 const fs = require('fs');
 const fsp = fs.promises;
+const I18N = require('../i18n/i18n.js'); const __ = I18N.t;
 
 const SKIP = new Set(['node_modules', 'vendor', '.git', 'dist', 'build', 'out', '.next', '.cache', 'storage', 'bin', 'obj', '.idea', '.vs', 'cache']);
 const ENV_NAME = /^\.env(\.(local|dev|development|prod|production|staging|test|testing))?$/i;
@@ -96,7 +97,7 @@ function vnlEntries(text) {
     // which environment: the nearest "case true/false:" (testMode switch) or "if (...testMode...)" before it
     const before = text.slice(Math.max(0, m.index - 1500), m.index);
     const cases = [...before.matchAll(/case\s+(true|false)\s*:/gi)];
-    const env = cases.length ? (cases[cases.length - 1][1].toLowerCase() === 'true' ? 'test modu' : 'canlı') : '';
+    const env = cases.length ? (cases[cases.length - 1][1].toLowerCase() === 'true' ? __('test modu') : __('canlı')) : '';
     out.push({
       type: TYPE(phpString(block, 'driver')) || 'mysql',
       host: phpString(block, 'host'), port: +phpString(block, 'port') || null,

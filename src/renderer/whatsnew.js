@@ -8,66 +8,68 @@
   // try: what the "Dene" button does (optional)
   const NOTES = [
     {
-      id: '2026-11-20c', title: 'Sürüm 0.9.0', date: '20 Kasım 2026',
+      id: '2026-11-20c', title: __('Sürüm {v}', { v: '0.9.0' }), date: '2026-11-20',
       items: [
-        { icon: 'fa-solid fa-plug-circle-check', title: 'Claude ve Codex, SSH ve veritabanlarını VoxStorm üzerinden kullanır', text: 'Ajanlar VoxStorm’da kayıtlı SSH sunucularında komut, veritabanlarında sorgu çalıştırabilir. Bağlantıyı VoxStorm kurar; adres, kullanıcı adı ve parola ajana hiç verilmez, ajan yalnızca bağlantının adını ve komutun çıktısını görür. Bir bağlantıyı ilk kullanmak istediğinde sorulur: Evet / Hayır, istersen “her zaman hatırla”. Salt okunur bağlantılar korunur; DROP, TRUNCATE ve WHERE’siz UPDATE/DELETE her seferinde ayrıca sorulur. Kararları bağlantının düzenleme penceresinden değiştirebilir, özelliği Ayarlar’dan kapatabilirsin.', try: () => openSettings() },
-        { icon: 'fa-solid fa-diagram-project', title: 'Workflow ayrıntıları', text: 'Ajan panelinde bir workflow’a tıklayınca oturumuna geçilir ve ayrıntı penceresi açılır: fazlar, her fazdaki ajanlar, model, token, süre, ajanın o an ne yaptığı; biten ajanların sonucu ve commit’leri. Pencere açıkken canlı güncellenir.' },
-        { icon: 'fa-solid fa-star', title: 'Favori projeler', text: 'Karşılama ekranında ve Proje Başlat panelinde projeyi yıldızla; favoriler listenin başında durur. Yeni eklenen proje de artık oturumu olmadığı için en alta düşmüyor.', try: () => showPanel('side').then(() => openStartPanel()) },
+        { icon: 'fa-solid fa-plug-circle-check', title: __('Claude ve Codex, SSH ve veritabanlarını VoxStorm üzerinden kullanır'), text: __('Ajanlar VoxStorm’da kayıtlı SSH sunucularında komut, veritabanlarında sorgu çalıştırabilir. Bağlantıyı VoxStorm kurar; adres, kullanıcı adı ve parola ajana hiç verilmez, ajan yalnızca bağlantının adını ve komutun çıktısını görür. Bir bağlantıyı ilk kullanmak istediğinde sorulur: Evet / Hayır, istersen “her zaman hatırla”. Salt okunur bağlantılar korunur; DROP, TRUNCATE ve WHERE’siz UPDATE/DELETE her seferinde ayrıca sorulur. Kararları bağlantının düzenleme penceresinden değiştirebilir, özelliği Ayarlar’dan kapatabilirsin.'), try: () => openSettings() },
+        { icon: 'fa-solid fa-diagram-project', title: __('Workflow ayrıntıları'), text: __('Ajan panelinde bir workflow’a tıklayınca oturumuna geçilir ve ayrıntı penceresi açılır: fazlar, her fazdaki ajanlar, model, token, süre, ajanın o an ne yaptığı; biten ajanların sonucu ve commit’leri. Pencere açıkken canlı güncellenir.') },
+        { icon: 'fa-solid fa-star', title: __('Favori projeler'), text: __('Karşılama ekranında ve Proje Başlat panelinde projeyi yıldızla; favoriler listenin başında durur. Yeni eklenen proje de artık oturumu olmadığı için en alta düşmüyor.'), try: () => showPanel('side').then(() => openStartPanel()) },
       ],
-      small: ['Bir oturumun sekmesine bakınca o oturumun bildirimleri zildeki listeden de kalkıyor.', 'Ajan panelinde workflow’lar “Workflow” yerine kendi adıyla görünüyor.', 'Proje altındaki git satırı dar panelde taşmıyor.'],
+      small: [__('Bir oturumun sekmesine bakınca o oturumun bildirimleri zildeki listeden de kalkıyor.'), __('Ajan panelinde workflow’lar “Workflow” yerine kendi adıyla görünüyor.'), __('Proje altındaki git satırı dar panelde taşmıyor.')],
     },
     {
-      id: '2026-11-20b', title: 'Sürüm 0.8.1', date: '20 Kasım 2026',
+      id: '2026-11-20b', title: __('Sürüm {v}', { v: '0.8.1' }), date: '2026-11-20',
       items: [
-        { icon: 'fa-solid fa-folder-plus', title: 'Yeni proje ekleme penceresi', text: 'Klasörü sürükle-bırak, seç ya da yolunu yapıştır. Claude’un çalıştığı klasörler aranabilir listede; art arda birkaç tane ekleyebilirsin. IDE gezgininde proje seçicinin yanındaki + ile de açılır.', try: () => openDiscover() },
-        { icon: 'fa-solid fa-bars', title: 'Oturumlarda sağ tık menüsü', text: 'Soldaki oturum listesinde sağ tık artık doğrudan yeniden adlandırmıyor; menü açılır: gruba ekle, yeniden adlandır, kapat. Dışarıdaki ve geçmiş oturumlarda izle, taşı, devam et.' },
-        { icon: 'fa-solid fa-puzzle-piece', title: 'Eklentilere menü ve ipucu', text: 'Eklentiler oturum, proje ve dosya sağ tık menülerine öğe ekleyebilir, düğmelerine açılır menü koyabilir, kendi sayfalarından menü açabilir. Eklenti sayfalarındaki title’lar uygulamanın temalı ipucuyla görünür.' },
+        { icon: 'fa-solid fa-folder-plus', title: __('Yeni proje ekleme penceresi'), text: __('Klasörü sürükle-bırak, seç ya da yolunu yapıştır. Claude’un çalıştığı klasörler aranabilir listede; art arda birkaç tane ekleyebilirsin. IDE gezgininde proje seçicinin yanındaki + ile de açılır.'), try: () => openDiscover() },
+        { icon: 'fa-solid fa-bars', title: __('Oturumlarda sağ tık menüsü'), text: __('Soldaki oturum listesinde sağ tık artık doğrudan yeniden adlandırmıyor; menü açılır: gruba ekle, yeniden adlandır, kapat. Dışarıdaki ve geçmiş oturumlarda izle, taşı, devam et.') },
+        { icon: 'fa-solid fa-puzzle-piece', title: __('Eklentilere menü ve ipucu'), text: __('Eklentiler oturum, proje ve dosya sağ tık menülerine öğe ekleyebilir, düğmelerine açılır menü koyabilir, kendi sayfalarından menü açabilir. Eklenti sayfalarındaki title’lar uygulamanın temalı ipucuyla görünür.') },
       ],
-      small: ['Soldan bir oturuma tıklayınca, sekme çok olsa da üst şerit o sekmeye kayıyor.'],
+      small: [__('Soldan bir oturuma tıklayınca, sekme çok olsa da üst şerit o sekmeye kayıyor.')],
     },
     {
-      id: '2026-11-20', title: 'Sürüm 0.8.0', date: '20 Kasım 2026',
+      id: '2026-11-20', title: __('Sürüm {v}', { v: '0.8.0' }), date: '2026-11-20',
       items: [
-        { icon: 'fa-brands fa-openai', title: 'Codex desteği', text: 'Claude Code’un yanında OpenAI Codex oturumları: + Oturum menüsünden ya da Ctrl+Shift+X ile aç. İzin kartları, bitince bildirim, geçmiş ve kaldığın yerden devam, alt ajanlar ve arka planda süren komutlar ajan panelinde. Codex kurulu değilse hiçbir yerde görünmez.', keys: 'Ctrl+Shift+X', try: () => { if (INFO && INFO.codex) setMode('claude'); else toast('Codex kurulu değil', 'npm i -g @openai/codex, ardından codex login.'); } },
-        { icon: 'fa-solid fa-wand-magic-sparkles', title: 'Varsayılan yapay zekâ', text: 'Ayarlarda Claude ya da Codex seç: Ctrl+Shift+N ve “… sor” düğmeleri (IDE, DB) seçtiğine gider.' },
-        { icon: 'fa-solid fa-chart-column', title: 'Codex kullanımı', text: 'Haftalık kullanım panelinde Claude / Codex seçici: Codex’in token grafiği ve 5 saatlik / haftalık plan limitleri.' },
-        { icon: 'fa-brands fa-linux', title: 'Linux desteği', text: 'VoxStorm artık Linux’ta da çalışıyor: AppImage ve .deb. Güncellemeler AppImage’da uygulama içinden gelir.' },
-        { icon: 'fa-solid fa-file-import', title: 'Terminale sürükle-bırak', text: 'Gezginden ya da masaüstünden dosya/klasörü terminale bırak; yolu tırnaklı olarak yazılır.' },
-        { icon: 'fa-solid fa-sliders', title: 'Tek sayfa ayarlar', text: 'Claude, Codex ve hitap ayarları tek kaydırılabilir “Yapay zekâ” sayfasında: ortak ayarlar açık, Claude ve Codex bölümleri katlanır.' },
+        { icon: 'fa-brands fa-openai', title: __('Codex desteği'), text: __('Claude Code’un yanında OpenAI Codex oturumları: + Oturum menüsünden ya da Ctrl+Shift+X ile aç. İzin kartları, bitince bildirim, geçmiş ve kaldığın yerden devam, alt ajanlar ve arka planda süren komutlar ajan panelinde. Codex kurulu değilse hiçbir yerde görünmez.'), keys: 'Ctrl+Shift+X', try: () => { if (INFO && INFO.codex) setMode('claude'); else toast(__('Codex kurulu değil'), __('npm i -g @openai/codex, ardından codex login.')); } },
+        { icon: 'fa-solid fa-wand-magic-sparkles', title: __('Varsayılan yapay zekâ'), text: __('Ayarlarda Claude ya da Codex seç: Ctrl+Shift+N ve “… sor” düğmeleri (IDE, DB) seçtiğine gider.') },
+        { icon: 'fa-solid fa-chart-column', title: __('Codex kullanımı'), text: __('Haftalık kullanım panelinde Claude / Codex seçici: Codex’in token grafiği ve 5 saatlik / haftalık plan limitleri.') },
+        { icon: 'fa-brands fa-linux', title: __('Linux desteği'), text: __('VoxStorm artık Linux’ta da çalışıyor: AppImage ve .deb. Güncellemeler AppImage’da uygulama içinden gelir.') },
+        { icon: 'fa-solid fa-file-import', title: __('Terminale sürükle-bırak'), text: __('Gezginden ya da masaüstünden dosya/klasörü terminale bırak; yolu tırnaklı olarak yazılır.') },
+        { icon: 'fa-solid fa-sliders', title: __('Tek sayfa ayarlar'), text: __('Claude, Codex ve hitap ayarları tek kaydırılabilir “Yapay zekâ” sayfasında: ortak ayarlar açık, Claude ve Codex bölümleri katlanır.') },
       ],
-      small: ['Panel başlıklarındaki sabitle ve kapat düğmeleri hep görünür; yanındaki düğmeler artık kaymıyor.', 'Terminalde emojili satırlarda harflerin üst üste binmesi düzeldi.', 'Görev çubuğu simgesi güncel logo.'],
+      small: [__('Panel başlıklarındaki sabitle ve kapat düğmeleri hep görünür; yanındaki düğmeler artık kaymıyor.'), __('Terminalde emojili satırlarda harflerin üst üste binmesi düzeldi.'), __('Görev çubuğu simgesi güncel logo.')],
     },
     {
-      id: '2026-11-19', title: 'Sürüm 0.7.0', date: '19 Kasım 2026',
+      id: '2026-11-19', title: __('Sürüm {v}', { v: '0.7.0' }), date: '2026-11-19',
       items: [
-        { icon: 'fa-solid fa-server', title: 'SSH modu', text: 'PuTTY ve WinSCP bir arada: kayıtlı sunucular, terminal, iki panelli SFTP dosya yöneticisi (sürükle-bırak, klasör aktarımı, chmod, uzak dosyayı düzenleme), port yönlendirme tünelleri ve Uzak Masaüstü (RDP) kayıtları.', keys: 'Ctrl+4', try: () => setMode('ssh') },
-        { icon: 'fa-brands fa-docker', title: 'Docker', text: 'Git düğmesinin yanındaki Docker panelinden bu bilgisayardaki konteynerleri yönet: başlat / durdur, canlı loglar, konteynerde terminal, compose projeleri, imajlar. SSH oturumlarında da sunucudaki Docker için ayrı bir görünüm var.', keys: 'Ctrl+Shift+Y', try: () => { const b = document.getElementById('dockerBtn'); if (b && !b.hidden) b.click(); else toast('Docker bulunamadı', 'Docker Desktop kurulu olmalı.'); } },
-        { icon: 'fa-solid fa-bars', title: 'IDE menü çubuğu', text: 'Dosya, Düzen, Seçim, Görünüm, Terminal ve Yardım menüleri. Bul ve değiştir (regex), kod katlama, Ctrl+D ile çoklu imleç, satır taşıma / çoğaltma, JSON biçimlendirme, son açılan dosyalar, farklı kaydet.', keys: 'Alt / F10', try: () => setMode('ide') },
-        { icon: 'fa-solid fa-database', title: 'IDE içinde veritabanı', text: 'Gezginde “DB” sekmesi: bağlantılar, tablolar, sütunlar. Seçili SQL’i ya da .sql dosyasında imleçteki deyimi Ctrl+Shift+Enter ile çalıştır; sonuçlar düzenleyicinin altındaki panelde.', keys: 'Ctrl+Shift+Enter', try: () => { setMode('ide'); const b = document.querySelector('[data-exview=db]'); if (b) b.click(); } },
-        { icon: 'fa-solid fa-up-right-from-square', title: 'Modlar ayrı pencerede', text: 'AI, IDE, DB ya da SSH’yi kendi penceresine al (örneğin ikinci monitöre). Mod düğmesine sağ tıkla ya da Ctrl+Shift+M; pencereyi kapatınca mod ana pencereye döner.', keys: 'Ctrl+Shift+M' },
-        { icon: 'fa-solid fa-layer-group', title: 'Sekme grupları', text: 'Bir ya da birden çok projedeki Claude oturumlarını adlı, renkli gruplara al. Sekmeye sağ tıkla ya da Ctrl+tık ile seçip Ctrl+Shift+L. Kapalı grup, içinde karar bekleyen olursa yanıp söner.', keys: 'Ctrl+Shift+L', try: () => setMode('claude') },
-        { icon: 'fa-solid fa-clock-rotate-left', title: 'Kapatılanı geri aç', text: 'Yanlışlıkla kapattığın Claude oturumu konuşmasıyla geri gelir. Sekme çubuğunda + yanındaki düğme sonuncuyu açar, ▾ ile proje adı ve zamanıyla listeden seçersin. Zaten açık olan oturumlar listede görünmez.', keys: 'Ctrl+Alt+T', try: () => setMode('claude') },
-        { icon: 'fa-brands fa-apple', title: 'macOS desteği', text: 'VoxStorm artık Mac’te de çalışıyor (Apple Silicon ve Intel). Kısayollar ⌘ ile, Claude Code ve terminaller aynı; güncellemeler Mac’te de uygulama içinden gelir.' },
-        { icon: 'fa-solid fa-gift', title: 'Neler yeni', text: 'Bu ekran: yeni sürümün ilk açılışında bir kez çıkar, sağ alttaki düğmeden her zaman açılır.' },
+        { icon: 'fa-solid fa-server', title: __('SSH modu'), text: __('PuTTY ve WinSCP bir arada: kayıtlı sunucular, terminal, iki panelli SFTP dosya yöneticisi (sürükle-bırak, klasör aktarımı, chmod, uzak dosyayı düzenleme), port yönlendirme tünelleri ve Uzak Masaüstü (RDP) kayıtları.'), keys: 'Ctrl+4', try: () => setMode('ssh') },
+        { icon: 'fa-brands fa-docker', title: 'Docker', text: __('Git düğmesinin yanındaki Docker panelinden bu bilgisayardaki konteynerleri yönet: başlat / durdur, canlı loglar, konteynerde terminal, compose projeleri, imajlar. SSH oturumlarında da sunucudaki Docker için ayrı bir görünüm var.'), keys: 'Ctrl+Shift+Y', try: () => { const b = document.getElementById('dockerBtn'); if (b && !b.hidden) b.click(); else toast(__('Docker bulunamadı'), __('Docker Desktop kurulu olmalı.')); } },
+        { icon: 'fa-solid fa-bars', title: __('IDE menü çubuğu'), text: __('Dosya, Düzen, Seçim, Görünüm, Terminal ve Yardım menüleri. Bul ve değiştir (regex), kod katlama, Ctrl+D ile çoklu imleç, satır taşıma / çoğaltma, JSON biçimlendirme, son açılan dosyalar, farklı kaydet.'), keys: 'Alt / F10', try: () => setMode('ide') },
+        { icon: 'fa-solid fa-database', title: __('IDE içinde veritabanı'), text: __('Gezginde “DB” sekmesi: bağlantılar, tablolar, sütunlar. Seçili SQL’i ya da .sql dosyasında imleçteki deyimi Ctrl+Shift+Enter ile çalıştır; sonuçlar düzenleyicinin altındaki panelde.'), keys: 'Ctrl+Shift+Enter', try: () => { setMode('ide'); const b = document.querySelector('[data-exview=db]'); if (b) b.click(); } },
+        { icon: 'fa-solid fa-up-right-from-square', title: __('Modlar ayrı pencerede'), text: __('AI, IDE, DB ya da SSH’yi kendi penceresine al (örneğin ikinci monitöre). Mod düğmesine sağ tıkla ya da Ctrl+Shift+M; pencereyi kapatınca mod ana pencereye döner.'), keys: 'Ctrl+Shift+M' },
+        { icon: 'fa-solid fa-layer-group', title: __('Sekme grupları'), text: __('Bir ya da birden çok projedeki Claude oturumlarını adlı, renkli gruplara al. Sekmeye sağ tıkla ya da Ctrl+tık ile seçip Ctrl+Shift+L. Kapalı grup, içinde karar bekleyen olursa yanıp söner.'), keys: 'Ctrl+Shift+L', try: () => setMode('claude') },
+        { icon: 'fa-solid fa-clock-rotate-left', title: __('Kapatılanı geri aç'), text: __('Yanlışlıkla kapattığın Claude oturumu konuşmasıyla geri gelir. Sekme çubuğunda + yanındaki düğme sonuncuyu açar, ▾ ile proje adı ve zamanıyla listeden seçersin. Zaten açık olan oturumlar listede görünmez.'), keys: 'Ctrl+Alt+T', try: () => setMode('claude') },
+        { icon: 'fa-brands fa-apple', title: __('macOS desteği'), text: __('VoxStorm artık Mac’te de çalışıyor (Apple Silicon ve Intel). Kısayollar ⌘ ile, Claude Code ve terminaller aynı; güncellemeler Mac’te de uygulama içinden gelir.') },
+        { icon: 'fa-solid fa-gift', title: __('Neler yeni'), text: __('Bu ekran: yeni sürümün ilk açılışında bir kez çıkar, sağ alttaki düğmeden her zaman açılır.') },
       ],
-      small: ['Oturum adları: senin verdiğin ad yoksa ilk mesaj yerine Claude’un oturuma verdiği başlık (terminal başlığındaki) kullanılıyor; açık sekmelerde de anında güncelleniyor.', 'Mod düğmeleri hap yerine Git düğmesi gibi köşeli.'],
+      small: [__('Oturum adları: senin verdiğin ad yoksa ilk mesaj yerine Claude’un oturuma verdiği başlık (terminal başlığındaki) kullanılıyor; açık sekmelerde de anında güncelleniyor.'), __('Mod düğmeleri hap yerine Git düğmesi gibi köşeli.')],
     },
     {
-      id: '2026-11-16', title: 'Sürüm 0.6.0', date: '16 Kasım 2026',
+      id: '2026-11-16', title: __('Sürüm {v}', { v: '0.6.0' }), date: '2026-11-16',
       items: [
-        { icon: 'fa-solid fa-table-columns', title: 'Dock düzeninde yan paneller', text: 'Visual Studio / VS Code gibi: simge şeritleri, sekmeli ve bölünebilir gruplar, sürükle-bırak ile dock pusulası, otomatik gizleme (raptiye), katlama ve boyutlandırma.' },
-        { icon: 'fa-solid fa-gauge-high', title: 'Plan limitleri', text: 'Haftalık kullanım panelinde Claude Code /usage gibi plan limitleri modu.' },
-        { icon: 'fa-brands fa-chrome', title: 'Chrome ve açılış komutu', text: 'Claude oturumlarını --chrome ile başlatma ve varsayılan açılış komutu. Karşılama ekranında projeye tıklayınca doğrudan yeni oturum.' },
+        { icon: 'fa-solid fa-table-columns', title: __('Dock düzeninde yan paneller'), text: __('Visual Studio / VS Code gibi: simge şeritleri, sekmeli ve bölünebilir gruplar, sürükle-bırak ile dock pusulası, otomatik gizleme (raptiye), katlama ve boyutlandırma.') },
+        { icon: 'fa-solid fa-gauge-high', title: __('Plan limitleri'), text: __('Haftalık kullanım panelinde Claude Code /usage gibi plan limitleri modu.') },
+        { icon: 'fa-brands fa-chrome', title: __('Chrome ve açılış komutu'), text: __('Claude oturumlarını --chrome ile başlatma ve varsayılan açılış komutu. Karşılama ekranında projeye tıklayınca doğrudan yeni oturum.') },
       ],
     },
     {
-      id: '2026-11-14', title: 'Sürüm 0.5.1 – 0.5.2', date: '14 Kasım 2026',
+      id: '2026-11-14', title: __('Sürüm {v}', { v: '0.5.1 – 0.5.2' }), date: '2026-11-14',
       items: [
-        { icon: 'fa-solid fa-robot', title: 'Arka plan ajanları', text: 'Arka plan alt ajanları ve workflow’lar bitene kadar aktif listede kalıyor; tıklayınca ajanın konuşması açılıyor.' },
-        { icon: 'fa-solid fa-computer-mouse', title: 'Sekme çubuğu', text: 'Sekme çubukları düz fare tekerleğiyle yana kayıyor.' },
+        { icon: 'fa-solid fa-robot', title: __('Arka plan ajanları'), text: __('Arka plan alt ajanları ve workflow’lar bitene kadar aktif listede kalıyor; tıklayınca ajanın konuşması açılıyor.') },
+        { icon: 'fa-solid fa-computer-mouse', title: __('Sekme çubuğu'), text: __('Sekme çubukları düz fare tekerleğiyle yana kayıyor.') },
       ],
     },
   ];
+  // NOTES dates are YYYY-MM-DD; shown in the interface language ("20 Kasım 2026")
+  const fmtDate = s => { const [y, m, d] = String(s).split('-').map(Number); return new Date(y, m - 1, d).toLocaleDateString(I18N.locale(), { day: 'numeric', month: 'long', year: 'numeric' }); };
   const newest = NOTES[0].id;
   const seen = () => String((CFG && CFG.settings && CFG.settings.whatsNewSeen) || '');
   const unseen = () => seen() < newest;
@@ -78,7 +80,7 @@
     bg.className = 'settings-bg wn-bg';
     bg.hidden = true;
     bg.innerHTML = `<div class="wn" role="dialog" aria-modal="true" aria-labelledby="wnTitle">
-      <div class="wn-h"><i class="fa-solid fa-gift"></i><span id="wnTitle">Neler yeni</span><button class="ghost" data-wn="close">Kapat <i class="fa-solid fa-xmark"></i></button></div>
+      <div class="wn-h"><i class="fa-solid fa-gift"></i><span id="wnTitle">${__('Neler yeni')}</span><button class="ghost" data-wn="close">${__('Kapat')} <i class="fa-solid fa-xmark"></i></button></div>
       <div class="wn-body"></div></div>`;
     document.getElementById('win').appendChild(bg);
     bg.addEventListener('click', e => {
@@ -93,15 +95,15 @@
   }
   function card(it, n, i) {
     return `<div class="wn-card"><i class="${it.icon} wn-ic"></i><div class="wn-tx"><b>${esc(it.title)}</b><p>${esc(it.text)}</p>
-      ${it.keys || it.try ? `<div class="wn-f">${it.keys ? `<span class="wn-k">${it.keys.split(' / ').map(k => k.split('+').map(x => `<kbd>${esc(x)}</kbd>`).join('')).join(' <span>/</span> ')}</span>` : ''}${it.try ? `<button class="btn" data-wn="try:${n}:${i}">Dene <i class="fa-solid fa-arrow-right"></i></button>` : ''}</div>` : ''}</div></div>`;
+      ${it.keys || it.try ? `<div class="wn-f">${it.keys ? `<span class="wn-k">${it.keys.split(' / ').map(k => k.split('+').map(x => `<kbd>${esc(x)}</kbd>`).join('')).join(' <span>/</span> ')}</span>` : ''}${it.try ? `<button class="btn" data-wn="try:${n}:${i}">${__('Dene')} <i class="fa-solid fa-arrow-right"></i></button>` : ''}</div>` : ''}</div></div>`;
   }
   function render() {
     const [cur, ...old] = NOTES;
     bg.querySelector('.wn-body').innerHTML = `
-      <div class="wn-rel"><div class="wn-rh"><b>${esc(cur.title)}</b><span>${esc(cur.date)}</span></div>
+      <div class="wn-rel"><div class="wn-rh"><b>${esc(cur.title)}</b><span>${esc(fmtDate(cur.date))}</span></div>
         <div class="wn-grid">${cur.items.map((it, i) => card(it, 0, i)).join('')}</div>
         ${cur.small ? `<ul class="wn-small">${cur.small.map(s => `<li>${esc(s)}</li>`).join('')}</ul>` : ''}</div>
-      ${old.map((r, n) => `<div class="wn-old"><button class="wn-ot" data-wn="older"><i class="fa-solid fa-chevron-right"></i><b>${esc(r.title)}</b><span>${esc(r.date)}</span></button>
+      ${old.map((r, n) => `<div class="wn-old"><button class="wn-ot" data-wn="older"><i class="fa-solid fa-chevron-right"></i><b>${esc(r.title)}</b><span>${esc(fmtDate(r.date))}</span></button>
         <div class="wn-grid">${r.items.map((it, i) => card(it, n + 1, i)).join('')}</div></div>`).join('')}`;
   }
   function open() {
@@ -113,7 +115,7 @@
   }
   function close() { if (bg) bg.hidden = true; }
   // the status-bar button (app.js puts chipHtml() into the status bar on every render)
-  const chipHtml = () => `<button class="sb-chip wn-chip${unseen() ? ' new' : ''}" data-whatsnew="1" title="Neler yeni (Ctrl+Shift+F1)"><i class="fa-solid fa-gift"></i> Neler yeni${unseen() ? '<span class="wn-dot"></span>' : ''}</button>`;
+  const chipHtml = () => `<button class="sb-chip wn-chip${unseen() ? ' new' : ''}" data-whatsnew="1" title="${esc(__('Neler yeni (Ctrl+Shift+F1)'))}"><i class="fa-solid fa-gift"></i> ${__('Neler yeni')}${unseen() ? '<span class="wn-dot"></span>' : ''}</button>`;
   function refreshChip() { const c = document.querySelector('#statusbar [data-whatsnew]'); if (c) c.outerHTML = chipHtml(); }
   document.addEventListener('click', e => { if (e.target.closest('[data-whatsnew]')) open(); });
 
@@ -125,5 +127,5 @@
       if (!only && unseen()) setTimeout(open, 600);
     },
   };
-  try { SHORTCUTS.push({ group: 'Genel', keys: 'Ctrl+Shift+F1', label: 'Neler yeni', run: () => open() }); } catch (_) {}
+  try { SHORTCUTS.push({ group: __('Genel'), keys: 'Ctrl+Shift+F1', label: __('Neler yeni'), run: () => open() }); } catch (_) {}
 })();

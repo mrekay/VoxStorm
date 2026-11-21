@@ -27,10 +27,10 @@
   async function reopen(i = 0) {
     prune();
     const e = list()[i]; // index into what the user sees (open sessions left out)
-    if (!e) { toast('Kapatılan sekme yok'); return; }
+    if (!e) { toast(__('Kapatılan sekme yok')); return; }
     const rest = stored().filter(x => x !== e);
     save(rest);
-    if (!proj(e.projectId)) { toast('Proje artık listede yok', e.title); return; }
+    if (!proj(e.projectId)) { toast(__('Proje artık listede yok'), e.title); return; }
     if (S.mode !== 'claude' && S.mode !== 'ide') setMode('claude');
     const group = e.group && S.groups && S.groups.some(g => g.id === e.group) ? e.group : null;
     if (e.kind === 'claude') {
@@ -39,10 +39,10 @@
   }
   const ago = ms => {
     const s = Math.max(0, (Date.now() - ms) / 1000);
-    if (s < 60) return 'az önce';
-    if (s < 3600) return Math.floor(s / 60) + ' dk önce';
-    if (s < 86400) return Math.floor(s / 3600) + ' sa önce';
-    return Math.floor(s / 86400) + ' gün önce';
+    if (s < 60) return __('az önce');
+    if (s < 3600) return __('{n} dk önce', { n: Math.floor(s / 60) });
+    if (s < 86400) return __('{n} sa önce', { n: Math.floor(s / 3600) });
+    return __('{n} gün önce', { n: Math.floor(s / 86400) });
   };
 
   /* the list under the clock button */
@@ -56,19 +56,19 @@
       menu.addEventListener('click', e => {
         const b = e.target.closest('[data-ct]'); if (!b) return;
         closeMenu();
-        if (b.dataset.ct === 'clear') { save([]); if (window.renderAll) renderAll(); toast('Liste temizlendi'); }
+        if (b.dataset.ct === 'clear') { save([]); if (window.renderAll) renderAll(); toast(__('Liste temizlendi')); }
         else reopen(+b.dataset.ct);
       });
       document.addEventListener('mousedown', e => { if (menu && !menu.hidden && !e.target.closest('.ct-menu,[data-closedmenu]')) closeMenu(); });
       document.addEventListener('keydown', e => { if (e.key === 'Escape' && menu && !menu.hidden) closeMenu(); });
     }
     const l = list();
-    menu.innerHTML = `<div class="h">Son kapatılanlar</div>` + (l.length ? l.map((e, i) => {
+    menu.innerHTML = `<div class="h">${__('Son kapatılanlar')}</div>` + (l.length ? l.map((e, i) => {
       const p = proj(e.projectId);
       const icon = e.kind !== 'claude' ? 'fa-solid fa-terminal' : e.agent === 'codex' ? 'fa-brands fa-openai' : 'fa-solid fa-robot';
-      return `<button data-ct="${i}" role="menuitem" title="${e.kind === 'claude' ? 'Konuşmasıyla birlikte devam ettir' : 'Yeni terminal aç'}"><i class="${icon}"></i><span class="ct-t"><b>${esc(e.title)}</b><small>${esc(p ? p.name : 'silinmiş proje')} · ${ago(e.at)}</small></span>${i === 0 ? '<kbd>Ctrl+Alt+T</kbd>' : ''}</button>`;
-    }).join('') + '<div class="sep"></div><button data-ct="clear" role="menuitem"><i class="fa-solid fa-broom"></i><span class="ct-t">Listeyi temizle</span></button>'
-      : '<div class="ct-empty">Bu oturumda kapatılan sekme yok.</div>');
+      return `<button data-ct="${i}" role="menuitem" title="${esc(e.kind === 'claude' ? __('Konuşmasıyla birlikte devam ettir') : __('Yeni terminal aç'))}"><i class="${icon}"></i><span class="ct-t"><b>${esc(e.title)}</b><small>${esc(p ? p.name : __('silinmiş proje'))} · ${ago(e.at)}</small></span>${i === 0 ? '<kbd>Ctrl+Alt+T</kbd>' : ''}</button>`;
+    }).join('') + `<div class="sep"></div><button data-ct="clear" role="menuitem"><i class="fa-solid fa-broom"></i><span class="ct-t">${__('Listeyi temizle')}</span></button>`
+      : `<div class="ct-empty">${__('Bu oturumda kapatılan sekme yok.')}</div>`);
     menu.hidden = false;
     const w = document.getElementById('win').getBoundingClientRect(), r = btn.getBoundingClientRect();
     menu.style.left = Math.max(8, Math.min(r.right - w.left - menu.offsetWidth, w.width - menu.offsetWidth - 8)) + 'px';
@@ -87,7 +87,7 @@
   function buttonHtml(wide) {
     const l = list(); if (!l.length) return '';
     const p = proj(l[0].projectId);
-    return `<span class="ct-split${wide ? ' wide' : ''}"><button class="ct-main" data-ctlast="1" title="Son kapatılanı yeniden aç: ${esc(l[0].title)}${p ? ' · ' + esc(p.name) : ''} (Ctrl+Alt+T)" aria-label="Son kapatılanı yeniden aç"><i class="fa-solid fa-clock-rotate-left"></i>${wide ? ' Kapatılanı geri aç' : ''}</button><button class="ct-car" data-closedmenu="1" title="Kapatılanlardan birini seç (${l.length})" aria-label="Kapatılan sekmeler listesi" aria-haspopup="true" aria-expanded="false"><i class="fa-solid fa-chevron-down"></i></button></span>`;
+    return `<span class="ct-split${wide ? ' wide' : ''}"><button class="ct-main" data-ctlast="1" title="${esc(__('Son kapatılanı yeniden aç: {name}', { name: l[0].title + (p ? ' · ' + p.name : '') }))} (Ctrl+Alt+T)" aria-label="${esc(__('Son kapatılanı yeniden aç'))}"><i class="fa-solid fa-clock-rotate-left"></i>${wide ? ' ' + esc(__('Kapatılanı geri aç')) : ''}</button><button class="ct-car" data-closedmenu="1" title="${esc(__('Kapatılanlardan birini seç ({n})', { n: l.length }))}" aria-label="${esc(__('Kapatılan sekmeler listesi'))}" aria-haspopup="true" aria-expanded="false"><i class="fa-solid fa-chevron-down"></i></button></span>`;
   }
   document.addEventListener('click', e => {
     if (!e.target.closest('[data-ctlast]')) return;
@@ -96,6 +96,6 @@
 
   window.closedTabs = { remember, reopen, buttonHtml, list };
   try {
-    SHORTCUTS.push({ group: 'Terminaller', keys: 'Ctrl+Alt+T', label: 'Son kapatılan sekmeyi yeniden aç (Claude oturumu konuşmasıyla döner)', when: () => S.mode === 'claude' || S.mode === 'ide', run: () => reopen(0) });
+    SHORTCUTS.push({ group: __('Terminaller'), keys: 'Ctrl+Alt+T', label: __('Son kapatılan sekmeyi yeniden aç (Claude oturumu konuşmasıyla döner)'), when: () => S.mode === 'claude' || S.mode === 'ide', run: () => reopen(0) });
   } catch (_) {}
 })();

@@ -9,7 +9,7 @@
 (() => {
   'use strict';
   const view = document.getElementById('sshView');
-  const COLORS = [['', 'Yok'], ['red', 'Kırmızı'], ['orange', 'Turuncu'], ['yellow', 'Sarı'], ['green', 'Yeşil'], ['blue', 'Mavi'], ['purple', 'Mor'], ['gray', 'Gri']];
+  const COLORS = [['', __('Yok')], ['red', __('Kırmızı')], ['orange', __('Turuncu')], ['yellow', __('Sarı')], ['green', __('Yeşil')], ['blue', __('Mavi')], ['purple', __('Mor')], ['gray', __('Gri')]];
   const errText = e => String((e && e.message) || e).replace(/^Error invoking remote method '[^']+': (Error: )?/, '');
   const inv = async (ch, ...a) => { try { return await api.invoke(ch, ...a); } catch (e) { return { error: errText(e) }; } };
   const uid = () => 't' + Math.random().toString(36).slice(2, 10);
@@ -18,7 +18,7 @@
     if (n < 1024) return n + ' B';
     const u = ['KB', 'MB', 'GB', 'TB']; let i = -1;
     do { n /= 1024; i++; } while (n >= 1024 && i < u.length - 1);
-    return n.toLocaleString('tr-TR', { maximumFractionDigits: n < 10 ? 1 : 0 }) + ' ' + u[i];
+    return n.toLocaleString(I18N.locale(), { maximumFractionDigits: n < 10 ? 1 : 0 }) + ' ' + u[i];
   };
   const fmtDate = ms => {
     if (!ms) return '';
@@ -55,13 +55,13 @@
   /* ---------------- build ---------------- */
   function build() {
     view.innerHTML = `
-      <aside class="ssh-side" aria-label="Sunucular">
-        <div class="ssh-side-h"><b>Sunucular</b><span class="ssh-grow"></span>
-          <button class="ssh-ib" data-act="newHost" title="Yeni bağlantı (Ctrl+Alt+N)" aria-label="Yeni bağlantı"><i class="fa-solid fa-plus"></i></button></div>
-        <div class="ssh-search"><i class="fa-solid fa-magnifying-glass"></i><input id="sshFilter" placeholder="Ara…" spellcheck="false" autocomplete="off" aria-label="Sunucu ara"></div>
-        <div class="ssh-hosts" id="sshHosts" tabindex="0" role="listbox" aria-label="Kayıtlı sunucular"></div>
+      <aside class="ssh-side" aria-label="${esc(__('Sunucular'))}">
+        <div class="ssh-side-h"><b>${__('Sunucular')}</b><span class="ssh-grow"></span>
+          <button class="ssh-ib" data-act="newHost" title="${esc(__('Yeni bağlantı (Ctrl+Alt+N)'))}" aria-label="${esc(__('Yeni bağlantı'))}"><i class="fa-solid fa-plus"></i></button></div>
+        <div class="ssh-search"><i class="fa-solid fa-magnifying-glass"></i><input id="sshFilter" placeholder="${esc(__('Ara…'))}" spellcheck="false" autocomplete="off" aria-label="${esc(__('Sunucu ara'))}"></div>
+        <div class="ssh-hosts" id="sshHosts" tabindex="0" role="listbox" aria-label="${esc(__('Kayıtlı sunucular'))}"></div>
       </aside>
-      <div class="ssh-split-v" data-drag="side" title="Sürükleyerek genişlet"></div>
+      <div class="ssh-split-v" data-drag="side" title="${esc(__('Sürükleyerek genişlet'))}"></div>
       <main class="ssh-main">
         <div class="ssh-tabs" id="sshTabs" role="tablist"></div>
         <div class="ssh-body" id="sshBody"></div>
@@ -78,7 +78,7 @@
     const q = X.filter.toLowerCase();
     const list = X.hosts.filter(h => !q || [h.name, h.host, h.user, h.group].some(v => (v || '').toLowerCase().includes(q)));
     if (!X.hosts.length) {
-      el.innerHTML = `<div class="ssh-hempty"><i class="fa-solid fa-server"></i><b>Kayıtlı sunucu yok</b><span>SSH/SFTP ya da Uzak Masaüstü (RDP) bağlantısı ekle.</span><button class="btn primary" data-act="newHost"><i class="fa-solid fa-plus"></i> Yeni bağlantı</button></div>`;
+      el.innerHTML = `<div class="ssh-hempty"><i class="fa-solid fa-server"></i><b>${__('Kayıtlı sunucu yok')}</b><span>${__('SSH/SFTP ya da Uzak Masaüstü (RDP) bağlantısı ekle.')}</span><button class="btn primary" data-act="newHost"><i class="fa-solid fa-plus"></i> ${__('Yeni bağlantı')}</button></div>`;
       return;
     }
     const groups = new Map();
@@ -91,15 +91,15 @@
       if (shut) continue;
       for (const h of groups.get(g)) {
         const live = X.tabs.filter(t => t.hostId === h.id && t.status === 'ok').length;
-        html += `<div class="ssh-host${X.cur === h.id ? ' cur' : ''}${g ? ' in-grp' : ''} db-c-${h.color || 'none'}" data-host="${h.id}" role="option" aria-selected="${X.cur === h.id}" draggable="true" title="${esc(hostAddr(h))} · çift tık: bağlan">
+        html += `<div class="ssh-host${X.cur === h.id ? ' cur' : ''}${g ? ' in-grp' : ''} db-c-${h.color || 'none'}" data-host="${h.id}" role="option" aria-selected="${X.cur === h.id}" draggable="true" title="${esc(__('{addr} · çift tık: bağlan', { addr: hostAddr(h) }))}">
           <i class="fa-solid ${h.kind === 'rdp' ? 'fa-desktop' : 'fa-terminal'} ssh-hi"></i>
           <span class="ssh-hn"><b>${esc(hostLabel(h))}</b><small>${esc(h.kind === 'rdp' ? 'RDP · ' + hostAddr(h) : hostAddr(h))}</small></span>
-          ${live ? `<span class="ssh-live" title="${live} açık oturum">${live}</span>` : ''}
-          <button class="ssh-ib sm" data-hostmenu="${h.id}" title="Diğer işlemler" aria-label="Diğer işlemler"><i class="fa-solid fa-ellipsis"></i></button>
+          ${live ? `<span class="ssh-live" title="${esc(__('{n} açık oturum', { n: live }))}">${live}</span>` : ''}
+          <button class="ssh-ib sm" data-hostmenu="${h.id}" title="${esc(__('Diğer işlemler'))}" aria-label="${esc(__('Diğer işlemler'))}"><i class="fa-solid fa-ellipsis"></i></button>
         </div>`;
       }
     }
-    el.innerHTML = html || '<div class="ssh-hnone">Eşleşen sunucu yok.</div>';
+    el.innerHTML = html || `<div class="ssh-hnone">${__('Eşleşen sunucu yok.')}</div>`;
   }
   async function loadHosts() {
     const r = await inv('ssh:list');
@@ -116,13 +116,13 @@
       const st = t.status === 'ok' ? 'ok' : t.status === 'connecting' ? 'busy' : 'off';
       return `<div class="ssh-tab${t.id === X.active ? ' on' : ''} db-c-${(h && h.color) || 'none'}" data-stab="${t.id}" role="tab" aria-selected="${t.id === X.active}" title="${esc(hostAddr(h))}">
         <span class="ssh-dot ${st}"></span><span class="ssh-tt">${esc(t.title)}</span>
-        <button class="ssh-tx" data-sclose="${t.id}" title="Kapat" aria-label="Sekmeyi kapat"><i class="fa-solid fa-xmark"></i></button></div>`;
-    }).join('') + `<button class="ssh-tadd" data-act="pickHost" title="Yeni oturum" aria-label="Yeni oturum"><i class="fa-solid fa-plus"></i></button>`;
+        <button class="ssh-tx" data-sclose="${t.id}" title="${esc(__('Kapat'))}" aria-label="${esc(__('Sekmeyi kapat'))}"><i class="fa-solid fa-xmark"></i></button></div>`;
+    }).join('') + `<button class="ssh-tadd" data-act="pickHost" title="${esc(__('Yeni oturum'))}" aria-label="${esc(__('Yeni oturum'))}"><i class="fa-solid fa-plus"></i></button>`;
     const body = document.getElementById('sshBody');
     if (!X.tabs.length && !body.querySelector('.ssh-empty')) {
       body.querySelectorAll('.ssh-sess').forEach(x => { x.hidden = true; });
-      body.insertAdjacentHTML('beforeend', `<div class="ssh-empty"><i class="fa-solid fa-network-wired"></i><b>Açık oturum yok</b><span>Soldaki listeden bir sunucuya çift tıkla ya da yeni bağlantı ekle.</span>
-        <dl class="en-keys"><dt>Yeni bağlantı</dt><dd><kbd>Ctrl</kbd><kbd>Alt</kbd><kbd>N</kbd></dd><dt>Sekmeyi kapat</dt><dd><kbd>Ctrl</kbd><kbd>W</kbd></dd><dt>Terminal / Dosyalar</dt><dd><kbd>Ctrl</kbd><kbd>Alt</kbd><kbd>T</kbd> / <kbd>F</kbd></dd><dt>Diğer tarafa aktar</dt><dd><kbd>F5</kbd></dd></dl></div>`);
+      body.insertAdjacentHTML('beforeend', `<div class="ssh-empty"><i class="fa-solid fa-network-wired"></i><b>${__('Açık oturum yok')}</b><span>${__('Soldaki listeden bir sunucuya çift tıkla ya da yeni bağlantı ekle.')}</span>
+        <dl class="en-keys"><dt>${__('Yeni bağlantı')}</dt><dd><kbd>Ctrl</kbd><kbd>Alt</kbd><kbd>N</kbd></dd><dt>${__('Sekmeyi kapat')}</dt><dd><kbd>Ctrl</kbd><kbd>W</kbd></dd><dt>${__('Terminal / Dosyalar')}</dt><dd><kbd>Ctrl</kbd><kbd>Alt</kbd><kbd>T</kbd> / <kbd>F</kbd></dd><dt>${__('Diğer tarafa aktar')}</dt><dd><kbd>F5</kbd></dd></dl></div>`);
     } else if (X.tabs.length) { const e = body.querySelector('.ssh-empty'); if (e) e.remove(); }
   }
   function activate(id) {
@@ -172,31 +172,31 @@
       <div class="ssh-bar">
         <span class="ssh-dot busy" data-role="dot"></span>
         <span class="ssh-addr" data-role="addr">${esc(hostAddr(h))}</span>
-        <div class="db-seg ssh-vseg" role="tablist" aria-label="Görünüm">
-          <button data-view="term" title="Yalnızca terminal (Ctrl+Alt+T)"><i class="fa-solid fa-terminal"></i>Terminal</button>
-          <button data-view="split" title="Dosyalar ve terminal birlikte"><i class="fa-solid fa-table-columns fa-rotate-90"></i>İkisi</button>
-          <button data-view="files" title="Yalnızca dosyalar (Ctrl+Alt+F)"><i class="fa-regular fa-folder-open"></i>Dosyalar</button>
-          <button data-view="docker" title="Sunucudaki Docker konteynerleri"><i class="fa-brands fa-docker"></i>Docker</button>
+        <div class="db-seg ssh-vseg" role="tablist" aria-label="${esc(__('Görünüm'))}">
+          <button data-view="term" title="${esc(__('Yalnızca terminal (Ctrl+Alt+T)'))}"><i class="fa-solid fa-terminal"></i>${__('Terminal')}</button>
+          <button data-view="split" title="${esc(__('Dosyalar ve terminal birlikte'))}"><i class="fa-solid fa-table-columns fa-rotate-90"></i>${__('İkisi')}</button>
+          <button data-view="files" title="${esc(__('Yalnızca dosyalar (Ctrl+Alt+F)'))}"><i class="fa-regular fa-folder-open"></i>${__('Dosyalar')}</button>
+          <button data-view="docker" title="${esc(__('Sunucudaki Docker konteynerleri'))}"><i class="fa-brands fa-docker"></i>Docker</button>
         </div>
         <span class="ssh-grow"></span>
-        <button class="ssh-tb" data-act="tunnels" title="Port yönlendirme (tüneller)"><i class="fa-solid fa-route"></i>Tüneller<b class="ssh-cnt" data-role="tcount" hidden></b></button>
-        <button class="ssh-tb" data-act="dupSess" title="Aynı sunucuya yeni oturum"><i class="fa-regular fa-clone"></i>Çoğalt</button>
-        <button class="ssh-tb" data-act="reconnect" data-role="recon" title="Yeniden bağlan"><i class="fa-solid fa-plug-circle-bolt"></i>Yeniden bağlan</button>
-        <button class="ssh-tb danger" data-act="disconnect" data-role="disc" title="Bağlantıyı kes"><i class="fa-solid fa-plug-circle-xmark"></i>Kes</button>
+        <button class="ssh-tb" data-act="tunnels" title="${esc(__('Port yönlendirme (tüneller)'))}"><i class="fa-solid fa-route"></i>${__('Tüneller')}<b class="ssh-cnt" data-role="tcount" hidden></b></button>
+        <button class="ssh-tb" data-act="dupSess" title="${esc(__('Aynı sunucuya yeni oturum'))}"><i class="fa-regular fa-clone"></i>${__('Çoğalt')}</button>
+        <button class="ssh-tb" data-act="reconnect" data-role="recon" title="${esc(__('Yeniden bağlan'))}"><i class="fa-solid fa-plug-circle-bolt"></i>${__('Yeniden bağlan')}</button>
+        <button class="ssh-tb danger" data-act="disconnect" data-role="disc" title="${esc(__('Bağlantıyı kes'))}"><i class="fa-solid fa-plug-circle-xmark"></i>${__('Kes')}</button>
       </div>
       <div class="ssh-content">
         <div class="ssh-files">
           <div class="ssh-panes">
             ${paneHtml('local')}
             <div class="ssh-mid">
-              <button class="ssh-ib" data-act="upload" title="Seçilenleri sunucuya yükle (sol panelde F5)" aria-label="Yükle"><i class="fa-solid fa-arrow-right"></i></button>
-              <button class="ssh-ib" data-act="download" title="Seçilenleri bu bilgisayara indir (sağ panelde F5)" aria-label="İndir"><i class="fa-solid fa-arrow-left"></i></button>
+              <button class="ssh-ib" data-act="upload" title="${esc(__('Seçilenleri sunucuya yükle (sol panelde F5)'))}" aria-label="${esc(__('Yükle'))}"><i class="fa-solid fa-arrow-right"></i></button>
+              <button class="ssh-ib" data-act="download" title="${esc(__('Seçilenleri bu bilgisayara indir (sağ panelde F5)'))}" aria-label="${esc(__('İndir'))}"><i class="fa-solid fa-arrow-left"></i></button>
             </div>
             ${paneHtml('remote')}
           </div>
           <div class="ssh-xfers" data-role="xfers" hidden></div>
         </div>
-        <div class="ssh-split-h" data-drag="split" title="Sürükleyerek boyutlandır"></div>
+        <div class="ssh-split-h" data-drag="split" title="${esc(__('Sürükleyerek boyutlandır'))}"></div>
         <div class="ssh-term"><div class="ssh-termhost" data-role="term"></div></div>
         <div class="ssh-dock" data-role="docker"></div>
         <div class="ssh-over" data-role="over"></div>
@@ -243,18 +243,18 @@
   }
   function paneHtml(side) {
     const remote = side === 'remote';
-    return `<section class="ssh-pane" data-pane="${side}" aria-label="${remote ? 'Sunucu' : 'Bu bilgisayar'}">
+    return `<section class="ssh-pane" data-pane="${side}" aria-label="${esc(remote ? __('Sunucu') : __('Bu bilgisayar'))}">
       <div class="ssh-ph">
-        <span class="ssh-pt"><i class="fa-solid ${remote ? 'fa-server' : 'fa-laptop'}"></i>${remote ? 'Sunucu' : 'Bu bilgisayar'}</span>
-        <button class="ssh-ib sm" data-spact="back" title="Geri (Alt+Sol)" aria-label="Geri"><i class="fa-solid fa-arrow-left"></i></button>
-        <button class="ssh-ib sm" data-spact="up" title="Üst klasör (Backspace)" aria-label="Üst klasör"><i class="fa-solid fa-arrow-turn-up"></i></button>
-        <button class="ssh-ib sm" data-spact="home" title="${remote ? 'Ev klasörü' : 'Kullanıcı klasörü'}" aria-label="Ev klasörü"><i class="fa-solid fa-house"></i></button>
-        <input class="ssh-path" data-role="path" spellcheck="false" autocomplete="off" aria-label="Yol" title="Bir yol yaz ve Enter'a bas">
-        <button class="ssh-ib sm" data-spact="refresh" title="Yenile (Ctrl+R)" aria-label="Yenile"><i class="fa-solid fa-arrows-rotate"></i></button>
-        <button class="ssh-ib sm" data-spact="mkdir" title="Yeni klasör (F7)" aria-label="Yeni klasör"><i class="fa-solid fa-folder-plus"></i></button>
-        ${remote ? '<button class="ssh-ib sm" data-spact="touch" title="Yeni dosya" aria-label="Yeni dosya"><i class="fa-solid fa-file-circle-plus"></i></button>' : '<button class="ssh-ib sm" data-spact="pick" title="Klasör seç…" aria-label="Klasör seç"><i class="fa-regular fa-folder-open"></i></button>'}
+        <span class="ssh-pt"><i class="fa-solid ${remote ? 'fa-server' : 'fa-laptop'}"></i>${remote ? __('Sunucu') : __('Bu bilgisayar')}</span>
+        <button class="ssh-ib sm" data-spact="back" title="${esc(__('Geri (Alt+Sol)'))}" aria-label="${esc(__('Geri'))}"><i class="fa-solid fa-arrow-left"></i></button>
+        <button class="ssh-ib sm" data-spact="up" title="${esc(__('Üst klasör (Backspace)'))}" aria-label="${esc(__('Üst klasör'))}"><i class="fa-solid fa-arrow-turn-up"></i></button>
+        <button class="ssh-ib sm" data-spact="home" title="${esc(remote ? __('Ev klasörü') : __('Kullanıcı klasörü'))}" aria-label="${esc(__('Ev klasörü'))}"><i class="fa-solid fa-house"></i></button>
+        <input class="ssh-path" data-role="path" spellcheck="false" autocomplete="off" aria-label="${esc(__('Yol'))}" title="${esc(__("Bir yol yaz ve Enter'a bas"))}">
+        <button class="ssh-ib sm" data-spact="refresh" title="${esc(__('Yenile (Ctrl+R)'))}" aria-label="${esc(__('Yenile'))}"><i class="fa-solid fa-arrows-rotate"></i></button>
+        <button class="ssh-ib sm" data-spact="mkdir" title="${esc(__('Yeni klasör (F7)'))}" aria-label="${esc(__('Yeni klasör'))}"><i class="fa-solid fa-folder-plus"></i></button>
+        ${remote ? `<button class="ssh-ib sm" data-spact="touch" title="${esc(__('Yeni dosya'))}" aria-label="${esc(__('Yeni dosya'))}"><i class="fa-solid fa-file-circle-plus"></i></button>` : `<button class="ssh-ib sm" data-spact="pick" title="${esc(__('Klasör seç…'))}" aria-label="${esc(__('Klasör seç'))}"><i class="fa-regular fa-folder-open"></i></button>`}
       </div>
-      <div class="ssh-lh ${remote ? 'rem' : ''}"><span data-sort="name">Ad</span><span data-sort="size">Boyut</span><span data-sort="mtime">Değişiklik</span>${remote ? '<span data-sort="perm">İzinler</span><span data-sort="owner">Sahip</span>' : ''}</div>
+      <div class="ssh-lh ${remote ? 'rem' : ''}"><span data-sort="name">${__('Ad')}</span><span data-sort="size">${__('Boyut')}</span><span data-sort="mtime">${__('Değişiklik')}</span>${remote ? `<span data-sort="perm">${__('İzinler')}</span><span data-sort="owner">${__('Sahip')}</span>` : ''}</div>
       <div class="ssh-list ${remote ? 'rem' : ''}" data-role="list" tabindex="0"></div>
       <div class="ssh-pf" data-role="foot"></div>
     </section>`;
@@ -296,32 +296,32 @@
     if (t.status === 'ok') { o.hidden = true; o.innerHTML = ''; return; }
     o.hidden = false;
     const h = host(t.hostId);
-    if (t.status === 'connecting') o.innerHTML = `<div class="ssh-ob"><i class="fa-solid fa-circle-notch fa-spin"></i><b>Bağlanıyor…</b><span>${esc(hostAddr(h))}</span></div>`;
-    else o.innerHTML = `<div class="ssh-ob ${t.status === 'error' ? 'bad' : ''}"><i class="fa-solid ${t.status === 'error' ? 'fa-triangle-exclamation' : 'fa-plug-circle-xmark'}"></i><b>${t.status === 'error' ? 'Bağlanılamadı' : 'Bağlantı kapandı'}</b>${t.error ? `<span>${esc(t.error)}</span>` : ''}
-      <div class="ssh-obb"><button class="btn primary" data-act="reconnect"><i class="fa-solid fa-plug-circle-bolt"></i> Yeniden bağlan</button><button class="btn" data-act="editThisHost">Bağlantıyı düzenle</button></div></div>`;
+    if (t.status === 'connecting') o.innerHTML = `<div class="ssh-ob"><i class="fa-solid fa-circle-notch fa-spin"></i><b>${__('Bağlanıyor…')}</b><span>${esc(hostAddr(h))}</span></div>`;
+    else o.innerHTML = `<div class="ssh-ob ${t.status === 'error' ? 'bad' : ''}"><i class="fa-solid ${t.status === 'error' ? 'fa-triangle-exclamation' : 'fa-plug-circle-xmark'}"></i><b>${t.status === 'error' ? __('Bağlanılamadı') : __('Bağlantı kapandı')}</b>${t.error ? `<span>${esc(t.error)}</span>` : ''}
+      <div class="ssh-obb"><button class="btn primary" data-act="reconnect"><i class="fa-solid fa-plug-circle-bolt"></i> ${__('Yeniden bağlan')}</button><button class="btn" data-act="editThisHost">${__('Bağlantıyı düzenle')}</button></div></div>`;
   }
   async function connectTab(t, opts = {}) {
     const h = host(t.hostId);
-    if (!h) { t.status = 'error'; t.error = 'Bağlantı kaydı silinmiş.'; renderOver(t); return; }
+    if (!h) { t.status = 'error'; t.error = __('Bağlantı kaydı silinmiş.'); renderOver(t); return; }
     t.status = 'connecting'; t.error = ''; renderOver(t); renderTabs();
     const r = await inv('ssh:connect', h.id, opts);
     if (!tab(t.id)) { if (r.sid) inv('ssh:disconnect', r.sid); return; }
     if (r.needPassword) {
       const a = await askSecret(h, r.what, r.loginFailed ? r.error : '');
-      if (!a) { t.status = 'error'; t.error = r.what === 'pp' ? 'Anahtar parolası girilmedi.' : 'Parola girilmedi.'; renderOver(t); renderTabs(); return; }
+      if (!a) { t.status = 'error'; t.error = r.what === 'pp' ? __('Anahtar parolası girilmedi.') : __('Parola girilmedi.'); renderOver(t); renderTabs(); return; }
       return connectTab(t, { ...opts, [r.what === 'pp' ? 'passphrase' : 'password']: a.value, remember: a.remember });
     }
     if (r.hostKey) {
       const ok = await askHostKey(h, r);
-      if (!ok) { t.status = 'error'; t.error = 'Sunucu anahtarı onaylanmadı.'; renderOver(t); renderTabs(); return; }
+      if (!ok) { t.status = 'error'; t.error = __('Sunucu anahtarı onaylanmadı.'); renderOver(t); renderTabs(); return; }
       return connectTab(t, { ...opts, acceptKey: r.hostKey });
     }
     if (r.error) { t.status = 'error'; t.error = r.error; renderOver(t); renderTabs(); return; }
     t.sid = r.sid; t.home = r.home || '/'; t.status = 'ok'; t.tunnels = r.tunnels || [];
-    if (r.tunnelErrors && r.tunnelErrors.length) toast('Bazı tüneller açılamadı', r.tunnelErrors.join(' · '));
+    if (r.tunnelErrors && r.tunnelErrors.length) toast(__('Bazı tüneller açılamadı'),r.tunnelErrors.join(' · '));
     if (opts.password !== undefined || opts.passphrase !== undefined) loadHosts().then(renderHosts);
     renderOver(t); renderTabs(); renderHosts();
-    t.term.write(`\x1b[2m— ${hostAddr(h)} bağlantısı kuruldu —\x1b[0m\r\n`);
+    t.term.write(`\x1b[2m— ${__('{addr} bağlantısı kuruldu', { addr: hostAddr(h) })} —\x1b[0m\r\n`);
     fitTerm(t);
     openShell(t);
     if (!t.remote.path || opts.reconnect !== true) t.remote.path = h.startDir || t.home;
@@ -335,7 +335,7 @@
     fitTerm(t);
     const r = await inv('ssh:shell', t.sid, t.term.cols, t.term.rows);
     t.opening = false;
-    if (r.error) { t.term.write(`\r\n\x1b[31mKabuk açılamadı: ${r.error}\x1b[0m\r\n`); return; }
+    if (r.error) { t.term.write(`\r\n\x1b[31m${__('Kabuk açılamadı: {msg}', { msg: r.error })}\x1b[0m\r\n`); return; }
     t.ch = r.ch;
     const h = host(t.hostId);
     if (h && h.startDir && !t.cdDone) { t.cdDone = true; api.send('ssh:write', t.ch, `cd ${shq(h.startDir)}\r`); }
@@ -371,7 +371,7 @@
     p.loading = false;
     if (r.error) {
       p.error = r.error;
-      if (prev && prev !== path) { toast('Açılamadı', r.error); p.error = ''; }
+      if (prev && prev !== path) { toast(__('Açılamadı'), r.error); p.error = ''; }
       renderPane(t, side); return;
     }
     p.error = '';
@@ -386,7 +386,7 @@
   function renderPane(t, side) {
     const p = P(t, side), el = paneEl(t, side); if (!el) return;
     const inp = el.querySelector('[data-role=path]');
-    if (document.activeElement !== inp) inp.value = side === 'local' && !p.path ? 'Bu bilgisayar' : p.path;
+    if (document.activeElement !== inp) inp.value = side === 'local' && !p.path ? __('Bu bilgisayar') : p.path;
     el.querySelectorAll('[data-sort]').forEach(s => { s.classList.toggle('on', s.dataset.sort === p.sort.k); s.dataset.dir = p.sort.d > 0 ? 'asc' : 'desc'; });
     const list = el.querySelector('[data-role=list]');
     el.classList.toggle('loading', !!p.loading);
@@ -399,10 +399,10 @@
     rows.forEach((f, i) => {
       const ic = f.drive ? 'fa-hard-drive' : f.dir ? 'fa-folder' : fileIcon(f.name);
       h += `<div class="ssh-row${p.sel.has(f.name) ? ' sel' : ''}${i === p.focus ? ' foc' : ''}${f.dir ? ' dir' : ''}${f.name.startsWith('.') ? ' dot' : ''}" data-i="${i}" draggable="true">
-        <span class="ssh-fn"><i class="${f.dir ? 'fa-solid' : 'fa-regular'} ${ic}"></i>${esc(f.name)}${f.link ? `<i class="fa-solid fa-link ssh-lnk${f.broken ? ' bad' : ''}" title="${f.broken ? 'Kırık bağlantı' : 'Sembolik bağlantı'}"></i>` : ''}</span>
+        <span class="ssh-fn"><i class="${f.dir ? 'fa-solid' : 'fa-regular'} ${ic}"></i>${esc(f.name)}${f.link ? `<i class="fa-solid fa-link ssh-lnk${f.broken ? ' bad' : ''}" title="${esc(f.broken ? __('Kırık bağlantı') : __('Sembolik bağlantı'))}"></i>` : ''}</span>
         <span class="ssh-fs">${f.dir ? '' : fmtSize(f.size)}</span><span class="ssh-fd">${fmtDate(f.mtime)}</span>${remote ? `<span class="ssh-fp">${esc(f.perm || '')}</span><span class="ssh-fo">${esc(f.owner || '')}</span>` : ''}</div>`;
     });
-    if (!rows.length && !p.loading) h += `<div class="ssh-lempty">${p.items.length ? 'Yalnızca gizli dosyalar var' : 'Klasör boş'}</div>`;
+    if (!rows.length && !p.loading) h += `<div class="ssh-lempty">${p.items.length ? __('Yalnızca gizli dosyalar var') : __('Klasör boş')}</div>`;
     list.innerHTML = h;
     renderFoot(t, side);
   }
@@ -412,8 +412,8 @@
     const sel = rows.filter(f => p.sel.has(f.name));
     const bytes = sel.reduce((a, f) => a + (f.size || 0), 0);
     const hid = p.items.length - rows.length;
-    el.querySelector('[data-role=foot]').innerHTML = `<span>${sel.length ? `${sel.length} / ${rows.length} seçili${bytes ? ' · ' + fmtSize(bytes) : ''}` : `${rows.length} öğe`}${hid > 0 ? ` · ${hid} gizli` : ''}</span>
-      <button class="ssh-hid${X.ui.hidden ? ' on' : ''}" data-act="toggleHidden" title="Nokta ile başlayan gizli dosyaları göster / gizle (Ctrl+H)"><i class="fa-solid fa-eye${X.ui.hidden ? '' : '-slash'}"></i>Gizli</button>`;
+    el.querySelector('[data-role=foot]').innerHTML = `<span>${sel.length ? `${__('{sel} / {n} seçili', { sel: sel.length, n: rows.length })}${bytes ? ' · ' + fmtSize(bytes) : ''}` : __('{n} öğe', { n: rows.length })}${hid > 0 ? ' · ' + __('{n} gizli', { n: hid }) : ''}</span>
+      <button class="ssh-hid${X.ui.hidden ? ' on' : ''}" data-act="toggleHidden" title="${esc(__('Nokta ile başlayan gizli dosyaları göster / gizle (Ctrl+H)'))}"><i class="fa-solid fa-eye${X.ui.hidden ? '' : '-slash'}"></i>${__('Gizli')}</button>`;
   }
   const ICONS = { js: 'fa-file-code', ts: 'fa-file-code', py: 'fa-file-code', php: 'fa-file-code', go: 'fa-file-code', rs: 'fa-file-code', java: 'fa-file-code', c: 'fa-file-code', cpp: 'fa-file-code', cs: 'fa-file-code', sh: 'fa-file-code', html: 'fa-file-code', css: 'fa-file-code', json: 'fa-file-code', yml: 'fa-file-code', yaml: 'fa-file-code', xml: 'fa-file-code', sql: 'fa-file-code', md: 'fa-file-lines', txt: 'fa-file-lines', log: 'fa-file-lines', conf: 'fa-file-lines', ini: 'fa-file-lines', env: 'fa-file-lines', png: 'fa-file-image', jpg: 'fa-file-image', jpeg: 'fa-file-image', gif: 'fa-file-image', svg: 'fa-file-image', webp: 'fa-file-image', zip: 'fa-file-zipper', gz: 'fa-file-zipper', tgz: 'fa-file-zipper', tar: 'fa-file-zipper', rar: 'fa-file-zipper', '7z': 'fa-file-zipper', pdf: 'fa-file-pdf', mp4: 'fa-file-video', mp3: 'fa-file-audio' };
   const fileIcon = n => ICONS[(n.split('.').pop() || '').toLowerCase()] || 'fa-file';
@@ -426,7 +426,7 @@
   function openItem(t, side, f) {
     if (!f) return;
     if (f.dir) { loadPane(t, side, f.drive ? f.name : fullPath(t, side, f.name)); return; }
-    if (side === 'local') { inv('ssh:localOp', 'open', { path: fullPath(t, side, f.name) }).then(r => { if (r.error) toast('Açılamadı', r.error); }); return; }
+    if (side === 'local') { inv('ssh:localOp', 'open', { path: fullPath(t, side, f.name) }).then(r => { if (r.error) toast(__('Açılamadı'), r.error); }); return; }
     editRemote(t, fullPath(t, side, f.name));
   }
   function goUp(t, side) {
@@ -461,19 +461,19 @@
 
   /* ---------------- file operations ---------------- */
   async function mkdir(t, side) {
-    const r = await modal({ title: 'Yeni klasör', icon: 'fa-folder-plus', body: `<label class="db-f"><span>Ad</span><input name="n" spellcheck="false"></label>`, buttons: [['cancel', 'Vazgeç'], ['ok', 'Oluştur', 'primary']] });
+    const r = await modal({ title: __('Yeni klasör'), icon: 'fa-folder-plus', body: `<label class="db-f"><span>${__('Ad')}</span><input name="n" spellcheck="false"></label>`, buttons: [['cancel', __('Vazgeç')], ['ok', __('Oluştur'), 'primary']] });
     const n = r && r.value === 'ok' && r.form.n.trim(); if (!n) return;
     const res = side === 'remote' ? await inv('ssh:op', t.sid, 'mkdir', { path: fullPath(t, side, n) }) : await inv('ssh:localOp', 'mkdir', { path: fullPath(t, side, n) });
-    if (res.error) { toast('Klasör oluşturulamadı', res.error); return; }
+    if (res.error) { toast(__('Klasör oluşturulamadı'), res.error); return; }
     P(t, side).sel = new Set([n]);
     loadPane(t, side, P(t, side).path, true);
   }
   async function touch(t) {
-    const r = await modal({ title: 'Yeni dosya', icon: 'fa-file-circle-plus', body: `<label class="db-f"><span>Ad</span><input name="n" spellcheck="false"></label>`, buttons: [['cancel', 'Vazgeç'], ['ok', 'Oluştur ve düzenle', 'primary']] });
+    const r = await modal({ title: __('Yeni dosya'), icon: 'fa-file-circle-plus', body: `<label class="db-f"><span>${__('Ad')}</span><input name="n" spellcheck="false"></label>`, buttons: [['cancel', __('Vazgeç')], ['ok', __('Oluştur ve düzenle'), 'primary']] });
     const n = r && r.value === 'ok' && r.form.n.trim(); if (!n) return;
     const fp = fullPath(t, 'remote', n);
     const res = await inv('ssh:op', t.sid, 'touch', { path: fp });
-    if (res.error) { toast('Dosya oluşturulamadı', res.error); return; }
+    if (res.error) { toast(__('Dosya oluşturulamadı'), res.error); return; }
     t.remote.sel = new Set([n]);
     await loadPane(t, 'remote', t.remote.path, true);
     editRemote(t, fp);
@@ -481,43 +481,55 @@
   async function rename(t, side) {
     const f = selOrFocus(t, side)[0]; if (!f || f.drive) return;
     const r = await modal({
-      title: 'Yeniden adlandır', icon: 'fa-i-cursor', body: `<label class="db-f"><span>Yeni ad</span><input name="n" value="${esc(f.name)}" spellcheck="false"></label>`,
-      buttons: [['cancel', 'Vazgeç'], ['ok', 'Adlandır', 'primary']],
+      title: __('Yeniden adlandır'), icon: 'fa-i-cursor', body: `<label class="db-f"><span>${__('Yeni ad')}</span><input name="n" value="${esc(f.name)}" spellcheck="false"></label>`,
+      buttons: [['cancel', __('Vazgeç')], ['ok', __('Adlandır'), 'primary']],
       onOpen: form => requestAnimationFrame(() => { const i = form.querySelector('input'); const dot = f.dir ? -1 : f.name.lastIndexOf('.'); i.setSelectionRange(0, dot > 0 ? dot : f.name.length); }),
     });
     const n = r && r.value === 'ok' && r.form.n.trim(); if (!n || n === f.name) return;
     const a = { from: fullPath(t, side, f.name), to: n.includes('/') && side === 'remote' ? n : fullPath(t, side, n) };
     const res = side === 'remote' ? await inv('ssh:op', t.sid, 'rename', a) : await inv('ssh:localOp', 'rename', a);
-    if (res.error) { toast('Adlandırılamadı', res.error); return; }
+    if (res.error) { toast(__('Adlandırılamadı'), res.error); return; }
     P(t, side).sel = new Set([n]);
     loadPane(t, side, P(t, side).path, true);
   }
   async function remove(t, side) {
     const items = selOrFocus(t, side).filter(f => !f.drive); if (!items.length) return;
     const remote = side === 'remote';
-    const what = items.length === 1 ? `<b>${esc(items[0].name)}</b>${items[0].dir ? ' klasörü ve içindeki her şey' : ''}` : `<b>${items.length} öğe</b>${items.some(f => f.dir) ? ' (klasörlerin içeriğiyle birlikte)' : ''}`;
+    const one = items.length === 1, name = one ? esc(items[0].name) : '', n = items.length;
+    const kind = one ? (items[0].dir ? 'dir' : 'file') : (items.some(f => f.dir) ? 'manyDirs' : 'many');
+    const msg = remote ? {
+      dir: __('<b>{name}</b> klasörü ve içindeki her şey sunucudan <b>kalıcı olarak</b> silinecek. Bu işlem geri alınamaz.', { name }),
+      file: __('<b>{name}</b> sunucudan <b>kalıcı olarak</b> silinecek. Bu işlem geri alınamaz.', { name }),
+      manyDirs: __('<b>{n} öğe</b> (klasörlerin içeriğiyle birlikte) sunucudan <b>kalıcı olarak</b> silinecek. Bu işlem geri alınamaz.', { n }),
+      many: __('<b>{n} öğe</b> sunucudan <b>kalıcı olarak</b> silinecek. Bu işlem geri alınamaz.', { n }),
+    }[kind] : {
+      dir: __('<b>{name}</b> klasörü ve içindeki her şey Geri Dönüşüm Kutusu’na taşınacak.', { name }),
+      file: __('<b>{name}</b> Geri Dönüşüm Kutusu’na taşınacak.', { name }),
+      manyDirs: __('<b>{n} öğe</b> (klasörlerin içeriğiyle birlikte) Geri Dönüşüm Kutusu’na taşınacak.', { n }),
+      many: __('<b>{n} öğe</b> Geri Dönüşüm Kutusu’na taşınacak.', { n }),
+    }[kind];
     const r = await modal({
-      title: remote ? 'Sunucudan sil' : 'Geri Dönüşüm Kutusu’na taşı', icon: 'fa-trash-can', danger: remote,
-      body: remote ? `<p>${what} sunucudan <b>kalıcı olarak</b> silinecek. Bu işlem geri alınamaz.</p>` : `<p>${what} Geri Dönüşüm Kutusu’na taşınacak.</p>`,
-      buttons: [['cancel', 'Vazgeç'], ['ok', remote ? 'Kalıcı olarak sil' : 'Taşı', remote ? 'danger' : 'primary']], focus: 'cancel',
+      title: remote ? __('Sunucudan sil') : __('Geri Dönüşüm Kutusu’na taşı'), icon: 'fa-trash-can', danger: remote,
+      body: `<p>${msg}</p>`,
+      buttons: [['cancel', __('Vazgeç')], ['ok', remote ? __('Kalıcı olarak sil') : __('Taşı'), remote ? 'danger' : 'primary']], focus: 'cancel',
     });
     if (!r || r.value !== 'ok') return;
     const paths = items.map(f => fullPath(t, side, f.name));
     const res = remote ? await inv('ssh:op', t.sid, 'delete', { paths }) : await inv('ssh:localOp', 'trash', { paths });
-    if (res.error) toast('Silinemedi', res.error);
+    if (res.error) toast(__('Silinemedi'), res.error);
     P(t, side).sel.clear();
     loadPane(t, side, P(t, side).path);
   }
   async function chmod(t) {
     const items = selOrFocus(t, 'remote'); if (!items.length) return;
     const m0 = items[0].mode || 0o644;
-    const bits = [['Sahip', 6], ['Grup', 3], ['Diğer', 0]];
-    const body = `<p>${items.length === 1 ? `<b>${esc(items[0].name)}</b>` : `<b>${items.length} öğe</b>`}</p>
-      <table class="ssh-perm"><tr><th></th><th>Okuma</th><th>Yazma</th><th>Çalıştırma</th></tr>
+    const bits = [[__('Sahip'), 6], [__('Grup'), 3], [__('Diğer'), 0]];
+    const body = `<p>${items.length === 1 ? `<b>${esc(items[0].name)}</b>` : `<b>${__('{n} öğe', { n: items.length })}</b>`}</p>
+      <table class="ssh-perm"><tr><th></th><th>${__('Okuma')}</th><th>${__('Yazma')}</th><th>${__('Çalıştırma')}</th></tr>
       ${bits.map(([l, s]) => `<tr><td>${l}</td>${[4, 2, 1].map(b => `<td><input type="checkbox" data-bit="${b << s}"${m0 & (b << s) ? ' checked' : ''}></td>`).join('')}</tr>`).join('')}</table>
-      <label class="db-f"><span>Sekizlik (octal)</span><input name="oct" value="${(m0 & 0o777).toString(8).padStart(3, '0')}" maxlength="4" inputmode="numeric" spellcheck="false"></label>`;
+      <label class="db-f"><span>${__('Sekizlik (octal)')}</span><input name="oct" value="${(m0 & 0o777).toString(8).padStart(3, '0')}" maxlength="4" inputmode="numeric" spellcheck="false"></label>`;
     const r = await modal({
-      title: 'İzinler (chmod)', icon: 'fa-lock', body, buttons: [['cancel', 'Vazgeç'], ['ok', 'Uygula', 'primary']],
+      title: __('İzinler (chmod)'), icon: 'fa-lock', body, buttons: [['cancel', __('Vazgeç')], ['ok', __('Uygula'), 'primary']],
       onOpen: form => {
         const oct = form.querySelector('[name=oct]');
         form.addEventListener('change', e => { if (e.target.dataset.bit) { let m = 0; form.querySelectorAll('[data-bit]').forEach(c => { if (c.checked) m |= +c.dataset.bit; }); oct.value = m.toString(8).padStart(3, '0'); } });
@@ -526,19 +538,19 @@
     });
     if (!r || r.value !== 'ok') return;
     const mode = parseInt(r.form.oct, 8);
-    if (isNaN(mode) || mode < 0 || mode > 0o7777) { toast('Geçersiz izin değeri', r.form.oct); return; }
-    for (const f of items) { const res = await inv('ssh:op', t.sid, 'chmod', { path: fullPath(t, 'remote', f.name), mode }); if (res.error) { toast('İzin değiştirilemedi', res.error); break; } }
+    if (isNaN(mode) || mode < 0 || mode > 0o7777) { toast(__('Geçersiz izin değeri'), r.form.oct); return; }
+    for (const f of items) { const res = await inv('ssh:op', t.sid, 'chmod', { path: fullPath(t, 'remote', f.name), mode }); if (res.error) { toast(__('İzin değiştirilemedi'), res.error); break; } }
     loadPane(t, 'remote', t.remote.path, true);
   }
   async function calcSize(t) {
     const items = selOrFocus(t, 'remote'); if (!items.length) return;
-    toast('Boyut hesaplanıyor…', items.length === 1 ? items[0].name : items.length + ' öğe');
+    toast(__('Boyut hesaplanıyor…'), items.length === 1 ? items[0].name : __('{n} öğe', { n: items.length }));
     const r = await inv('ssh:op', t.sid, 'du', { paths: items.map(f => fullPath(t, 'remote', f.name)) });
-    if (r.error) toast('Hesaplanamadı', r.error);
-    else toast('Toplam boyut: ' + fmtSize(r.total), `${r.files.toLocaleString('tr-TR')} dosya, ${r.dirs.toLocaleString('tr-TR')} klasör`);
+    if (r.error) toast(__('Hesaplanamadı'), r.error);
+    else toast(__('Toplam boyut: {size}', { size: fmtSize(r.total) }), __('{files} dosya, {dirs} klasör', { files: r.files.toLocaleString(I18N.locale()), dirs: r.dirs.toLocaleString(I18N.locale()) }));
   }
   function cdTerminal(t, dir) {
-    if (!t.ch) { toast('Terminal kapalı', 'Terminalde Enter’a basarak yeni kabuk aç.'); return; }
+    if (!t.ch) { toast(__('Terminal kapalı'), __('Terminalde Enter’a basarak yeni kabuk aç.')); return; }
     if (t.view === 'files') setView(t, 'split');
     api.send('ssh:write', t.ch, `cd ${shq(dir)}\r`);
     t.term.focus();
@@ -546,11 +558,11 @@
 
   /* ---------------- transfers ---------------- */
   async function transfer(t, dir, paths, target) {
-    if (!t.sid) { toast('Bağlantı kapalı', 'Önce yeniden bağlan.'); return; }
+    if (!t.sid) { toast(__('Bağlantı kapalı'), __('Önce yeniden bağlan.')); return; }
     if (!paths.length) return;
-    if (dir === 'down' && !target) { toast('Hedef klasör yok', 'Sol panelde bir klasör aç.'); return; }
+    if (dir === 'down' && !target) { toast(__('Hedef klasör yok'), __('Sol panelde bir klasör aç.')); return; }
     const r = await inv('ssh:transfer', t.sid, dir, paths, target);
-    if (r.error) toast('Aktarım başlatılamadı', r.error);
+    if (r.error) toast(__('Aktarım başlatılamadı'), r.error);
   }
   function upload(t) {
     const items = selOrFocus(t, 'local').filter(f => !f.drive);
@@ -566,16 +578,16 @@
     el.hidden = !list.length;
     if (!list.length) { el.innerHTML = ''; return; }
     const active = list.filter(j => !['done', 'error', 'canceled'].includes(j.state)).length;
-    el.innerHTML = `<div class="ssh-xh"><b>Aktarımlar</b><span>${active ? active + ' süren' : 'tamamlandı'}</span><span class="ssh-grow"></span><button class="ssh-tb" data-act="clearXfers" title="Bitenleri listeden kaldır"><i class="fa-solid fa-broom"></i>Temizle</button></div>
+    el.innerHTML = `<div class="ssh-xh"><b>${__('Aktarımlar')}</b><span>${active ? __('{n} süren', { n: active }) : __('tamamlandı')}</span><span class="ssh-grow"></span><button class="ssh-tb" data-act="clearXfers" title="${esc(__('Bitenleri listeden kaldır'))}"><i class="fa-solid fa-broom"></i>${__('Temizle')}</button></div>
       <div class="ssh-xl">${list.slice().reverse().map(j => {
         const pct = j.total ? Math.min(100, Math.round(j.done * 100 / j.total)) : (j.state === 'done' ? 100 : 0);
-        const st = { preparing: 'Hazırlanıyor…', running: `${fmtSize(j.done)} / ${fmtSize(j.total)}${j.speed ? ' · ' + fmtSize(j.speed) + '/sn' : ''}`, ask: 'Yanıt bekleniyor…', done: `Tamam · ${fmtSize(j.total)}${j.skipped ? ` · ${j.skipped} atlandı` : ''}`, error: j.error || 'Hata', canceled: 'İptal edildi' }[j.state] || '';
+        const st = { preparing: __('Hazırlanıyor…'), running: `${fmtSize(j.done)} / ${fmtSize(j.total)}${j.speed ? ' · ' + __('{size}/sn', { size: fmtSize(j.speed) }) : ''}`, ask: __('Yanıt bekleniyor…'), done: `${__('Tamam · {size}', { size: fmtSize(j.total) })}${j.skipped ? ' · ' + __('{n} atlandı', { n: j.skipped }) : ''}`, error: j.error || __('Hata'), canceled: __('İptal edildi') }[j.state] || '';
         return `<div class="ssh-x ${j.state}" title="${esc(j.current || j.target)}">
           <i class="fa-solid ${j.dir === 'up' ? 'fa-arrow-up' : 'fa-arrow-down'} ssh-xd"></i>
-          <span class="ssh-xn">${esc(j.name)}${j.files > 1 ? ` <small>${j.filesDone}/${j.files} dosya</small>` : ''}</span>
+          <span class="ssh-xn">${esc(j.name)}${j.files > 1 ? ` <small>${__('{done}/{n} dosya', { done: j.filesDone, n: j.files })}</small>` : ''}</span>
           <span class="ssh-xb"><i style="width:${pct}%"></i></span>
           <span class="ssh-xs">${esc(st)}</span>
-          ${['done', 'error', 'canceled'].includes(j.state) ? (j.dir === 'down' && j.state === 'done' ? `<button class="ssh-ib sm" data-xreveal="${j.id}" title="Klasörde göster" aria-label="Klasörde göster"><i class="fa-regular fa-folder-open"></i></button>` : '<span class="ssh-ib sm"></span>') : `<button class="ssh-ib sm" data-xcancel="${j.id}" title="İptal" aria-label="İptal"><i class="fa-solid fa-xmark"></i></button>`}
+          ${['done', 'error', 'canceled'].includes(j.state) ? (j.dir === 'down' && j.state === 'done' ? `<button class="ssh-ib sm" data-xreveal="${j.id}" title="${esc(__('Klasörde göster'))}" aria-label="${esc(__('Klasörde göster'))}"><i class="fa-regular fa-folder-open"></i></button>` : '<span class="ssh-ib sm"></span>') : `<button class="ssh-ib sm" data-xcancel="${j.id}" title="${esc(__('İptal'))}" aria-label="${esc(__('İptal'))}"><i class="fa-solid fa-xmark"></i></button>`}
         </div>`;
       }).join('')}</div>`;
   }
@@ -588,18 +600,18 @@
     if (['done', 'error', 'canceled'].includes(j.state) && (!prev || prev.state !== j.state)) {
       if (j.dir === 'up') { if (t.remote.path === j.target || j.target.startsWith(rjoin(t.remote.path, ''))) loadPane(t, 'remote', t.remote.path, true); }
       else if (t.local.path === j.target) loadPane(t, 'local', t.local.path, true);
-      if (j.state === 'error') toast('Aktarım başarısız: ' + j.name, j.error);
-      else if (j.state === 'done' && (j.files > 1 || j.total > 20 * 1048576)) toast(j.dir === 'up' ? 'Yükleme bitti' : 'İndirme bitti', `${j.name} · ${fmtSize(j.total)}`);
+      if (j.state === 'error') toast(__('Aktarım başarısız: {name}', { name: j.name }), j.error);
+      else if (j.state === 'done' && (j.files > 1 || j.total > 20 * 1048576)) toast(j.dir === 'up' ? __('Yükleme bitti') : __('İndirme bitti'),`${j.name} · ${fmtSize(j.total)}`);
     }
   }
   async function onXferAsk(a) {
     const fmt = x => `${fmtSize(x.size)} · ${fmtDate(x.mtime)}`;
     const r = await modal({
-      title: 'Dosya zaten var', icon: 'fa-copy', wide: true,
+      title: __('Dosya zaten var'), icon: 'fa-copy', wide: true,
       body: `<p class="ssh-mono">${esc(a.file)}</p>
-        <div class="ssh-cmp"><span>Kaynak</span><b>${esc(fmt(a.src))}</b><span>Hedef</span><b>${esc(fmt(a.dst))}</b></div>
-        <p class="db-muted">“Tümü” seçenekleri bu aktarımdaki diğer çakışmalara da uygulanır.</p>`,
-      buttons: [['cancel', 'Aktarımı iptal et'], ['skipAll', 'Tümünü atla'], ['skip', 'Atla'], ['newerAll', 'Yeniyse üzerine yaz (tümü)'], ['overwriteAll', 'Tümünün üzerine yaz'], ['overwrite', 'Üzerine yaz', 'primary']],
+        <div class="ssh-cmp"><span>${__('Kaynak')}</span><b>${esc(fmt(a.src))}</b><span>${__('Hedef')}</span><b>${esc(fmt(a.dst))}</b></div>
+        <p class="db-muted">${__('“Tümü” seçenekleri bu aktarımdaki diğer çakışmalara da uygulanır.')}</p>`,
+      buttons: [['cancel', __('Aktarımı iptal et')], ['skipAll', __('Tümünü atla')], ['skip', __('Atla')], ['newerAll', __('Yeniyse üzerine yaz (tümü)')], ['overwriteAll', __('Tümünün üzerine yaz')], ['overwrite', __('Üzerine yaz'), 'primary']],
     });
     inv('ssh:xferAnswer', a.id, r ? r.value : 'cancel');
   }
@@ -608,10 +620,10 @@
   async function editRemote(t, fp) {
     const r = await inv('ssh:op', t.sid, 'read', { path: fp });
     if (r.error) {
-      if (r.binary || /çok büyük/.test(r.error)) {
-        const a = await modal({ title: 'Düzenleyicide açılamıyor', icon: 'fa-file', body: `<p>${esc(r.error)}</p><p>Dosyayı soldaki klasöre (<b>${esc(t.local.path || '—')}</b>) indirmek ister misin?</p>`, buttons: [['cancel', 'Vazgeç'], ['ok', 'İndir', 'primary']] });
+      if (r.binary || r.tooBig) {
+        const a = await modal({ title: __('Düzenleyicide açılamıyor'), icon: 'fa-file', body: `<p>${esc(r.error)}</p><p>${__('Dosyayı soldaki klasöre (<b>{path}</b>) indirmek ister misin?', { path: esc(t.local.path || '—') })}</p>`, buttons: [['cancel', __('Vazgeç')], ['ok', __('İndir'), 'primary']] });
         if (a && a.value === 'ok') transfer(t, 'down', [fp], t.local.path);
-      } else toast('Açılamadı', r.error);
+      } else toast(__('Açılamadı'), r.error);
       return;
     }
     let mtime = r.mtime, ed = null, dirty = false;
@@ -621,13 +633,13 @@
       if (r.crlf) text = text.replace(/\r?\n/g, '\r\n');
       const w = await inv('ssh:op', t.sid, 'write', { path: fp, text, mtime, force });
       if (w.conflict) {
-        const c = await confirmBox('Dosya sunucuda değişmiş', 'Sen düzenlerken dosya sunucuda başka biri ya da bir program tarafından değiştirildi. Yine de kendi sürümünle üzerine yazılsın mı?', 'Üzerine yaz', true);
+        const c = await confirmBox(__('Dosya sunucuda değişmiş'), __('Sen düzenlerken dosya sunucuda başka biri ya da bir program tarafından değiştirildi. Yine de kendi sürümünle üzerine yazılsın mı?'), __('Üzerine yaz'), true);
         if (c) return save(true);
         return false;
       }
-      if (w.error) { toast('Kaydedilemedi', w.error); return false; }
+      if (w.error) { toast(__('Kaydedilemedi'), w.error); return false; }
       mtime = w.mtime; dirty = false; setTitle();
-      toast('Kaydedildi', fp);
+      toast(__('Kaydedildi'), fp);
       if (t.remote.path === rparent(fp)) loadPane(t, 'remote', t.remote.path, true);
       return true;
     };
@@ -635,7 +647,7 @@
     await modal({
       title: name, icon: 'fa-pen-to-square', wide: true, cls: 'ssh-editor',
       body: `<div class="ssh-epath ssh-mono">${esc(hostAddr(host(t.hostId)))}:${esc(fp)}</div><div class="ssh-ed" data-role="ed"></div>`,
-      buttons: [['cancel', 'Kapat'], ['save', 'Kaydet (Ctrl+S)', 'primary']],
+      buttons: [['cancel', __('Kapat')], ['save', __('Kaydet (Ctrl+S)'), 'primary']],
       onOpen: form => {
         const mode = (typeof MODES !== 'undefined' && typeof extOf === 'function') ? MODES[extOf(fp)] || null : null;
         ed = CodeMirror(form.querySelector('[data-role=ed]'), {
@@ -651,7 +663,7 @@
       },
       beforeClose: async () => {
         if (!dirty) return true;
-        const keep = await confirmInline('Kaydedilmemiş değişiklikler var. Kaydetmeden kapatılsın mı?');
+        const keep = await confirmInline(__('Kaydedilmemiş değişiklikler var. Kaydetmeden kapatılsın mı?'));
         return keep;
       },
     });
@@ -662,7 +674,7 @@
       const host = document.querySelector('#sshModal .db-dlg'); if (!host) { res(true); return; }
       const bar = document.createElement('div');
       bar.className = 'ssh-confirm';
-      bar.innerHTML = `<span>${esc(msg)}</span><button type="button" class="btn" data-cf="no">Vazgeç</button><button type="button" class="btn db-bdanger" data-cf="yes">Kaydetmeden kapat</button>`;
+      bar.innerHTML = `<span>${esc(msg)}</span><button type="button" class="btn" data-cf="no">${__('Vazgeç')}</button><button type="button" class="btn db-bdanger" data-cf="yes">${__('Kaydetmeden kapat')}</button>`;
       host.appendChild(bar);
       bar.querySelector('[data-cf=no]').focus();
       bar.addEventListener('click', e => { const b = e.target.closest("[data-cf]"); if (!b) return; e.preventDefault(); e.stopPropagation(); bar.remove(); res(b.dataset.cf === "yes"); });
@@ -676,7 +688,7 @@
     if (modalDone) modalDone(null, true);
     return new Promise(resolve => {
       el.innerHTML = `<form class="db-dlg${wide ? ' wide' : ''}${danger ? ' danger' : ''}${cls ? ' ' + cls : ''}" novalidate role="dialog" aria-modal="true" aria-label="${esc(title)}">
-        <div class="db-dh">${icon ? `<i class="fa-solid ${icon}"></i>` : ''}<b>${esc(title)}</b><button type="button" class="db-ib" data-mb="cancel" aria-label="Kapat"><i class="fa-solid fa-xmark"></i></button></div>
+        <div class="db-dh">${icon ? `<i class="fa-solid ${icon}"></i>` : ''}<b>${esc(title)}</b><button type="button" class="db-ib" data-mb="cancel" aria-label="${esc(__('Kapat'))}"><i class="fa-solid fa-xmark"></i></button></div>
         <div class="db-db">${body}</div>
         <div class="db-df">${(buttons || []).map(([v, l, k]) => `<button type="${k === 'primary' || k === 'danger' ? 'submit' : 'button'}" class="btn ${k === 'danger' ? 'db-bdanger' : k || ''}" data-mb="${v}">${esc(l)}</button>`).join('')}</div></form>`;
       el.hidden = false;
@@ -702,30 +714,30 @@
     });
   }
   async function confirmBox(title, text, okLabel, danger) {
-    const r = await modal({ title, icon: danger ? 'fa-triangle-exclamation' : 'fa-circle-question', danger, body: `<p>${esc(text)}</p>`, buttons: [['cancel', 'Vazgeç'], ['ok', okLabel || 'Tamam', danger ? 'danger' : 'primary']], focus: 'cancel' });
+    const r = await modal({ title, icon: danger ? 'fa-triangle-exclamation' : 'fa-circle-question', danger, body: `<p>${esc(text)}</p>`, buttons: [['cancel', __('Vazgeç')], ['ok', okLabel || __('Tamam'), danger ? 'danger' : 'primary']], focus: 'cancel' });
     return !!(r && r.value === 'ok');
   }
   async function askSecret(h, what, err) {
     const pp = what === 'pp';
     const r = await modal({
-      title: pp ? 'Anahtar parolası' : 'Parola gerekli', icon: 'fa-key',
+      title: pp ? __('Anahtar parolası') : __('Parola gerekli'), icon: 'fa-key',
       body: `<p><b>${esc(hostLabel(h))}</b> · ${esc(hostAddr(h))}</p>${pp ? `<p class="db-muted ssh-mono">${esc(h.keyPath)}</p>` : ''}${err ? `<p class="db-errbox">${esc(err)}</p>` : ''}
-        <label class="db-f"><span>${pp ? 'Anahtar parolası (passphrase)' : 'Parola'}</span><input type="password" name="pw" autocomplete="off"></label>
-        ${X.canEncrypt && !h.askPassword ? `<label class="db-ck"><input type="checkbox" name="remember"><span>${pp ? 'Anahtar parolasını' : 'Parolayı'} kaydet (Windows hesabına bağlı olarak şifrelenir)</span></label>` : '<p class="db-muted">Yalnızca bu oturum boyunca bellekte tutulur.</p>'}`,
-      buttons: [['cancel', 'Vazgeç'], ['ok', 'Bağlan', 'primary']],
+        <label class="db-f"><span>${pp ? __('Anahtar parolası (passphrase)') : __('Parola')}</span><input type="password" name="pw" autocomplete="off"></label>
+        ${X.canEncrypt && !h.askPassword ? `<label class="db-ck"><input type="checkbox" name="remember"><span>${pp ? __('Anahtar parolasını kaydet (Windows hesabına bağlı olarak şifrelenir)') : __('Parolayı kaydet (Windows hesabına bağlı olarak şifrelenir)')}</span></label>` : `<p class="db-muted">${__('Yalnızca bu oturum boyunca bellekte tutulur.')}</p>`}`,
+      buttons: [['cancel', __('Vazgeç')], ['ok', __('Bağlan'), 'primary']],
     });
     return r && r.value === 'ok' ? { value: r.form.pw, remember: !!r.form.remember } : null;
   }
   async function askHostKey(h, r) {
     const changed = r.changed;
     const res = await modal({
-      title: changed ? 'UYARI: Sunucu anahtarı değişmiş!' : 'Yeni sunucu', icon: changed ? 'fa-shield-halved' : 'fa-fingerprint', danger: changed, wide: changed,
+      title: changed ? __('UYARI: Sunucu anahtarı değişmiş!') : __('Yeni sunucu'), icon: changed ? 'fa-shield-halved' : 'fa-fingerprint', danger: changed, wide: changed,
       body: changed
-        ? `<p class="db-errbox"><b>${esc(h.host)}</b> için daha önce kaydedilen anahtar ile şimdi gelen anahtar farklı. Sunucu yeniden kurulmuş olabilir; ama biri araya girip bağlantıyı dinliyor da olabilir (man-in-the-middle).</p>
-           <div class="ssh-cmp"><span>Kayıtlı</span><b class="ssh-mono">${esc(r.oldKey)}</b><span>Gelen</span><b class="ssh-mono">${esc(r.hostKey)}</b></div>
-           <p>Değişikliğin beklendiğinden emin değilsen sunucu yöneticisine sor ve bağlanma.</p>`
-        : `<p><b>${esc(hostAddr(h))}</b> sunucusuna ilk kez bağlanıyorsun. Sunucunun anahtar parmak izi:</p><p class="ssh-fpbox ssh-mono">${esc(r.hostKey)}</p><p class="db-muted">Güvenirsen kaydedilir; bir dahaki sefere sorulmaz, değişirse uyarılırsın.</p>`,
-      buttons: [['cancel', 'Bağlanma'], ['ok', changed ? 'Yeni anahtarı kabul et' : 'Güven ve bağlan', changed ? 'danger' : 'primary']], focus: changed ? 'cancel' : undefined,
+        ? `<p class="db-errbox">${__('<b>{host}</b> için daha önce kaydedilen anahtar ile şimdi gelen anahtar farklı. Sunucu yeniden kurulmuş olabilir; ama biri araya girip bağlantıyı dinliyor da olabilir (man-in-the-middle).', { host: esc(h.host) })}</p>
+           <div class="ssh-cmp"><span>${__('Kayıtlı')}</span><b class="ssh-mono">${esc(r.oldKey)}</b><span>${__('Gelen')}</span><b class="ssh-mono">${esc(r.hostKey)}</b></div>
+           <p>${__('Değişikliğin beklendiğinden emin değilsen sunucu yöneticisine sor ve bağlanma.')}</p>`
+        : `<p>${__('<b>{addr}</b> sunucusuna ilk kez bağlanıyorsun. Sunucunun anahtar parmak izi:', { addr: esc(hostAddr(h)) })}</p><p class="ssh-fpbox ssh-mono">${esc(r.hostKey)}</p><p class="db-muted">${__('Güvenirsen kaydedilir; bir dahaki sefere sorulmaz, değişirse uyarılırsın.')}</p>`,
+      buttons: [['cancel', __('Bağlanma')], ['ok', changed ? __('Yeni anahtarı kabul et') : __('Güven ve bağlan'), changed ? 'danger' : 'primary']], focus: changed ? 'cancel' : undefined,
     });
     return !!(res && res.value === 'ok');
   }
@@ -740,42 +752,42 @@
     const groups = [...new Set(X.hosts.map(h => h.group).filter(Boolean))];
     const body = `
       <div class="db-grid2">
-        <div class="db-f full"><span>Tür</span><div class="db-typesel"><label><input type="radio" name="kind" value="ssh"${chk(v.kind !== 'rdp')}><span><i class="fa-solid fa-terminal"></i> SSH / SFTP</span></label><label><input type="radio" name="kind" value="rdp"${chk(v.kind === 'rdp')}><span><i class="fa-solid fa-desktop"></i> Uzak Masaüstü (RDP)</span></label></div></div>
-        <label class="db-f wide"><span>Ad</span><input name="name" value="${esc(v.name || '')}" placeholder="Örn. Üretim web sunucusu" maxlength="80"></label>
-        <label class="db-f"><span>Grup</span><input name="group" value="${esc(v.group || '')}" list="sshGroups" placeholder="İsteğe bağlı" maxlength="60"><datalist id="sshGroups">${groups.map(g => `<option value="${esc(g)}">`).join('')}</datalist></label>
-        <label class="db-f wide"><span>Sunucu</span><input name="host" value="${esc(v.host || '')}" placeholder="ornek.com ya da 10.0.0.5" spellcheck="false"></label>
-        <label class="db-f"><span>Port</span><input name="port" value="${esc(v.port || '')}" inputmode="numeric" placeholder="${v.kind === 'rdp' ? 3389 : 22}"></label>
-        <label class="db-f rdp-only"><span>Alan (domain)</span><input name="domain" value="${esc(v.domain || '')}" spellcheck="false" placeholder="İsteğe bağlı"></label>
-        <label class="db-f"><span>Kullanıcı</span><input name="user" value="${esc(v.user || '')}" spellcheck="false" autocomplete="off" placeholder="${v.kind === 'rdp' ? '' : 'root'}"></label>
-        <label class="db-f ssh-only"><span>Kimlik doğrulama</span><select name="auth"><option value="password"${sel(v.auth, 'password')}>Parola</option><option value="key"${sel(v.auth, 'key')}>Özel anahtar dosyası</option><option value="agent"${sel(v.auth, 'agent')}>SSH ajanı / Pageant</option></select></label>
-        <div class="db-f full key-only"><span>Özel anahtar (OpenSSH ya da PuTTY .ppk)</span><div class="ssh-keyrow"><input name="keyPath" value="${esc(v.keyPath || '')}" placeholder="C:\\Users\\…\\.ssh\\id_ed25519" spellcheck="false"><button type="button" class="btn" data-mb="pickKey">Seç…</button></div></div>
-        <label class="db-f full pw-only"><span class="pw-l">Parola</span><input type="password" name="pw" autocomplete="new-password" placeholder="${c && c.hasPassword ? 'Kayıtlı parola değişmez' : ''}"></label>
-        <label class="db-f full key-only"><span>Anahtar parolası (passphrase)</span><input type="password" name="pp" autocomplete="new-password" placeholder="${c && c.hasPassphrase ? 'Kayıtlı parola değişmez' : 'Anahtar şifreliyse'}"></label>
+        <div class="db-f full"><span>${__('Tür')}</span><div class="db-typesel"><label><input type="radio" name="kind" value="ssh"${chk(v.kind !== 'rdp')}><span><i class="fa-solid fa-terminal"></i> SSH / SFTP</span></label><label><input type="radio" name="kind" value="rdp"${chk(v.kind === 'rdp')}><span><i class="fa-solid fa-desktop"></i> ${__('Uzak Masaüstü (RDP)')}</span></label></div></div>
+        <label class="db-f wide"><span>${__('Ad')}</span><input name="name" value="${esc(v.name || '')}" placeholder="${esc(__('Örn. Üretim web sunucusu'))}" maxlength="80"></label>
+        <label class="db-f"><span>${__('Grup')}</span><input name="group" value="${esc(v.group || '')}" list="sshGroups" placeholder="${esc(__('İsteğe bağlı'))}" maxlength="60"><datalist id="sshGroups">${groups.map(g => `<option value="${esc(g)}">`).join('')}</datalist></label>
+        <label class="db-f wide"><span>${__('Sunucu')}</span><input name="host" value="${esc(v.host || '')}" placeholder="${esc(__('ornek.com ya da 10.0.0.5'))}" spellcheck="false"></label>
+        <label class="db-f"><span>${__('Port')}</span><input name="port" value="${esc(v.port || '')}" inputmode="numeric" placeholder="${v.kind === 'rdp' ? 3389 : 22}"></label>
+        <label class="db-f rdp-only"><span>${__('Alan (domain)')}</span><input name="domain" value="${esc(v.domain || '')}" spellcheck="false" placeholder="${esc(__('İsteğe bağlı'))}"></label>
+        <label class="db-f"><span>${__('Kullanıcı')}</span><input name="user" value="${esc(v.user || '')}" spellcheck="false" autocomplete="off" placeholder="${v.kind === 'rdp' ? '' : 'root'}"></label>
+        <label class="db-f ssh-only"><span>${__('Kimlik doğrulama')}</span><select name="auth"><option value="password"${sel(v.auth, 'password')}>${__('Parola')}</option><option value="key"${sel(v.auth, 'key')}>${__('Özel anahtar dosyası')}</option><option value="agent"${sel(v.auth, 'agent')}>${__('SSH ajanı / Pageant')}</option></select></label>
+        <div class="db-f full key-only"><span>${__('Özel anahtar (OpenSSH ya da PuTTY .ppk)')}</span><div class="ssh-keyrow"><input name="keyPath" value="${esc(v.keyPath || '')}" placeholder="C:\\Users\\…\\.ssh\\id_ed25519" spellcheck="false"><button type="button" class="btn" data-mb="pickKey">${__('Seç…')}</button></div></div>
+        <label class="db-f full pw-only"><span class="pw-l">${__('Parola')}</span><input type="password" name="pw" autocomplete="new-password" placeholder="${c && c.hasPassword ? esc(__('Kayıtlı parola değişmez')) : ''}"></label>
+        <label class="db-f full key-only"><span>${__('Anahtar parolası (passphrase)')}</span><input type="password" name="pp" autocomplete="new-password" placeholder="${esc(c && c.hasPassphrase ? __('Kayıtlı parola değişmez') : __('Anahtar şifreliyse'))}"></label>
         <div class="db-f full db-row pwk-only">
-          <label class="db-ck"><input type="checkbox" name="askPassword"${chk(v.askPassword)}><span>Parolayı kaydetme, her bağlanışta sor</span></label>
-          ${c && (c.hasPassword || c.hasPassphrase) ? '<button type="button" class="db-link" data-mb="clearPw">Kayıtlı parolayı sil</button>' : ''}
+          <label class="db-ck"><input type="checkbox" name="askPassword"${chk(v.askPassword)}><span>${__('Parolayı kaydetme, her bağlanışta sor')}</span></label>
+          ${c && (c.hasPassword || c.hasPassphrase) ? `<button type="button" class="db-link" data-mb="clearPw">${__('Kayıtlı parolayı sil')}</button>` : ''}
         </div>
-        ${!X.canEncrypt ? '<p class="db-note warn full"><i class="fa-solid fa-triangle-exclamation"></i>Bu bilgisayarda şifreleme kullanılamıyor; parolalar yalnızca oturum boyunca bellekte tutulur.</p>' : ''}
-        <label class="db-f wide ssh-only"><span>Açılış klasörü (sunucu)</span><input name="startDir" value="${esc(v.startDir || '')}" placeholder="Ev klasörü" spellcheck="false"></label>
-        <label class="db-f ssh-only"><span>Canlı tutma (sn)</span><input name="keepalive" value="${esc(v.keepalive == null ? 30 : v.keepalive)}" inputmode="numeric" title="0: kapalı"></label>
-        <label class="db-f full ssh-only"><span>Yerel klasör (bu bilgisayar)</span><input name="localDir" value="${esc(v.localDir || '')}" placeholder="Son kullanılan klasör" spellcheck="false"></label>
-        <label class="db-f full ssh-only"><span>Tüneller (yerel port yönlendirme) · her satır: <code>yerelPort hedef:port</code></span><textarea name="tunnels" rows="2" spellcheck="false" placeholder="3307 127.0.0.1:3306">${esc(tun)}</textarea></label>
-        <label class="db-ck full ssh-only"><input type="checkbox" name="tunAuto"${chk((v.tunnels || []).some(t => t.auto))}><span>Bağlanınca tünelleri otomatik aç (örn. DB modunda <code>localhost:3307</code> ile bağlan)</span></label>
-        <label class="db-f full ssh-only"><span>Claude / Codex erişimi · bağlantıyı VoxStorm kurar, adres ve parola ajana verilmez</span><select name="aiAccess"><option value=""${sel(v.aiAccess || '', '')}>Her oturumda ilk kullanımda sor</option><option value="allow"${sel(v.aiAccess, 'allow')}>Her zaman izin ver</option><option value="deny"${sel(v.aiAccess, 'deny')}>Asla izin verme (ajanlar bu bağlantıyı görmez)</option></select></label>
-        <label class="db-ck full rdp-only"><input type="checkbox" name="fullscreen"${chk(v.fullscreen)}><span>Tam ekran aç</span></label>
-        <label class="db-ck full rdp-only"><input type="checkbox" name="admin"${chk(v.admin)}><span>Yönetici oturumu (/admin)</span></label>
-        <div class="db-f full"><span>Renk</span><div class="db-colors">${COLORS.map(([k, l]) => `<label title="${l}"><input type="radio" name="color" value="${k}"${chk((v.color || '') === k)}><span class="db-sw db-c-${k || 'none'}"></span></label>`).join('')}</div></div>
+        ${!X.canEncrypt ? `<p class="db-note warn full"><i class="fa-solid fa-triangle-exclamation"></i>${__('Bu bilgisayarda şifreleme kullanılamıyor; parolalar yalnızca oturum boyunca bellekte tutulur.')}</p>` : ''}
+        <label class="db-f wide ssh-only"><span>${__('Açılış klasörü (sunucu)')}</span><input name="startDir" value="${esc(v.startDir || '')}" placeholder="${esc(__('Ev klasörü'))}" spellcheck="false"></label>
+        <label class="db-f ssh-only"><span>${__('Canlı tutma (sn)')}</span><input name="keepalive" value="${esc(v.keepalive == null ? 30 : v.keepalive)}" inputmode="numeric" title="${esc(__('0: kapalı'))}"></label>
+        <label class="db-f full ssh-only"><span>${__('Yerel klasör (bu bilgisayar)')}</span><input name="localDir" value="${esc(v.localDir || '')}" placeholder="${esc(__('Son kullanılan klasör'))}" spellcheck="false"></label>
+        <label class="db-f full ssh-only"><span>${__('Tüneller (yerel port yönlendirme) · her satır: <code>yerelPort hedef:port</code>')}</span><textarea name="tunnels" rows="2" spellcheck="false" placeholder="3307 127.0.0.1:3306">${esc(tun)}</textarea></label>
+        <label class="db-ck full ssh-only"><input type="checkbox" name="tunAuto"${chk((v.tunnels || []).some(t => t.auto))}><span>${__('Bağlanınca tünelleri otomatik aç (örn. DB modunda <code>localhost:3307</code> ile bağlan)')}</span></label>
+        <label class="db-f full ssh-only"><span>${__('Claude / Codex erişimi · bağlantıyı VoxStorm kurar, adres ve parola ajana verilmez')}</span><select name="aiAccess"><option value=""${sel(v.aiAccess || '', '')}>${__('Her oturumda ilk kullanımda sor')}</option><option value="allow"${sel(v.aiAccess, 'allow')}>${__('Her zaman izin ver')}</option><option value="deny"${sel(v.aiAccess, 'deny')}>${__('Asla izin verme (ajanlar bu bağlantıyı görmez)')}</option></select></label>
+        <label class="db-ck full rdp-only"><input type="checkbox" name="fullscreen"${chk(v.fullscreen)}><span>${__('Tam ekran aç')}</span></label>
+        <label class="db-ck full rdp-only"><input type="checkbox" name="admin"${chk(v.admin)}><span>${__('Yönetici oturumu (/admin)')}</span></label>
+        <div class="db-f full"><span>${__('Renk')}</span><div class="db-colors">${COLORS.map(([k, l]) => `<label title="${esc(l)}"><input type="radio" name="color" value="${k}"${chk((v.color || '') === k)}><span class="db-sw db-c-${k || 'none'}"></span></label>`).join('')}</div></div>
         <p class="db-note full rdp-only"><i class="fa-solid fa-circle-info"></i>${IS_MAC
-          ? 'RDP bağlantısı Windows App (Microsoft Remote Desktop) ile açılır; App Store’dan kurulu olmalı. Parolayı orada girersin.'
-          : 'RDP bağlantısı Windows Uzak Masaüstü (mstsc) penceresinde açılır. Parola girersen Windows Kimlik Bilgileri Yöneticisi’ne kaydedilir.'}</p>
+          ? __('RDP bağlantısı Windows App (Microsoft Remote Desktop) ile açılır; App Store’dan kurulu olmalı. Parolayı orada girersin.')
+          : __('RDP bağlantısı Windows Uzak Masaüstü (mstsc) penceresinde açılır. Parola girersen Windows Kimlik Bilgileri Yöneticisi’ne kaydedilir.')}</p>
       </div>`;
     const parseTunnels = (txt, auto) => String(txt || '').split(/\n/).map(l => l.trim()).filter(Boolean).map(l => {
       const m = l.match(/^(?:L\s+)?(\d+)\s*[\s:>-]+\s*([^\s:]+):(\d+)$/i);
       return m ? { localPort: +m[1], remoteHost: m[2], remotePort: +m[3], auto } : { bad: l };
     });
     const r = await modal({
-      title: c ? 'Bağlantıyı düzenle' : 'Yeni bağlantı', icon: 'fa-server', wide: true,
-      body, buttons: [['cancel', 'Vazgeç'], ['save', 'Kaydet', 'primary']],
+      title: c ? __('Bağlantıyı düzenle') : __('Yeni bağlantı'), icon: 'fa-server', wide: true,
+      body, buttons: [['cancel', __('Vazgeç')], ['save', __('Kaydet'), 'primary']],
       onOpen: form => {
         const sync = () => {
           const kind = form.querySelector('[name=kind]:checked').value, auth = form.querySelector('[name=auth]').value;
@@ -789,15 +801,15 @@
       },
       onAction: async (act, f, form) => {
         if (act === 'pickKey') { const p = await inv('ssh:pickKey'); if (p && typeof p === 'string') form.querySelector('[name=keyPath]').value = p; return true; }
-        if (act === 'clearPw') { await inv('ssh:save', { ...v, id: c.id, clearPw: true }); await loadHosts(); toast('Kayıtlı parola silindi'); form.querySelector('[data-mb=clearPw]').remove(); return true; }
-        if (!f.host.trim()) { form.querySelector('[name=host]').focus(); toast('Sunucu adresi gerekli'); return true; }
+        if (act === 'clearPw') { await inv('ssh:save', { ...v, id: c.id, clearPw: true }); await loadHosts(); toast(__('Kayıtlı parola silindi')); form.querySelector('[data-mb=clearPw]').remove(); return true; }
+        if (!f.host.trim()) { form.querySelector('[name=host]').focus(); toast(__('Sunucu adresi gerekli')); return true; }
         const tunnels = parseTunnels(f.tunnels, !!f.tunAuto);
         const bad = tunnels.find(x => x.bad);
-        if (bad && f.kind === 'ssh') { toast('Tünel satırı anlaşılamadı', bad.bad + ' — örnek: 3307 127.0.0.1:3306'); return true; }
+        if (bad && f.kind === 'ssh') { toast(__('Tünel satırı anlaşılamadı'), __('{line} — örnek: 3307 127.0.0.1:3306', { line: bad.bad })); return true; }
         f.tunnels = tunnels;
-        if (f.kind === 'ssh' && f.auth === 'key' && !f.keyPath.trim()) { toast('Anahtar dosyası seç'); return true; }
+        if (f.kind === 'ssh' && f.auth === 'key' && !f.keyPath.trim()) { toast(__('Anahtar dosyası seç')); return true; }
         const saved = await inv('ssh:save', { ...f, id: c ? c.id : undefined, pw: f.pw || undefined, pp: f.pp || undefined });
-        if (saved.error) { toast('Kaydedilemedi', saved.error); return true; }
+        if (saved.error) { toast(__('Kaydedilemedi'), saved.error); return true; }
         v.savedId = saved.id;
         return false;
       },
@@ -811,22 +823,22 @@
   }
   async function deleteHost(id) {
     const h = host(id); if (!h) return;
-    if (!(await confirmBox('Bağlantıyı sil', `“${hostLabel(h)}” kaydı ve kayıtlı parolası silinecek. Açık oturumlar etkilenmez.`, 'Sil', true))) return;
+    if (!(await confirmBox(__('Bağlantıyı sil'), __('“{name}” kaydı ve kayıtlı parolası silinecek. Açık oturumlar etkilenmez.', { name: hostLabel(h) }), __('Sil'), true))) return;
     await inv('ssh:delete', id);
     await loadHosts(); renderHosts();
   }
   async function openRdp(h, pw) {
     const r = await inv('ssh:rdp', h.id, pw);
-    if (r.error) toast('Uzak Masaüstü açılamadı', r.error);
-    else toast('Uzak Masaüstü açılıyor', hostAddr(h));
+    if (r.error) toast(__('Uzak Masaüstü açılamadı'), r.error);
+    else toast(__('Uzak Masaüstü açılıyor'), hostAddr(h));
   }
   async function pickHost() {
     if (!X.hosts.length) { const id = await editHost(); if (id) openSession(id); return; }
     const ssh = X.hosts.filter(h => h.kind !== 'rdp');
     const r = await modal({
-      title: 'Yeni oturum', icon: 'fa-network-wired',
+      title: __('Yeni oturum'), icon: 'fa-network-wired',
       body: `<div class="ssh-pick">${X.hosts.map(h => `<button type="button" class="ssh-pk db-c-${h.color || 'none'}" data-mb="h:${h.id}"><i class="fa-solid ${h.kind === 'rdp' ? 'fa-desktop' : 'fa-terminal'}"></i><span><b>${esc(hostLabel(h))}</b><small>${esc(hostAddr(h))}</small></span></button>`).join('')}</div>`,
-      buttons: [['cancel', 'Vazgeç'], ['new', 'Yeni bağlantı…']],
+      buttons: [['cancel', __('Vazgeç')], ['new', __('Yeni bağlantı…')]],
     });
     if (!r) return;
     if (r.value === 'new') { const id = await editHost(); if (id) openSession(id); return; }
@@ -836,23 +848,23 @@
 
   /* ---------------- tunnels dialog ---------------- */
   async function tunnelsDialog(t) {
-    if (!t.sid) { toast('Bağlantı kapalı'); return; }
+    if (!t.sid) { toast(__('Bağlantı kapalı')); return; }
     const h = host(t.hostId);
-    const list = () => t.tunnels.length ? t.tunnels.map(x => `<div class="ssh-tun"><i class="fa-solid fa-route"></i><span class="ssh-mono">localhost:${x.localPort} → ${esc(x.remoteHost)}:${x.remotePort}</span><small${x.error ? ' class="bad"' : ''}>${x.error ? esc(x.error) : x.conns ? x.conns + ' bağlantı' : ''}</small><button type="button" class="db-ib" data-mb="close:${x.localPort}" title="Kapat" aria-label="Tüneli kapat"><i class="fa-solid fa-xmark"></i></button></div>`).join('') : '<p class="db-muted">Açık tünel yok.</p>';
+    const list = () => t.tunnels.length ? t.tunnels.map(x => `<div class="ssh-tun"><i class="fa-solid fa-route"></i><span class="ssh-mono">localhost:${x.localPort} → ${esc(x.remoteHost)}:${x.remotePort}</span><small${x.error ? ' class="bad"' : ''}>${x.error ? esc(x.error) : x.conns ? __('{n} bağlantı', { n: x.conns }) : ''}</small><button type="button" class="db-ib" data-mb="close:${x.localPort}" title="${esc(__('Kapat'))}" aria-label="${esc(__('Tüneli kapat'))}"><i class="fa-solid fa-xmark"></i></button></div>`).join('') : `<p class="db-muted">${__('Açık tünel yok.')}</p>`;
     const saved = (h && h.tunnels || []).filter(s => !t.tunnels.some(x => x.localPort === s.localPort));
     await modal({
-      title: 'Tüneller', icon: 'fa-route', wide: true,
-      body: `<p class="db-muted">Bu bilgisayardaki bir portu SSH üzerinden sunucunun erişebildiği bir adrese yönlendirir. Örn. <code>3307 → 127.0.0.1:3306</code> açıp DB modunda <code>localhost:3307</code> ile sunucudaki MySQL’e bağlanabilirsin.</p>
+      title: __('Tüneller'), icon: 'fa-route', wide: true,
+      body: `<p class="db-muted">${__('Bu bilgisayardaki bir portu SSH üzerinden sunucunun erişebildiği bir adrese yönlendirir. Örn. <code>3307 → 127.0.0.1:3306</code> açıp DB modunda <code>localhost:3307</code> ile sunucudaki MySQL’e bağlanabilirsin.')}</p>
         <div class="ssh-tuns" data-role="tl">${list()}</div>
         ${saved.length ? `<div class="db-presets">${saved.map(s => `<button type="button" class="db-chipbtn" data-mb="open:${s.localPort}:${esc(s.remoteHost)}:${s.remotePort}">${s.localPort} → ${esc(s.remoteHost)}:${s.remotePort}</button>`).join('')}</div>` : ''}
-        <div class="ssh-tunadd"><label class="db-f"><span>Yerel port</span><input name="lp" inputmode="numeric" placeholder="3307"></label><label class="db-f"><span>Hedef adres</span><input name="rh" value="127.0.0.1" spellcheck="false"></label><label class="db-f"><span>Hedef port</span><input name="rp" inputmode="numeric" placeholder="3306"></label><button type="button" class="btn primary" data-mb="add">Aç</button></div>`,
-      buttons: [['cancel', 'Kapat']],
+        <div class="ssh-tunadd"><label class="db-f"><span>${__('Yerel port')}</span><input name="lp" inputmode="numeric" placeholder="3307"></label><label class="db-f"><span>${__('Hedef adres')}</span><input name="rh" value="127.0.0.1" spellcheck="false"></label><label class="db-f"><span>${__('Hedef port')}</span><input name="rp" inputmode="numeric" placeholder="3306"></label><button type="button" class="btn primary" data-mb="add">${__('Aç')}</button></div>`,
+      buttons: [['cancel', __('Kapat')]],
       onAction: async (act, f, form) => {
         let r;
         if (act === 'add') r = await inv('ssh:tunnel', t.sid, 'open', { localPort: f.lp, remoteHost: f.rh, remotePort: f.rp });
         else if (act.startsWith('open:')) { const [, lp, rh, rp] = act.split(':'); r = await inv('ssh:tunnel', t.sid, 'open', { localPort: lp, remoteHost: rh, remotePort: rp }); }
         else if (act.startsWith('close:')) r = await inv('ssh:tunnel', t.sid, 'close', { localPort: +act.slice(6) });
-        if (r && r.error) toast('Tünel açılamadı', r.error);
+        if (r && r.error) toast(__('Tünel açılamadı'), r.error);
         if (r && r.tunnels) { t.tunnels = r.tunnels; renderBar(t); form.querySelector('[data-role=tl]').innerHTML = list(); }
         return true;
       },
@@ -875,23 +887,23 @@
     const items = onRow ? selOrFocus(t, side) : [];
     const one = items.length === 1 ? items[0] : null;
     const menu = onRow ? [
-      ['open', one && one.dir ? 'Aç' : remote ? 'Düzenle' : 'Aç', one && one.dir ? 'fa-folder-open' : remote ? 'fa-pen-to-square' : 'fa-up-right-from-square', !one, 'Enter'],
-      remote ? ['xfer', 'İndir (bu bilgisayara)', 'fa-arrow-left', !t.local.path, 'F5'] : ['xfer', 'Yükle (sunucuya)', 'fa-arrow-right', !t.sid || items.some(f => f.drive), 'F5'],
+      ['open', one && one.dir ? __('Aç') : remote ? __('Düzenle') : __('Aç'), one && one.dir ? 'fa-folder-open' : remote ? 'fa-pen-to-square' : 'fa-up-right-from-square', !one, 'Enter'],
+      remote ? ['xfer', __('İndir (bu bilgisayara)'), 'fa-arrow-left', !t.local.path, 'F5'] : ['xfer', __('Yükle (sunucuya)'), 'fa-arrow-right', !t.sid || items.some(f => f.drive), 'F5'],
       '-',
-      ['rename', 'Yeniden adlandır', 'fa-i-cursor', !one || one.drive, 'F2'],
-      ['delete', remote ? 'Sil' : 'Geri Dönüşüm Kutusu’na taşı', 'fa-trash-can', items.some(f => f.drive), 'Del'],
-      ...(remote ? [['chmod', 'İzinler (chmod)…', 'fa-lock'], ['du', 'Boyutu hesapla', 'fa-calculator']] : [['reveal', 'Explorer’da göster', 'fa-folder-tree', !one || one.drive]]),
+      ['rename', __('Yeniden adlandır'), 'fa-i-cursor', !one || one.drive, 'F2'],
+      ['delete', remote ? __('Sil') : __('Geri Dönüşüm Kutusu’na taşı'), 'fa-trash-can', items.some(f => f.drive), 'Del'],
+      ...(remote ? [['chmod', __('İzinler (chmod)…'), 'fa-lock'], ['du', __('Boyutu hesapla'), 'fa-calculator']] : [['reveal', __('Explorer’da göster'), 'fa-folder-tree', !one || one.drive]]),
       '-',
-      ['copyPath', 'Yolu kopyala', 'fa-copy'],
-      ...(remote ? [['cd', 'Terminalde bu klasöre git', 'fa-terminal', !(one && one.dir)]] : []),
+      ['copyPath', __('Yolu kopyala'), 'fa-copy'],
+      ...(remote ? [['cd', __('Terminalde bu klasöre git'), 'fa-terminal', !(one && one.dir)]] : []),
     ] : [
-      ['mkdir', 'Yeni klasör', 'fa-folder-plus', remote ? !t.sid : !P(t, side).path, 'F7'],
-      ...(remote ? [['touch', 'Yeni dosya', 'fa-file-circle-plus', !t.sid]] : []),
-      ['refresh', 'Yenile', 'fa-arrows-rotate', false, 'Ctrl+R'],
+      ['mkdir', __('Yeni klasör'), 'fa-folder-plus', remote ? !t.sid : !P(t, side).path, 'F7'],
+      ...(remote ? [['touch', __('Yeni dosya'), 'fa-file-circle-plus', !t.sid]] : []),
+      ['refresh', __('Yenile'), 'fa-arrows-rotate', false, 'Ctrl+R'],
       '-',
-      ['copyPath', 'Bu klasörün yolunu kopyala', 'fa-copy'],
-      ...(remote ? [['cd', 'Terminalde bu klasöre git', 'fa-terminal', !t.sid]] : [['reveal', 'Explorer’da aç', 'fa-folder-tree', !P(t, side).path]]),
-      ['hidden', X.ui.hidden ? 'Gizli dosyaları gizle' : 'Gizli dosyaları göster', 'fa-eye', false, 'Ctrl+H'],
+      ['copyPath', __('Bu klasörün yolunu kopyala'), 'fa-copy'],
+      ...(remote ? [['cd', __('Terminalde bu klasöre git'), 'fa-terminal', !t.sid]] : [['reveal', __('Explorer’da aç'), 'fa-folder-tree', !P(t, side).path]]),
+      ['hidden', X.ui.hidden ? __('Gizli dosyaları gizle') : __('Gizli dosyaları göster'), 'fa-eye', false, 'Ctrl+H'],
     ];
     const v = await ctxMenu(e.clientX, e.clientY, menu);
     if (!v) return;
@@ -907,7 +919,7 @@
     else if (v === 'refresh') loadPane(t, side, p.path, true);
     else if (v === 'hidden') toggleHidden();
     else if (v === 'reveal') inv('ssh:localOp', onRow ? 'reveal' : 'open', { path: onRow ? fullPath(t, side, one.name) : p.path });
-    else if (v === 'copyPath') { const s = onRow ? items.map(f => fullPath(t, side, f.name)).join('\n') : p.path; navigator.clipboard.writeText(s).catch(() => {}); toast('Yol kopyalandı', s.split('\n')[0]); }
+    else if (v === 'copyPath') { const s = onRow ? items.map(f => fullPath(t, side, f.name)).join('\n') : p.path; navigator.clipboard.writeText(s).catch(() => {}); toast(__('Yol kopyalandı'), s.split('\n')[0]); }
     else if (v === 'cd') cdTerminal(t, onRow ? fullPath(t, side, one.name) : p.path);
   }
   async function hostCtx(id, x, y) {
@@ -915,13 +927,13 @@
     X.cur = id; renderHosts();
     const rdp = h.kind === 'rdp';
     const v = await ctxMenu(x, y, rdp ? [
-      ['connect', 'Uzak Masaüstü ile bağlan', 'fa-desktop', false, 'Enter'], '-',
-      ['edit', 'Düzenle…', 'fa-pen'], ['dup', 'Çoğalt', 'fa-clone'], ['copy', 'Adresi kopyala', 'fa-copy'], '-', ['del', 'Sil', 'fa-trash-can'],
+      ['connect', __('Uzak Masaüstü ile bağlan'), 'fa-desktop', false, 'Enter'], '-',
+      ['edit', __('Düzenle…'), 'fa-pen'], ['dup', __('Çoğalt'), 'fa-clone'], ['copy', __('Adresi kopyala'), 'fa-copy'], '-', ['del', __('Sil'), 'fa-trash-can'],
     ] : [
-      ['connect', 'Bağlan (terminal + dosyalar)', 'fa-plug', false, 'Enter'],
-      ['term', 'Yalnızca terminal', 'fa-terminal'],
-      ['files', 'Yalnızca dosyalar (SFTP)', 'fa-folder-open'], '-',
-      ['edit', 'Düzenle…', 'fa-pen'], ['dup', 'Çoğalt', 'fa-clone'], ['copy', 'ssh komutunu kopyala', 'fa-copy'], '-', ['del', 'Sil', 'fa-trash-can'],
+      ['connect', __('Bağlan (terminal + dosyalar)'), 'fa-plug', false, 'Enter'],
+      ['term', __('Yalnızca terminal'), 'fa-terminal'],
+      ['files', __('Yalnızca dosyalar (SFTP)'), 'fa-folder-open'], '-',
+      ['edit', __('Düzenle…'), 'fa-pen'], ['dup', __('Çoğalt'), 'fa-clone'], ['copy', __('ssh komutunu kopyala'), 'fa-copy'], '-', ['del', __('Sil'), 'fa-trash-can'],
     ]);
     if (v === 'connect') openSession(id, 'split');
     else if (v === 'term') openSession(id, 'term');
@@ -931,7 +943,7 @@
     else if (v === 'del') deleteHost(id);
     else if (v === 'copy') {
       const s = rdp ? hostAddr(h) : `ssh ${h.port && h.port !== 22 ? '-p ' + h.port + ' ' : ''}${h.auth === 'key' && h.keyPath ? '-i "' + h.keyPath + '" ' : ''}${h.user ? h.user + '@' : ''}${h.host}`;
-      navigator.clipboard.writeText(s).catch(() => {}); toast('Kopyalandı', s);
+      navigator.clipboard.writeText(s).catch(() => {}); toast(__('Kopyalandı'), s);
     }
   }
   function toggleHidden() {
@@ -1019,7 +1031,7 @@
       if (tb) {
         e.preventDefault();
         const t2 = tab(tb.dataset.stab);
-        ctxMenu(e.clientX, e.clientY, [['dup', 'Aynı sunucuya yeni oturum', 'fa-clone'], ['edit', 'Bağlantıyı düzenle…', 'fa-pen'], '-', ['close', 'Sekmeyi kapat', 'fa-xmark', false, 'Ctrl+W'], ['others', 'Diğer sekmeleri kapat', 'fa-rectangle-xmark', X.tabs.length < 2]]).then(v => {
+        ctxMenu(e.clientX, e.clientY, [['dup', __('Aynı sunucuya yeni oturum'), 'fa-clone'], ['edit', __('Bağlantıyı düzenle…'), 'fa-pen'], '-', ['close', __('Sekmeyi kapat'), 'fa-xmark', false, 'Ctrl+W'], ['others', __('Diğer sekmeleri kapat'), 'fa-rectangle-xmark', X.tabs.length < 2]]).then(v => {
           if (v === 'dup') openSession(t2.hostId, t2.view);
           else if (v === 'edit') editHost(t2.hostId);
           else if (v === 'close') closeTab(t2.id);
@@ -1127,17 +1139,17 @@
         return;
       }
       const d = drag; drag = null;
-      if (d.t !== t) { toast('Farklı oturumlar arasında sürükleme desteklenmiyor'); return; }
+      if (d.t !== t) { toast(__('Farklı oturumlar arasında sürükleme desteklenmiyor')); return; }
       const srcPaths = d.names.map(n => fullPath(t, d.side, n));
       if (d.side !== side) { transfer(t, d.side === 'local' ? 'up' : 'down', srcPaths, dest); return; }
       if (dest === p.path || !sub) return;
       // same pane onto a folder: move
       const n = d.names.length;
-      if (!(await confirmBox('Taşı', `${n === 1 ? '“' + d.names[0] + '”' : n + ' öğe'} “${dest}” klasörüne taşınsın mı?`, 'Taşı'))) return;
+      if (!(await confirmBox(__('Taşı'), n === 1 ? __('“{name}” “{dest}” klasörüne taşınsın mı?', { name: d.names[0], dest }) : __('{n} öğe “{dest}” klasörüne taşınsın mı?', { n, dest }), __('Taşı')))) return;
       for (const nm of d.names) {
         const a = { from: fullPath(t, side, nm), to: side === 'remote' ? rjoin(dest, nm) : ljoin(dest, nm) };
         const r = side === 'remote' ? await inv('ssh:op', t.sid, 'rename', a) : await inv('ssh:localOp', 'rename', a);
-        if (r.error) { toast('Taşınamadı: ' + nm, r.error); break; }
+        if (r.error) { toast(__('Taşınamadı: {name}', { name: nm }), r.error); break; }
       }
       p.sel.clear();
       loadPane(t, side, p.path);
@@ -1182,12 +1194,12 @@
     const t = tabByCh(ch); if (!t) return;
     t.ch = null;
     if (t.kind === 'term') { const d = t.el.querySelector('[data-role=dot]'); if (d) d.className = 'ssh-dot off'; }
-    if (t.status === 'ok') t.term.write('\r\n\x1b[2m— kabuk kapandı · yeni kabuk için Enter —\x1b[0m\r\n');
+    if (t.status === 'ok') t.term.write(`\r\n\x1b[2m— ${__('kabuk kapandı · yeni kabuk için Enter')} —\x1b[0m\r\n`);
   });
   api.on('ssh:closed', (sid, reason) => {
     const t = tabBySid(sid); if (!t) return;
     t.sid = null; t.ch = null;
-    if (t.status === 'ok') { t.status = 'closed'; t.error = reason || ''; t.term.write('\r\n\x1b[33m— bağlantı kapandı —\x1b[0m\r\n'); }
+    if (t.status === 'ok') { t.status = 'closed'; t.error = reason || ''; t.term.write(`\r\n\x1b[33m— ${__('bağlantı kapandı')} —\x1b[0m\r\n`); }
     for (const j of X.xfers.values()) if (j.sid === sid) j.tab = t.id;
     renderOver(t); renderTabs(); renderHosts();
   });
@@ -1198,26 +1210,26 @@
     const t = tabBySid(sid); if (!t) return;
     const errs = list.filter(x => x.error && !(t.tunnels.find(o => o.localPort === x.localPort) || {}).error);
     t.tunnels = list; renderBar(t);
-    errs.forEach(x => toast(`Tünel ${x.localPort} → ${x.remoteHost}:${x.remotePort} çalışmadı`, x.error));
+    errs.forEach(x => toast(__('Tünel {local} → {host}:{port} çalışmadı', { local: x.localPort, host: x.remoteHost, port: x.remotePort }), x.error));
   });
 
   try {
     SHORTCUTS.push(
-      { group: 'SSH', keys: 'Ctrl+Alt+N', label: 'Yeni SSH / RDP bağlantısı' },
-      { group: 'SSH', keys: 'Ctrl+W', label: 'Oturum sekmesini kapat' },
-      { group: 'SSH', keys: 'Ctrl+PageDown / Ctrl+PageUp', label: 'Sonraki / önceki oturum' },
-      { group: 'SSH', keys: 'Ctrl+Alt+T / Ctrl+Alt+F', label: 'Yalnızca terminal / yalnızca dosyalar' },
-      { group: 'SSH', keys: 'F5', label: 'Seçilenleri diğer panele aktar (yükle / indir)' },
-      { group: 'SSH', keys: 'F2 / F7 / Delete', label: 'Yeniden adlandır / yeni klasör / sil' },
-      { group: 'SSH', keys: 'Backspace / Alt+Sol', label: 'Üst klasör / geri' },
-      { group: 'SSH', keys: 'Ctrl+H', label: 'Gizli dosyaları göster / gizle' },
-      { group: 'SSH', keys: 'Sağ tık (terminal)', label: 'Seçim varsa kopyala, yoksa yapıştır' },
+      { group: 'SSH', keys: 'Ctrl+Alt+N', label: __('Yeni SSH / RDP bağlantısı') },
+      { group: 'SSH', keys: 'Ctrl+W', label: __('Oturum sekmesini kapat') },
+      { group: 'SSH', keys: 'Ctrl+PageDown / Ctrl+PageUp', label: __('Sonraki / önceki oturum') },
+      { group: 'SSH', keys: 'Ctrl+Alt+T / Ctrl+Alt+F', label: __('Yalnızca terminal / yalnızca dosyalar') },
+      { group: 'SSH', keys: 'F5', label: __('Seçilenleri diğer panele aktar (yükle / indir)') },
+      { group: 'SSH', keys: 'F2 / F7 / Delete', label: __('Yeniden adlandır / yeni klasör / sil') },
+      { group: 'SSH', keys: __('Backspace / Alt+Sol'), label: __('Üst klasör / geri') },
+      { group: 'SSH', keys: 'Ctrl+H', label: __('Gizli dosyaları göster / gizle') },
+      { group: 'SSH', keys: __('Sağ tık (terminal)'), label: __('Seçim varsa kopyala, yoksa yapıştır') },
     );
   } catch (_) {}
 
   /* ---------------- terminal-only tabs (docker exec into a container) ---------------- */
   function openDockerTerm(c) {
-    const title = c.name + (c.target === 'local' ? '' : ' @ ' + (c.host || 'sunucu'));
+    const title = c.name + (c.target === 'local' ? '' : ' @ ' + (c.host || __('sunucu')));
     const t = {
       id: uid(), kind: 'term', hostId: null, title, status: 'ok', view: 'term', ch: null, sid: c.target === 'local' ? null : c.target,
       docker: c, local: {}, remote: {}, hist: { local: [], remote: [] }, tunnels: [],
@@ -1225,8 +1237,8 @@
     t.el = document.createElement('div');
     t.el.className = 'ssh-sess ssh-termtab';
     t.el.dataset.sess = t.id;
-    t.el.innerHTML = `<div class="ssh-bar"><span class="ssh-dot busy" data-role="dot"></span><i class="fa-brands fa-docker ssh-dki"></i><span class="ssh-addr">${esc(c.target === 'local' ? 'bu bilgisayar' : c.host || '')} · docker exec · <b>${esc(c.name)}</b></span><span class="ssh-grow"></span>
-        <button class="ssh-tb" data-act="termReopen" title="Kabuğu yeniden aç"><i class="fa-solid fa-rotate-right"></i>Yeniden aç</button></div>
+    t.el.innerHTML = `<div class="ssh-bar"><span class="ssh-dot busy" data-role="dot"></span><i class="fa-brands fa-docker ssh-dki"></i><span class="ssh-addr">${esc(c.target === 'local' ? __('bu bilgisayar') : c.host || '')} · docker exec · <b>${esc(c.name)}</b></span><span class="ssh-grow"></span>
+        <button class="ssh-tb" data-act="termReopen" title="${esc(__('Kabuğu yeniden aç'))}"><i class="fa-solid fa-rotate-right"></i>${__('Yeniden aç')}</button></div>
       <div class="ssh-content" data-layout="term"><div class="ssh-term"><div class="ssh-termhost" data-role="term"></div></div></div>`;
     document.getElementById('sshBody').appendChild(t.el);
     const term = new Terminal({ fontFamily: MONO_FONT, fontSize: 13, lineHeight: 1.15, cursorBlink: true, scrollback: 10000, allowProposedApi: true, theme: termTheme(), linkHandler: typeof termLinkHandler !== 'undefined' ? termLinkHandler : undefined });
@@ -1271,7 +1283,7 @@
     openDockerTerm(c) {
       // the SSH view may live in a window of its own; the tab has to open where it is seen
       const elsewhere = (typeof ONLY !== 'undefined' && ONLY && ONLY !== 'ssh') || (typeof ONLY !== 'undefined' && !ONLY && typeof DETACHED !== 'undefined' && DETACHED.has('ssh'));
-      if (elsewhere) { toast('SSH modu ayrı pencerede', 'Konteyner terminali için o penceredeki Docker düğmesini kullan ya da SSH’yi bu pencereye geri al.'); return; }
+      if (elsewhere) { toast(__('SSH modu ayrı pencerede'), __('Konteyner terminali için o penceredeki Docker düğmesini kullan ya da SSH’yi bu pencereye geri al.')); return; }
       if (S.mode !== 'ssh') setMode('ssh');
       openDockerTerm(c);
     },

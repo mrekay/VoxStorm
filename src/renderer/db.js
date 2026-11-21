@@ -10,13 +10,13 @@
   const TYPE_NAME = Object.fromEntries(TYPES);
   const DEF_PORT = { mssql: 1433, pg: 5432, mysql: 3306, mariadb: 3306 };
   const CM_MODE = { mssql: 'text/x-mssql', pg: 'text/x-pgsql', mysql: 'text/x-mysql', mariadb: 'text/x-mariadb' };
-  const COLORS = [['', 'Yok'], ['red', 'Kırmızı'], ['orange', 'Turuncu'], ['yellow', 'Sarı'], ['green', 'Yeşil'], ['blue', 'Mavi'], ['purple', 'Mor'], ['gray', 'Gri']];
-  const KINDS = [['tables', 'Tablolar', 'fa-table'], ['views', 'Görünümler', 'fa-eye'], ['procs', 'Saklı yordamlar', 'fa-gears'], ['funcs', 'Fonksiyonlar', 'fa-florin-sign']];
+  const COLORS = [['', __('Yok')], ['red', __('Kırmızı')], ['orange', __('Turuncu')], ['yellow', __('Sarı')], ['green', __('Yeşil')], ['blue', __('Mavi')], ['purple', __('Mor')], ['gray', __('Gri')]];
+  const KINDS = [['tables', __('Tablolar'), 'fa-table'], ['views', __('Görünümler'), 'fa-eye'], ['procs', __('Saklı yordamlar'), 'fa-gears'], ['funcs', __('Fonksiyonlar'), 'fa-florin-sign']];
   const RH = 24; // grid row height
   const SHOW_STEP = 1000;
   const isMy = t => t === 'mysql' || t === 'mariadb';
-  const fmtN = n => Number(n || 0).toLocaleString('tr-TR');
-  const fmtMs = ms => (ms < 1000 ? ms + ' ms' : (ms / 1000).toLocaleString('tr-TR', { maximumFractionDigits: 2 }) + ' sn');
+  const fmtN = n => Number(n || 0).toLocaleString(I18N.locale());
+  const fmtMs = ms => (ms < 1000 ? ms + ' ms' : __('{n} sn', { n: (ms / 1000).toLocaleString(I18N.locale(), { maximumFractionDigits: 2 }) }));
   const errText = e => String((e && e.message) || e).replace(/^Error invoking remote method '[^']+': (Error: )?/, '');
   const inv = async (ch, ...a) => { try { return await api.invoke(ch, ...a); } catch (e) { return { error: errText(e) }; } };
   const uid = () => 'q' + Math.random().toString(36).slice(2, 10);
@@ -92,39 +92,39 @@
   /* ---------------- build ---------------- */
   function build() {
     view.innerHTML = `
-      <aside class="db-side" id="dbSide" aria-label="Veritabanı gezgini">
+      <aside class="db-side" id="dbSide" aria-label="${esc(__('Veritabanı gezgini'))}">
         <div class="db-side-h">
           <div class="db-seg" role="tablist">
-            <button data-side="tree" role="tab" title="Bağlantılar ve nesneler"><i class="fa-solid fa-sitemap"></i>Gezgin</button>
-            <button data-side="history" role="tab" title="Çalıştırılan sorgular"><i class="fa-solid fa-clock-rotate-left"></i>Geçmiş</button>
-            <button data-side="saved" role="tab" title="Kayıtlı sorgular"><i class="fa-regular fa-bookmark"></i>Kayıtlı</button>
+            <button data-side="tree" role="tab" title="${esc(__('Bağlantılar ve nesneler'))}"><i class="fa-solid fa-sitemap"></i>${esc(__('Gezgin'))}</button>
+            <button data-side="history" role="tab" title="${esc(__('Çalıştırılan sorgular'))}"><i class="fa-solid fa-clock-rotate-left"></i>${esc(__('Geçmiş'))}</button>
+            <button data-side="saved" role="tab" title="${esc(__('Kayıtlı sorgular'))}"><i class="fa-regular fa-bookmark"></i>${esc(__('Kayıtlı'))}</button>
           </div>
-          <button class="db-ib" data-act="importConns" title="Projelerden içe aktar (.env, VNL config_definitions.php)" aria-label="Projelerden içe aktar"><i class="fa-solid fa-file-import"></i></button>
-          <button class="db-ib" data-act="newConn" title="Yeni bağlantı" aria-label="Yeni bağlantı"><i class="fa-solid fa-plus"></i></button>
+          <button class="db-ib" data-act="importConns" title="${esc(__('Projelerden içe aktar (.env, VNL config_definitions.php)'))}" aria-label="${esc(__('Projelerden içe aktar'))}"><i class="fa-solid fa-file-import"></i></button>
+          <button class="db-ib" data-act="newConn" title="${esc(__('Yeni bağlantı'))}" aria-label="${esc(__('Yeni bağlantı'))}"><i class="fa-solid fa-plus"></i></button>
         </div>
-        <div class="db-search"><i class="fa-solid fa-magnifying-glass"></i><input id="dbFilter" placeholder="Ara…" spellcheck="false" autocomplete="off" aria-label="Ara"><button class="db-ib sm" data-act="clearFilter" title="Temizle" hidden><i class="fa-solid fa-xmark"></i></button></div>
+        <div class="db-search"><i class="fa-solid fa-magnifying-glass"></i><input id="dbFilter" placeholder="${esc(__('Ara…'))}" spellcheck="false" autocomplete="off" aria-label="${esc(__('Ara'))}"><button class="db-ib sm" data-act="clearFilter" title="${esc(__('Temizle'))}" hidden><i class="fa-solid fa-xmark"></i></button></div>
         <div class="db-list" id="dbTree" tabindex="0"></div>
         <div class="db-list" id="dbHist" hidden></div>
         <div class="db-list" id="dbSaved" hidden></div>
       </aside>
-      <div class="db-split-v" data-drag="side" title="Sürükleyerek genişlet"></div>
+      <div class="db-split-v" data-drag="side" title="${esc(__('Sürükleyerek genişlet'))}"></div>
       <main class="db-main">
         <div class="db-tabs" id="dbTabs" role="tablist"></div>
         <div class="db-bar" id="dbBar">
           <span class="db-cdot" id="dbBarDot"></span>
-          <select id="dbConnSel" aria-label="Bağlantı" title="Bağlantı"></select>
-          <select id="dbDbSel" aria-label="Veritabanı" title="Veritabanı"></select>
-          <button class="db-run" data-act="run" title="Çalıştır: seçili kısım ya da tamamı (Ctrl+Enter / F5)"><i class="fa-solid fa-play"></i>Çalıştır</button>
-          <button class="db-tb" data-act="runStmt" title="İmlecin bulunduğu deyimi çalıştır (Ctrl+Shift+Enter)"><i class="fa-solid fa-i-cursor"></i>Deyim</button>
-          <button class="db-tb danger" data-act="cancel" title="Sorguyu iptal et (Shift+F5)" hidden><i class="fa-solid fa-stop"></i>İptal</button>
-          <span class="db-ro" id="dbRo" hidden title="Bu bağlantıda yazma ifadeleri engellenir"><i class="fa-solid fa-lock"></i>Salt okunur</span>
+          <select id="dbConnSel" aria-label="${esc(__('Bağlantı'))}" title="${esc(__('Bağlantı'))}"></select>
+          <select id="dbDbSel" aria-label="${esc(__('Veritabanı'))}" title="${esc(__('Veritabanı'))}"></select>
+          <button class="db-run" data-act="run" title="${esc(__('Çalıştır: seçili kısım ya da tamamı (Ctrl+Enter / F5)'))}"><i class="fa-solid fa-play"></i>${esc(__('Çalıştır'))}</button>
+          <button class="db-tb" data-act="runStmt" title="${esc(__('İmlecin bulunduğu deyimi çalıştır (Ctrl+Shift+Enter)'))}"><i class="fa-solid fa-i-cursor"></i>${esc(__('Deyim'))}</button>
+          <button class="db-tb danger" data-act="cancel" title="${esc(__('Sorguyu iptal et (Shift+F5)'))}" hidden><i class="fa-solid fa-stop"></i>${esc(__('İptal'))}</button>
+          <span class="db-ro" id="dbRo" hidden title="${esc(__('Bu bağlantıda yazma ifadeleri engellenir'))}"><i class="fa-solid fa-lock"></i>${esc(__('Salt okunur'))}</span>
           <span class="db-grow"></span>
-          <button class="db-tb" data-act="saveQuery" title="Sorguyu kaydet (Ctrl+S)"><i class="fa-regular fa-bookmark"></i>Kaydet</button>
-          <button class="db-tb" data-act="claude" title="Seçili sorguyu yapay zekâya sor (Ctrl+Shift+K)"><i class="fa-solid fa-robot"></i><span class="db-ask">Claude'a sor</span></button>
+          <button class="db-tb" data-act="saveQuery" title="${esc(__('Sorguyu kaydet (Ctrl+S)'))}"><i class="fa-regular fa-bookmark"></i>${esc(__('Kaydet'))}</button>
+          <button class="db-tb" data-act="claude" title="${esc(__('Seçili sorguyu yapay zekâya sor (Ctrl+Shift+K)'))}"><i class="fa-solid fa-robot"></i><span class="db-ask">${esc(__('Claude’a sor'))}</span></button>
         </div>
         <div class="db-ed" id="dbEd"></div>
-        <div class="db-split-h" data-drag="ed" title="Sürükleyerek boyutlandır"></div>
-        <section class="db-res" id="dbRes" aria-label="Sonuçlar">
+        <div class="db-split-h" data-drag="ed" title="${esc(__('Sürükleyerek boyutlandır'))}"></div>
+        <section class="db-res" id="dbRes" aria-label="${esc(__('Sonuçlar'))}">
           <div class="db-rtabs" id="dbRTabs" role="tablist"></div>
           <div class="db-rbody" id="dbRBody"></div>
         </section>
@@ -204,7 +204,7 @@
   function addTab(o = {}) {
     const c = conn(o.connId);
     const t = {
-      id: o.id || uid(), title: o.title || 'Sorgu ' + (D.tabs.length + 1), connId: c ? c.id : '', db: o.db || (c && c.database) || '',
+      id: o.id || uid(), title: o.title || __('Sorgu {n}', { n: D.tabs.length + 1 }), connId: c ? c.id : '', db: o.db || (c && c.database) || '',
       sql: o.sql || '', savedId: o.savedId || '', page: o.page || null,
       results: [], messages: [], view: 0, running: false, ms: null,
     };
@@ -270,7 +270,7 @@
     }
     if (r.error) {
       D.live[id] = { status: 'error', error: r.error };
-      if (!quiet) toast('Bağlanılamadı: ' + (c.name || c.host), r.error);
+      if (!quiet) toast(__('Bağlanılamadı: {name}', { name: c.name || c.host }), r.error);
       renderConn();
       return false;
     }
@@ -319,7 +319,7 @@
     else if (n.t === 'k') r = await inv('db:explore', n.id, 'objects', { db: n.db, schema: n.schema, kind: n.kind });
     else if (n.t === 'o') r = await inv('db:explore', n.id, 'columns', { db: n.db, schema: n.schema, table: n.name });
     if (r && r.needPassword) { await connect(n.id); r = await inv('db:explore', n.id, n.t === 'd' ? 'schemas' : n.t === 'k' ? 'objects' : 'columns', { db: n.db, schema: n.schema, kind: n.kind, table: n.name }); }
-    D.kids[key] = r && !r.error ? { items: r.items || [] } : { error: (r && r.error) || 'Yüklenemedi' };
+    D.kids[key] = r && !r.error ? { items: r.items || [] } : { error: (r && r.error) || __('Yüklenemedi') };
     renderTree();
   }
   async function toggle(key, force) {
@@ -339,7 +339,7 @@
       if (n.t === 'c') { ck = `d:${n.id}:${enc(it.name)}`; icon = 'fa-database'; if (it.system) extra = ' sys'; }
       else if (n.t === 'd' && !isMy(c.type)) { ck = `s:${n.id}:${enc(n.db)}:${enc(it.name)}`; icon = 'fa-folder'; if (it.empty) extra = ' sys'; }
       else if (n.t === 'd' || n.t === 's') { ck = it.key; icon = KINDS.find(x => x[0] === it.kind)[2]; extra = ' cat'; }
-      else if (n.t === 'k') { ck = `o:${n.id}:${enc(n.db)}:${enc(n.schema)}:${n.kind}:${enc(it.name)}`; icon = KINDS.find(x => x[0] === n.kind)[2]; leaf = n.kind === 'procs' || n.kind === 'funcs'; if (it.sub === 'materialized') meta = 'mat.'; }
+      else if (n.t === 'k') { ck = `o:${n.id}:${enc(n.db)}:${enc(n.schema)}:${n.kind}:${enc(it.name)}`; icon = KINDS.find(x => x[0] === n.kind)[2]; leaf = n.kind === 'procs' || n.kind === 'funcs'; if (it.sub === 'materialized') meta = __('mat.'); }
       else if (n.t === 'o') { ck = key + ':' + enc(it.name); icon = it.pk ? 'fa-key' : 'fa-minus'; meta = it.type + (it.nullable ? '' : ' · NOT NULL'); leaf = true; extra = it.pk ? ' db-pk' : ' db-colnode'; }
       const opened = !leaf && D.open.has(ck);
       const sub = [];
@@ -356,7 +356,7 @@
       if (opened || (f && kidsMatch)) {
         const kk = D.kids[ck];
         if (kk && kk.error) out.push(`<div class="db-node err" style="padding-left:${22 + (depth + 1) * 14}px" title="${esc(kk.error)}"><i class="fa-solid fa-triangle-exclamation"></i><span class="db-nm">${esc(kk.error)}</span></div>`);
-        else if (kk && kk.items && !kk.items.length && !f) out.push(`<div class="db-node empty" style="padding-left:${22 + (depth + 1) * 14}px"><span class="db-nm">(boş)</span></div>`);
+        else if (kk && kk.items && !kk.items.length && !f) out.push(`<div class="db-node empty" style="padding-left:${22 + (depth + 1) * 14}px"><span class="db-nm">${esc(__('(boş)'))}</span></div>`);
         out.push(...sub);
       }
     }
@@ -377,7 +377,7 @@
   }
   function treeHtml(filter) {
     if (!D.conns.length) {
-      return `<div class="db-hello"><i class="fa-solid fa-database"></i><b>Henüz bağlantı yok</b><span>MSSQL, PostgreSQL, MySQL ya da MariaDB sunucusu ekle.</span><button class="btn primary" data-act="newConn"><i class="fa-solid fa-plus"></i> Bağlantı ekle</button></div>`;
+      return `<div class="db-hello"><i class="fa-solid fa-database"></i><b>${esc(__('Henüz bağlantı yok'))}</b><span>${esc(__('MSSQL, PostgreSQL, MySQL ya da MariaDB sunucusu ekle.'))}</span><button class="btn primary" data-act="newConn"><i class="fa-solid fa-plus"></i> ${esc(__('Bağlantı ekle'))}</button></div>`;
     }
     const f = String(filter || '').trim().toLowerCase();
     const out = [];
@@ -393,12 +393,12 @@
         + `<i class="db-car fa-solid ${st === 'connecting' ? 'fa-spinner fa-spin' : opened ? 'fa-chevron-down' : 'fa-chevron-right'}"></i>`
         + `<span class="db-tico t-${c.type}">${esc(c.type === 'mssql' ? 'MS' : c.type === 'pg' ? 'PG' : c.type === 'mysql' ? 'My' : 'Ma')}</span>`
         + `<span class="db-nm">${hl(c.name || c.host, f)}</span>`
-        + (c.readOnly ? '<i class="fa-solid fa-lock db-lock" title="Salt okunur"></i>' : '')
-        + `<span class="db-st ${st}" title="${st === 'ok' ? 'Bağlı' : st === 'error' ? 'Hata' : st === 'connecting' ? 'Bağlanıyor' : 'Bağlı değil'}"></span></div>`);
+        + (c.readOnly ? `<i class="fa-solid fa-lock db-lock" title="${esc(__('Salt okunur'))}"></i>` : '')
+        + `<span class="db-st ${st}" title="${esc(st === 'ok' ? __('Bağlı') : st === 'error' ? __('Hata') : st === 'connecting' ? __('Bağlanıyor') : __('Bağlı değil'))}"></span></div>`);
       if (opened && live.status === 'error') out.push(`<div class="db-node err" style="padding-left:36px" title="${esc(live.error)}"><i class="fa-solid fa-triangle-exclamation"></i><span class="db-nm">${esc(live.error)}</span></div>`);
       out.push(...sub);
     }
-    return out.join('') || '<div class="db-none">Eşleşme yok. Arama yalnızca açılmış düğümlerin içine bakar.</div>';
+    return out.join('') || `<div class="db-none">${esc(__('Eşleşme yok. Arama yalnızca açılmış düğümlerin içine bakar.'))}</div>`;
   }
 
   /* ---------------- side views: history and saved queries ---------------- */
@@ -408,32 +408,32 @@
     document.getElementById('dbTree').hidden = v !== 'tree';
     document.getElementById('dbHist').hidden = v !== 'history';
     document.getElementById('dbSaved').hidden = v !== 'saved';
-    document.getElementById('dbFilter').placeholder = v === 'tree' ? 'Bağlantı, tablo, sütun ara…' : v === 'history' ? 'Geçmişte ara…' : 'Kayıtlı sorgularda ara…';
+    document.getElementById('dbFilter').placeholder = v === 'tree' ? __('Bağlantı, tablo, sütun ara…') : v === 'history' ? __('Geçmişte ara…') : __('Kayıtlı sorgularda ara…');
     if (v === 'history') loadHistory();
     if (v === 'saved') loadSaved();
     saveState();
   }
   async function loadHistory() { const r = await inv('db:history'); D.history = r.items || []; renderHistory(); }
   async function loadSaved() { const r = await inv('db:saved'); D.saved = r.items || []; renderSaved(); }
-  const when = ms => { const d = new Date(ms); const today = new Date().toDateString() === d.toDateString(); return today ? d.toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' }) : d.toLocaleDateString('tr-TR', { day: 'numeric', month: 'short' }) + ' ' + d.toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' }); };
+  const when = ms => { const d = new Date(ms); const today = new Date().toDateString() === d.toDateString(); return today ? d.toLocaleTimeString(I18N.locale(), { hour: '2-digit', minute: '2-digit' }) : d.toLocaleDateString(I18N.locale(), { day: 'numeric', month: 'short' }) + ' ' + d.toLocaleTimeString(I18N.locale(), { hour: '2-digit', minute: '2-digit' }); };
   function renderHistory() {
     const el = document.getElementById('dbHist'); if (!el || !D.history) return;
     const f = D.filter.trim().toLowerCase();
     const items = D.history.filter(h => !f || (h.sql + ' ' + h.connName + ' ' + h.db).toLowerCase().includes(f));
-    el.innerHTML = (D.history.length ? `<div class="db-lh"><span>${fmtN(items.length)} sorgu</span><button class="db-link" data-act="clearHistory">Geçmişi temizle</button></div>` : '')
-      + (items.map(h => `<div class="db-item" data-hist="${esc(h.id)}" title="Çift tıkla: yeni sekmede aç">
+    el.innerHTML = (D.history.length ? `<div class="db-lh"><span>${esc(__('{n} sorgu', { n: fmtN(items.length) }))}</span><button class="db-link" data-act="clearHistory">${esc(__('Geçmişi temizle'))}</button></div>` : '')
+      + (items.map(h => `<div class="db-item" data-hist="${esc(h.id)}" title="${esc(__('Çift tıkla: yeni sekmede aç'))}">
           <div class="db-ih"><span class="db-dot ${h.ok ? 'ok' : 'bad'}"></span><span>${esc(when(h.at))}</span><span class="db-muted">${esc(h.connName)}${h.db ? ' · ' + esc(h.db) : ''}</span><span class="db-grow"></span><span class="db-muted">${esc(fmtMs(h.ms))}</span></div>
           <pre class="db-isql">${esc(h.sql.slice(0, 400))}</pre><div class="db-isum">${esc(h.summary || '')}</div></div>`).join('')
-      || '<div class="db-none">Henüz çalıştırılmış sorgu yok.</div>');
+      || `<div class="db-none">${esc(__('Henüz çalıştırılmış sorgu yok.'))}</div>`);
   }
   function renderSaved() {
     const el = document.getElementById('dbSaved'); if (!el || !D.saved) return;
     const f = D.filter.trim().toLowerCase();
     const items = D.saved.filter(q => !f || (q.name + ' ' + q.sql).toLowerCase().includes(f));
-    el.innerHTML = items.map(q => { const c = conn(q.connId); return `<div class="db-item" data-saved="${esc(q.id)}" title="Tıkla: aç">
+    el.innerHTML = items.map(q => { const c = conn(q.connId); return `<div class="db-item" data-saved="${esc(q.id)}" title="${esc(__('Tıkla: aç'))}">
         <div class="db-ih"><i class="fa-regular fa-bookmark"></i><b>${esc(q.name)}</b><span class="db-grow"></span><span class="db-muted">${c ? esc(c.name || c.host) : ''}</span></div>
         <pre class="db-isql">${esc(q.sql.slice(0, 300))}</pre></div>`; }).join('')
-      || '<div class="db-none">Kayıtlı sorgu yok. Düzenleyicide Ctrl+S ile kaydedebilirsin.</div>';
+      || `<div class="db-none">${esc(__('Kayıtlı sorgu yok. Düzenleyicide Ctrl+S ile kaydedebilirsin.'))}</div>`;
   }
   function openSql(sql, connId, db, title, savedId) {
     const t = cur();
@@ -445,19 +445,20 @@
   async function saveQuery() {
     const t = cur(); if (!t) return;
     const sql = t.doc.getValue();
-    if (!sql.trim()) { toast('Kaydedilecek sorgu yok'); return; }
+    if (!sql.trim()) { toast(__('Kaydedilecek sorgu yok')); return; }
     if (D.saved == null) await loadSaved();
     const old = t.savedId && D.saved.find(q => q.id === t.savedId);
     let name = old ? old.name : '';
     if (!old) {
-      const r = await modal({ title: 'Sorguyu kaydet', body: `<label class="db-f"><span>Ad</span><input name="name" value="${esc(/^Sorgu \d+$/.test(t.title) ? '' : t.title)}" placeholder="Örn. Günlük satışlar" maxlength="120"></label>`, buttons: [['cancel', 'Vazgeç'], ['ok', 'Kaydet', 'primary']] });
+      const auto = /^Sorgu \d+$/.test(t.title) || t.title === __('Sorgu {n}', { n: (/\d+/.exec(t.title) || [''])[0] }); // the default tab title is not a name
+      const r = await modal({ title: __('Sorguyu kaydet'), body: `<label class="db-f"><span>${esc(__('Ad'))}</span><input name="name" value="${esc(auto ? '' : t.title)}" placeholder="${esc(__('Örn. Günlük satışlar'))}" maxlength="120"></label>`, buttons: [['cancel', __('Vazgeç')], ['ok', __('Kaydet'), 'primary']] });
       if (!r || r.value !== 'ok') return;
-      name = r.form.name.trim() || 'Adsız sorgu';
+      name = r.form.name.trim() || __('Adsız sorgu');
     }
     const res = await inv('db:savedSave', { id: old ? old.id : '', name, sql, connId: t.connId, db: t.db });
-    if (res.error) { toast('Kaydedilemedi', res.error); return; }
+    if (res.error) { toast(__('Kaydedilemedi'), res.error); return; }
     t.savedId = res.item.id; t.title = res.item.name;
-    toast(old ? 'Kayıtlı sorgu güncellendi' : 'Sorgu kaydedildi', res.item.name);
+    toast(old ? __('Kayıtlı sorgu güncellendi') : __('Sorgu kaydedildi'), res.item.name);
     renderTabs(); saveState(); loadSaved();
   }
 
@@ -468,20 +469,20 @@
       const c = conn(t.connId);
       return `<div class="db-tab${t.id === D.active ? ' on' : ''} db-c-${(c && c.color) || 'none'}" data-tab="${t.id}" role="tab" aria-selected="${t.id === D.active}" title="${esc(t.title)}${c ? ' — ' + esc(c.name || c.host) + (t.db ? ' / ' + esc(t.db) : '') : ''}">`
         + (t.running ? '<i class="fa-solid fa-spinner fa-spin db-tsp"></i>' : t.page ? '<i class="fa-solid fa-table db-tsp"></i>' : t.savedId ? '<i class="fa-regular fa-bookmark db-tsp"></i>' : '')
-        + `<span>${esc(t.title)}</span><button class="db-tx" data-close="${t.id}" title="Kapat (Ctrl+W)" aria-label="Sekmeyi kapat"><i class="fa-solid fa-xmark"></i></button></div>`;
-    }).join('') + '<button class="db-tnew" data-act="newTab" title="Yeni sorgu (Ctrl+T)" aria-label="Yeni sorgu"><i class="fa-solid fa-plus"></i></button>';
+        + `<span>${esc(t.title)}</span><button class="db-tx" data-close="${t.id}" title="${esc(__('Kapat (Ctrl+W)'))}" aria-label="${esc(__('Sekmeyi kapat'))}"><i class="fa-solid fa-xmark"></i></button></div>`;
+    }).join('') + `<button class="db-tnew" data-act="newTab" title="${esc(__('Yeni sorgu (Ctrl+T)'))}" aria-label="${esc(__('Yeni sorgu'))}"><i class="fa-solid fa-plus"></i></button>`;
   }
   function renderBar() {
     const t = cur(); if (!t || !document.getElementById('dbBar')) return;
     const c = conn(t.connId);
     const cs = document.getElementById('dbConnSel');
-    cs.innerHTML = '<option value="">Bağlantı seç…</option>' + D.conns.map(x => `<option value="${x.id}"${x.id === t.connId ? ' selected' : ''}>${esc(x.name || x.host)} (${esc(TYPE_NAME[x.type])})</option>`).join('');
+    cs.innerHTML = `<option value="">${esc(__('Bağlantı seç…'))}</option>` + D.conns.map(x => `<option value="${x.id}"${x.id === t.connId ? ' selected' : ''}>${esc(x.name || x.host)} (${esc(TYPE_NAME[x.type])})</option>`).join('');
     const ds = document.getElementById('dbDbSel');
     const live = c && D.live[c.id];
     const dbs = (live && live.dbs) || [];
     const names = dbs.map(d => d.name);
     if (t.db && !names.includes(t.db)) names.unshift(t.db);
-    ds.innerHTML = (c ? `<option value="">${c.type === 'pg' ? 'postgres (varsayılan)' : 'Varsayılan veritabanı'}</option>` : '<option value="">—</option>') + names.map(n => `<option${n === t.db ? ' selected' : ''}>${esc(n)}</option>`).join('');
+    ds.innerHTML = (c ? `<option value="">${esc(c.type === 'pg' ? __('postgres (varsayılan)') : __('Varsayılan veritabanı'))}</option>` : '<option value="">—</option>') + names.map(n => `<option${n === t.db ? ' selected' : ''}>${esc(n)}</option>`).join('');
     ds.disabled = !c;
     document.getElementById('dbBarDot').className = 'db-cdot db-c-' + ((c && c.color) || 'none') + (live && live.status === 'ok' ? ' on' : '');
     document.getElementById('dbRo').hidden = !(c && c.readOnly);
@@ -495,10 +496,10 @@
     const el = document.getElementById('dbStatus'); const t = cur(); if (!el || !t) return;
     const c = conn(t.connId), live = c && D.live[c.id];
     const pos = cm.getCursor();
-    const left = c ? `<span class="db-st ${live ? live.status : 'idle'}"></span><b>${esc(c.name || c.host)}</b><span>${esc(TYPE_NAME[c.type])}</span>${t.db ? `<span>${esc(t.db)}</span>` : ''}${c.readOnly ? '<span class="db-warn"><i class="fa-solid fa-lock"></i> salt okunur</span>' : ''}` : '<span class="db-muted">Bağlantı seçilmedi</span>';
-    let right = `<span>Satır ${pos.line + 1}, Sütun ${pos.ch + 1}</span>`;
-    if (t.running) right = `<span class="db-run-t"><i class="fa-solid fa-spinner fa-spin"></i> Çalışıyor ${fmtMs(Date.now() - t.started)}</span>` + right;
-    else if (t.ms != null) right = `<span>${fmtMs(t.ms)}</span>` + (t.results.length ? `<span>${t.results.map(r => fmtN(r.total)).join(' + ')} satır</span>` : '') + right;
+    const left = c ? `<span class="db-st ${live ? live.status : 'idle'}"></span><b>${esc(c.name || c.host)}</b><span>${esc(TYPE_NAME[c.type])}</span>${t.db ? `<span>${esc(t.db)}</span>` : ''}${c.readOnly ? `<span class="db-warn"><i class="fa-solid fa-lock"></i> ${esc(__('salt okunur'))}</span>` : ''}` : `<span class="db-muted">${esc(__('Bağlantı seçilmedi'))}</span>`;
+    let right = `<span>${esc(__('Satır {line}, Sütun {col}', { line: pos.line + 1, col: pos.ch + 1 }))}</span>`;
+    if (t.running) right = `<span class="db-run-t"><i class="fa-solid fa-spinner fa-spin"></i> ${esc(__('Çalışıyor {time}', { time: fmtMs(Date.now() - t.started) }))}</span>` + right;
+    else if (t.ms != null) right = `<span>${fmtMs(t.ms)}</span>` + (t.results.length ? `<span>${esc(__('{rows} satır', { rows: t.results.map(r => fmtN(r.total)).join(' + ') }))}</span>` : '') + right;
     el.innerHTML = `<div class="db-sl">${left}</div><div class="db-sr">${right}</div>`;
   }
 
@@ -534,12 +535,12 @@
     let sql, offset = 0;
     if (mode === 'stmt') {
       const st = statementAt();
-      if (!st || !st.sql.trim()) { toast('Çalıştırılacak deyim yok'); return; }
+      if (!st || !st.sql.trim()) { toast(__('Çalıştırılacak deyim yok')); return; }
       sql = st.sql; offset = st.from;
       cm.setSelection({ line: st.from, ch: 0 }, { line: st.to, ch: cm.getLine(st.to).length });
     } else if (cm.somethingSelected()) { sql = cm.getSelection(); offset = cm.getCursor('from').line; } else sql = cm.getValue();
-    if (!sql.trim()) { toast('Çalıştırılacak sorgu yok'); return; }
-    if (!t.connId) { toast('Önce bir bağlantı seç', 'Araç çubuğundaki listeden ya da soldaki gezginden.'); document.getElementById('dbConnSel').focus(); return; }
+    if (!sql.trim()) { toast(__('Çalıştırılacak sorgu yok')); return; }
+    if (!t.connId) { toast(__('Önce bir bağlantı seç'), __('Araç çubuğundaki listeden ya da soldaki gezginden.')); document.getElementById('dbConnSel').focus(); return; }
     await execute(t, sql, offset, {});
   }
   async function execute(t, sql, offset, o) {
@@ -561,12 +562,12 @@
     }
     if (r.blocked) {
       settle();
-      await modal({ title: 'Salt okunur bağlantı', icon: 'fa-lock', body: `<p><b>${esc(c.name || c.host)}</b> salt okunur olarak işaretli; şu ifadeler bu bağlantıda çalıştırılmaz:</p><p class="db-codes">${r.blocked.map(b => `<code>${esc(b)}</code>`).join(' ')}</p><p class="db-muted">Gerekirse bağlantı ayarlarından salt okunur işaretini kaldırabilirsin.</p>`, buttons: [['ok', 'Tamam', 'primary']] });
+      await modal({ title: __('Salt okunur bağlantı'), icon: 'fa-lock', body: `<p>${__('<b>{name}</b> salt okunur olarak işaretli; şu ifadeler bu bağlantıda çalıştırılmaz:', { name: esc(c.name || c.host) })}</p><p class="db-codes">${r.blocked.map(b => `<code>${esc(b)}</code>`).join(' ')}</p><p class="db-muted">${esc(__('Gerekirse bağlantı ayarlarından salt okunur işaretini kaldırabilirsin.'))}</p>`, buttons: [['ok', __('Tamam'), 'primary']] });
       return;
     }
     if (r.confirm) {
       settle();
-      const ok = await modal({ title: 'Bu sorgu veri silebilir', icon: 'fa-triangle-exclamation', danger: true, body: `<p>Çalıştırmadan önce kontrol et:</p><ul class="db-risks">${r.confirm.map(x => `<li>${esc(x)}</li>`).join('')}</ul><p class="db-muted">Bağlantı: <b>${esc(c.name || c.host)}</b>${t.db ? ' · ' + esc(t.db) : ''}</p>`, buttons: [['cancel', 'Vazgeç'], ['ok', 'Yine de çalıştır', 'danger']], focus: 'cancel' });
+      const ok = await modal({ title: __('Bu sorgu veri silebilir'), icon: 'fa-triangle-exclamation', danger: true, body: `<p>${esc(__('Çalıştırmadan önce kontrol et:'))}</p><ul class="db-risks">${r.confirm.map(x => `<li>${esc(x)}</li>`).join('')}</ul><p class="db-muted">${__('Bağlantı: <b>{name}</b>', { name: esc(c.name || c.host) })}${t.db ? ' · ' + esc(t.db) : ''}</p>`, buttons: [['cancel', __('Vazgeç')], ['ok', __('Yine de çalıştır'), 'danger']], focus: 'cancel' });
       if (ok && ok.value === 'ok') return execute(t, sql, offset, { ...o, confirmed: true });
       return;
     }
@@ -594,7 +595,7 @@
   async function cancelRun() {
     const t = cur(); if (!t || !t.running) return;
     await inv('db:cancel', t.id);
-    toast('İptal isteği gönderildi');
+    toast(__('İptal isteği gönderildi'));
   }
   function markErrLine(t, line) {
     const l = Math.max(0, Math.min(t.doc.lastLine(), (t.offset || 0) + line - 1));
@@ -607,14 +608,14 @@
     const t = cur(), tabsEl = document.getElementById('dbRTabs'), body = document.getElementById('dbRBody');
     if (!t || !tabsEl) return;
     const errs = t.messages.filter(m => m.type === 'error').length;
-    tabsEl.innerHTML = t.results.map((r, i) => `<button class="db-rtab${t.view === i ? ' on' : ''}" data-rview="${i}" role="tab"><i class="fa-solid fa-table-list"></i>Sonuç ${i + 1}<small>${fmtN(r.total)}</small></button>`).join('')
-      + `<button class="db-rtab${t.view === 'msg' ? ' on' : ''}${errs ? ' err' : ''}" data-rview="msg" role="tab"><i class="fa-solid ${errs ? 'fa-circle-exclamation' : 'fa-message'}"></i>Mesajlar${t.messages.length ? `<small>${t.messages.length}</small>` : ''}</button>`
-      + (t.page ? `<span class="db-pager"><button class="db-ib sm" data-page="-1" title="Önceki sayfa"${t.page.n ? '' : ' disabled'}><i class="fa-solid fa-chevron-left"></i></button><span>Sayfa ${t.page.n + 1}</span><button class="db-ib sm" data-page="1" title="Sonraki sayfa"${t.results[0] && t.results[0].total < t.page.size ? ' disabled' : ''}><i class="fa-solid fa-chevron-right"></i></button><select data-pagesize title="Sayfa boyutu">${[50, 100, 500, 1000].map(n => `<option${n === t.page.size ? ' selected' : ''}>${n}</option>`).join('')}</select></span>` : '');
-    if (t.running && !t.results.length) { body.innerHTML = '<div class="db-wait"><i class="fa-solid fa-spinner fa-spin"></i> Sorgu çalışıyor… <button class="btn" data-act="cancel">İptal et</button></div>'; return; }
+    tabsEl.innerHTML = t.results.map((r, i) => `<button class="db-rtab${t.view === i ? ' on' : ''}" data-rview="${i}" role="tab"><i class="fa-solid fa-table-list"></i>${esc(__('Sonuç {i}', { i: i + 1 }))}<small>${fmtN(r.total)}</small></button>`).join('')
+      + `<button class="db-rtab${t.view === 'msg' ? ' on' : ''}${errs ? ' err' : ''}" data-rview="msg" role="tab"><i class="fa-solid ${errs ? 'fa-circle-exclamation' : 'fa-message'}"></i>${esc(__('Mesajlar'))}${t.messages.length ? `<small>${t.messages.length}</small>` : ''}</button>`
+      + (t.page ? `<span class="db-pager"><button class="db-ib sm" data-page="-1" title="${esc(__('Önceki sayfa'))}"${t.page.n ? '' : ' disabled'}><i class="fa-solid fa-chevron-left"></i></button><span>${esc(__('Sayfa {page}', { page: t.page.n + 1 }))}</span><button class="db-ib sm" data-page="1" title="${esc(__('Sonraki sayfa'))}"${t.results[0] && t.results[0].total < t.page.size ? ' disabled' : ''}><i class="fa-solid fa-chevron-right"></i></button><select data-pagesize title="${esc(__('Sayfa boyutu'))}">${[50, 100, 500, 1000].map(n => `<option${n === t.page.size ? ' selected' : ''}>${n}</option>`).join('')}</select></span>` : '');
+    if (t.running && !t.results.length) { body.innerHTML = `<div class="db-wait"><i class="fa-solid fa-spinner fa-spin"></i> ${esc(__('Sorgu çalışıyor…'))} <button class="btn" data-act="cancel">${esc(__('İptal et'))}</button></div>`; return; }
     if (t.view === 'msg' || !t.results[t.view]) {
-      if (!t.messages.length && t.ms == null) { body.innerHTML = `<div class="db-wait db-muted">Sorguyu yaz ve <kbd>Ctrl</kbd>+<kbd>Enter</kbd> ile çalıştır. Seçili bir kısım varsa yalnızca o çalışır.</div>`; return; }
-      body.innerHTML = `<div class="db-msgs">${t.messages.map(m => `<div class="db-msg ${m.type}"${m.line ? ` data-line="${m.line}" title="Düzenleyicide satıra git"` : ''}><i class="fa-solid ${m.type === 'error' ? 'fa-circle-xmark' : m.type === 'rows' ? 'fa-check' : m.type === 'cancel' ? 'fa-ban' : m.type === 'ok' ? 'fa-check' : 'fa-circle-info'}"></i><span>${m.line ? `<b>Satır ${(t.offset || 0) + m.line}:</b> ` : ''}${esc(m.text)}</span></div>`).join('')}`
-        + (t.ms != null ? `<div class="db-msg muted"><i class="fa-regular fa-clock"></i><span>Süre: ${fmtMs(t.ms)}${t.results.length ? ' · ' + t.results.length + ' sonuç kümesi' : ''}</span></div>` : '') + '</div>';
+      if (!t.messages.length && t.ms == null) { body.innerHTML = `<div class="db-wait db-muted">${__('Sorguyu yaz ve <kbd>Ctrl</kbd>+<kbd>Enter</kbd> ile çalıştır. Seçili bir kısım varsa yalnızca o çalışır.')}</div>`; return; }
+      body.innerHTML = `<div class="db-msgs">${t.messages.map(m => `<div class="db-msg ${m.type}"${m.line ? ` data-line="${m.line}" title="${esc(__('Düzenleyicide satıra git'))}"` : ''}><i class="fa-solid ${m.type === 'error' ? 'fa-circle-xmark' : m.type === 'rows' ? 'fa-check' : m.type === 'cancel' ? 'fa-ban' : m.type === 'ok' ? 'fa-check' : 'fa-circle-info'}"></i><span>${m.line ? `<b>${esc(__('Satır {line}:', { line: (t.offset || 0) + m.line }))}</b> ` : ''}${esc(m.text)}</span></div>`).join('')}`
+        + (t.ms != null ? `<div class="db-msg muted"><i class="fa-regular fa-clock"></i><span>${esc(t.results.length ? __('Süre: {time} · {n} sonuç kümesi', { time: fmtMs(t.ms), n: t.results.length }) : __('Süre: {time}', { time: fmtMs(t.ms) }))}</span></div>` : '') + '</div>';
       return;
     }
     renderGrid(t, t.results[t.view], body);
@@ -649,14 +650,14 @@
     const W = rnW + r.widths.reduce((a, b) => a + b, 0);
     const more = r.shown < r.fetched;
     body.innerHTML = `<div class="db-ginfo">
-        <span><b>${fmtN(r.total)}</b> satır${r.shown < r.total ? ` · ilk <b>${fmtN(r.shown)}</b> gösteriliyor` : ''}${r.truncated ? ` · bellekte ${fmtN(r.fetched)} satır tutuldu (sınır)` : ''}</span>
-        ${more ? `<button class="db-link" data-act="more">${fmtN(Math.min(SHOW_STEP, r.fetched - r.shown))} satır daha göster</button><button class="db-link" data-act="moreAll">Tümünü göster (${fmtN(r.fetched)})</button>` : ''}
+        <span>${__('<b>{n}</b> satır', { n: fmtN(r.total) })}${r.shown < r.total ? ' · ' + __('ilk <b>{n}</b> gösteriliyor', { n: fmtN(r.shown) }) : ''}${r.truncated ? ' · ' + esc(__('bellekte {n} satır tutuldu (sınır)', { n: fmtN(r.fetched) })) : ''}</span>
+        ${more ? `<button class="db-link" data-act="more">${esc(__('{n} satır daha göster', { n: fmtN(Math.min(SHOW_STEP, r.fetched - r.shown)) }))}</button><button class="db-link" data-act="moreAll">${esc(__('Tümünü göster ({n})', { n: fmtN(r.fetched) }))}</button>` : ''}
         <span class="db-grow"></span>
         <span class="db-muted db-selinfo"></span>
-        <button class="db-tb sm" data-act="copyAll" title="Görüntülenen tüm satırları başlıklarla kopyala (sekmeyle ayrılmış)"><i class="fa-regular fa-copy"></i>Kopyala</button>
-        <button class="db-tb sm" data-act="csv" title="CSV olarak dışa aktar"><i class="fa-solid fa-file-csv"></i>CSV</button>
+        <button class="db-tb sm" data-act="copyAll" title="${esc(__('Görüntülenen tüm satırları başlıklarla kopyala (sekmeyle ayrılmış)'))}"><i class="fa-regular fa-copy"></i>${esc(__('Kopyala'))}</button>
+        <button class="db-tb sm" data-act="csv" title="${esc(__('CSV olarak dışa aktar'))}"><i class="fa-solid fa-file-csv"></i>CSV</button>
       </div>
-      <div class="db-grid" tabindex="0" aria-label="Sonuç tablosu">
+      <div class="db-grid" tabindex="0" aria-label="${esc(__('Sonuç tablosu'))}">
         <div class="db-gin" style="width:${W}px">
           <div class="db-gh"><div class="db-rn">#</div>${r.columns.map((c, j) => `<div class="db-hc${r.num[j] ? ' num' : ''}" data-col="${j}" style="width:${r.widths[j]}px" title="${esc(c.name)}${c.type ? ' (' + esc(c.type) + ')' : ''}"><span class="db-hn">${esc(c.name)}</span><span class="db-ht">${esc(c.type || '')}</span><i class="db-rz" data-rz="${j}"></i></div>`).join('')}</div>
           <div class="db-gb" style="height:${r.shown * RH}px"><div class="db-gw"></div></div>
@@ -695,14 +696,14 @@
     const r = grid._r, el = grid.parentElement.querySelector('.db-selinfo'); if (!el) return;
     if (!r.sel) { el.textContent = ''; return; }
     const rows = Math.abs(r.sel.r1 - r.sel.r0) + 1, cols = Math.abs(r.sel.c1 - r.sel.c0) + 1;
-    el.textContent = rows * cols > 1 ? `${fmtN(rows)} × ${fmtN(cols)} seçili` : `Satır ${r.sel.r0 + 1}, ${r.columns[r.sel.c0].name}`;
+    el.textContent = rows * cols > 1 ? __('{rows} × {cols} seçili', { rows: fmtN(rows), cols: fmtN(cols) }) : __('Satır {line}, {col}', { line: r.sel.r0 + 1, col: r.columns[r.sel.c0].name });
   }
   async function showMore(all) {
     const t = cur(), r = t && t.results[t.view]; if (!r) return;
     const want = all ? r.fetched : Math.min(r.fetched, r.shown + SHOW_STEP);
     while (r.rows.length < want) {
       const res = await inv('db:rows', r.id, r.rows.length, Math.min(20000, want - r.rows.length));
-      if (res.error) { toast('Satırlar alınamadı', res.error); break; }
+      if (res.error) { toast(__('Satırlar alınamadı'), res.error); break; }
       if (!res.rows.length) break;
       for (const row of res.rows) r.rows.push(row);
     }
@@ -716,7 +717,7 @@
     return { r0: Math.min(s.r0, s.r1), r1: Math.max(s.r0, s.r1), c0: Math.min(s.c0, s.c1), c1: Math.max(s.c0, s.c1) };
   }
   function copyText(text, what) {
-    navigator.clipboard.writeText(text).then(() => toast(what || 'Kopyalandı'), () => toast('Kopyalanamadı'));
+    navigator.clipboard.writeText(text).then(() => toast(what || __('Kopyalandı')), () => toast(__('Kopyalanamadı')));
   }
   function copySel(r, headers) {
     const s = selRange(r); if (!s) return;
@@ -724,13 +725,13 @@
     if (headers) lines.push(r.columns.slice(s.c0, s.c1 + 1).map(c => tsv(c.name)).join('\t'));
     for (let i = s.r0; i <= s.r1; i++) lines.push(r.rows[i].slice(s.c0, s.c1 + 1).map(tsv).join('\t'));
     const n = (s.r1 - s.r0 + 1) * (s.c1 - s.c0 + 1);
-    copyText(n === 1 && !headers ? cellText(r.rows[s.r0][s.c0]) : lines.join('\r\n'), n === 1 ? 'Hücre kopyalandı' : `${fmtN(s.r1 - s.r0 + 1)} satır kopyalandı`);
+    copyText(n === 1 && !headers ? cellText(r.rows[s.r0][s.c0]) : lines.join('\r\n'), n === 1 ? __('Hücre kopyalandı') : __('{n} satır kopyalandı', { n: fmtN(s.r1 - s.r0 + 1) }));
   }
   function copyRowsJson(r) {
     const s = selRange(r); if (!s) return;
     const objs = [];
     for (let i = s.r0; i <= s.r1; i++) { const o = {}; r.columns.forEach((c, j) => { o[c.name] = r.rows[i][j]; }); objs.push(o); }
-    copyText(JSON.stringify(objs.length === 1 ? objs[0] : objs, null, 2), 'JSON olarak kopyalandı');
+    copyText(JSON.stringify(objs.length === 1 ? objs[0] : objs, null, 2), __('JSON olarak kopyalandı'));
   }
   function copyRowsInsert(r, t) {
     const s = selRange(r); if (!s) return;
@@ -739,21 +740,21 @@
     const cols = r.columns.map(x => qi(type, x.name)).join(', ');
     const out = [];
     for (let i = s.r0; i <= s.r1; i++) out.push(`INSERT INTO tablo (${cols}) VALUES (${r.rows[i].map(lit).join(', ')});`);
-    copyText(out.join('\n'), 'INSERT olarak kopyalandı');
+    copyText(out.join('\n'), __('INSERT olarak kopyalandı'));
   }
   async function viewCell(r, i, j) {
     const v = r.rows[i][j];
     let s = cellText(v), pretty = '';
     if (typeof v === 'string' && /^\s*[[{]/.test(v)) { try { pretty = JSON.stringify(JSON.parse(v), null, 2); } catch (_) {} }
-    const res = await modal({ title: r.columns[j].name, wide: true, body: `<div class="db-muted db-vmeta">${esc(r.columns[j].type || '')} · satır ${i + 1}${v === null ? ' · <b>NULL</b>' : ` · ${fmtN(s.length)} karakter`}</div><textarea class="db-val" readonly spellcheck="false">${esc(pretty || s)}</textarea>`, buttons: [['copy', 'Kopyala'], ['ok', 'Kapat', 'primary']] });
-    if (res && res.value === 'copy') copyText(s, 'Değer kopyalandı');
+    const res = await modal({ title: r.columns[j].name, wide: true, body: `<div class="db-muted db-vmeta">${esc(r.columns[j].type || '')} · ${esc(__('satır {line}', { line: i + 1 }))}${v === null ? ' · <b>NULL</b>' : ' · ' + esc(__('{n} karakter', { n: fmtN(s.length) }))}</div><textarea class="db-val" readonly spellcheck="false">${esc(pretty || s)}</textarea>`, buttons: [['copy', __('Kopyala')], ['ok', __('Kapat'), 'primary']] });
+    if (res && res.value === 'copy') copyText(s, __('Değer kopyalandı'));
   }
   async function exportCsv(sep) {
     const t = cur(), r = t && t.results[t.view]; if (!r) return;
     const res = await inv('db:exportCsv', r.id, { sep, name: t.title });
     if (res.canceled) return;
-    if (res.error) { toast('Dışa aktarılamadı', res.error); return; }
-    toast('CSV kaydedildi', `${fmtN(res.rows)} satır${res.truncated ? ` (toplam ${fmtN(res.total)}; bellek sınırı nedeniyle tamamı değil)` : ''} · ${res.file}`);
+    if (res.error) { toast(__('Dışa aktarılamadı'), res.error); return; }
+    toast(__('CSV kaydedildi'), (res.truncated ? __('{n} satır (toplam {total}; bellek sınırı nedeniyle tamamı değil)', { n: fmtN(res.rows), total: fmtN(res.total) }) : __('{n} satır', { n: fmtN(res.rows) })) + ` · ${res.file}`);
   }
 
   /* ---------------- modal dialogs ---------------- */
@@ -763,7 +764,7 @@
     if (modalDone) modalDone(null);
     return new Promise(resolve => {
       el.innerHTML = `<form class="db-dlg${wide ? ' wide' : ''}${danger ? ' danger' : ''}" novalidate role="dialog" aria-modal="true" aria-label="${esc(title)}">
-        <div class="db-dh">${icon ? `<i class="fa-solid ${icon}"></i>` : ''}<b>${esc(title)}</b><button type="button" class="db-ib" data-mb="cancel" aria-label="Kapat"><i class="fa-solid fa-xmark"></i></button></div>
+        <div class="db-dh">${icon ? `<i class="fa-solid ${icon}"></i>` : ''}<b>${esc(title)}</b><button type="button" class="db-ib" data-mb="cancel" aria-label="${esc(__('Kapat'))}"><i class="fa-solid fa-xmark"></i></button></div>
         <div class="db-db">${body}</div>
         <div class="db-df">${(buttons || []).map(([v, l, k]) => `<button type="${k === 'primary' || k === 'danger' ? 'submit' : 'button'}" class="btn ${k === 'danger' ? 'db-bdanger' : k || ''}" data-mb="${v}">${esc(l)}</button>`).join('')}</div></form>`;
       el.hidden = false;
@@ -789,9 +790,9 @@
   }
   async function askPassword(c, err) {
     const r = await modal({
-      title: 'Parola gerekli', icon: 'fa-key',
-      body: `<p><b>${esc(c.name || c.host)}</b> (${esc(TYPE_NAME[c.type])}${c.user ? ' · ' + esc((c.domain ? c.domain + '\\' : '') + c.user) : ''})</p>${err ? `<p class="db-errbox">${esc(err)}</p>` : ''}<label class="db-f"><span>Parola</span><input type="password" name="pw" autocomplete="off"></label><p class="db-muted">Parola yalnızca bu oturum boyunca bellekte tutulur.</p>`,
-      buttons: [['cancel', 'Vazgeç'], ['ok', 'Bağlan', 'primary']],
+      title: __('Parola gerekli'), icon: 'fa-key',
+      body: `<p><b>${esc(c.name || c.host)}</b> (${esc(TYPE_NAME[c.type])}${c.user ? ' · ' + esc((c.domain ? c.domain + '\\' : '') + c.user) : ''})</p>${err ? `<p class="db-errbox">${esc(err)}</p>` : ''}<label class="db-f"><span>${esc(__('Parola'))}</span><input type="password" name="pw" autocomplete="off"></label><p class="db-muted">${esc(__('Parola yalnızca bu oturum boyunca bellekte tutulur.'))}</p>`,
+      buttons: [['cancel', __('Vazgeç')], ['ok', __('Bağlan'), 'primary']],
     });
     return r && r.value === 'ok' ? r.form.pw : null;
   }
@@ -804,29 +805,29 @@
     const chk = x => (x ? ' checked' : '');
     const body = `
       <div class="db-grid2">
-        <label class="db-f full"><span>Ad</span><input name="name" value="${esc(v.name || '')}" placeholder="Örn. Üretim - Muhasebe" maxlength="80"></label>
-        <div class="db-f full"><span>Tür</span><div class="db-typesel">${TYPES.map(([k, l]) => `<label><input type="radio" name="type" value="${k}"${chk(v.type === k)}><span>${l}</span></label>`).join('')}</div></div>
-        <label class="db-f wide"><span>Sunucu</span><input name="host" value="${esc(v.host || '')}" placeholder="localhost, 10.0.0.5 ya da SUNUCU\\ÖRNEK" spellcheck="false"></label>
-        <label class="db-f"><span>Port</span><input name="port" value="${esc(v.port || '')}" inputmode="numeric" placeholder="${DEF_PORT[v.type]}"></label>
-        <label class="db-f full mssql-only"><span>Kimlik doğrulama</span><select name="auth"><option value="sql"${sel(v.auth, 'sql')}>SQL Server kimlik doğrulaması</option><option value="ntlm"${sel(v.auth, 'ntlm')}>Windows (NTLM: alan, kullanıcı ve parola)</option></select></label>
-        <label class="db-f full ntlm-only"><span>Alan (domain)</span><input name="domain" value="${esc(v.domain || '')}" placeholder="ŞİRKET" spellcheck="false"></label>
-        <label class="db-f"><span>Kullanıcı</span><input name="user" value="${esc(v.user || '')}" spellcheck="false" autocomplete="off"></label>
-        <label class="db-f wide"><span>Parola</span><input type="password" name="pw" autocomplete="new-password" placeholder="${c && c.hasPassword ? 'Kayıtlı parola değişmez' : ''}"></label>
+        <label class="db-f full"><span>${esc(__('Ad'))}</span><input name="name" value="${esc(v.name || '')}" placeholder="${esc(__('Örn. Üretim - Muhasebe'))}" maxlength="80"></label>
+        <div class="db-f full"><span>${esc(__('Tür'))}</span><div class="db-typesel">${TYPES.map(([k, l]) => `<label><input type="radio" name="type" value="${k}"${chk(v.type === k)}><span>${l}</span></label>`).join('')}</div></div>
+        <label class="db-f wide"><span>${esc(__('Sunucu'))}</span><input name="host" value="${esc(v.host || '')}" placeholder="${esc(__('localhost, 10.0.0.5 ya da SUNUCU\\ÖRNEK'))}" spellcheck="false"></label>
+        <label class="db-f"><span>${esc(__('Port'))}</span><input name="port" value="${esc(v.port || '')}" inputmode="numeric" placeholder="${DEF_PORT[v.type]}"></label>
+        <label class="db-f full mssql-only"><span>${esc(__('Kimlik doğrulama'))}</span><select name="auth"><option value="sql"${sel(v.auth, 'sql')}>${esc(__('SQL Server kimlik doğrulaması'))}</option><option value="ntlm"${sel(v.auth, 'ntlm')}>${esc(__('Windows (NTLM: alan, kullanıcı ve parola)'))}</option></select></label>
+        <label class="db-f full ntlm-only"><span>${esc(__('Alan (domain)'))}</span><input name="domain" value="${esc(v.domain || '')}" placeholder="${esc(__('ŞİRKET'))}" spellcheck="false"></label>
+        <label class="db-f"><span>${esc(__('Kullanıcı'))}</span><input name="user" value="${esc(v.user || '')}" spellcheck="false" autocomplete="off"></label>
+        <label class="db-f wide"><span>${esc(__('Parola'))}</span><input type="password" name="pw" autocomplete="new-password" placeholder="${c && c.hasPassword ? esc(__('Kayıtlı parola değişmez')) : ''}"></label>
         <div class="db-f full db-row">
-          <label class="db-ck"><input type="checkbox" name="askPassword"${chk(v.askPassword)}><span>Parolayı kaydetme, her bağlanışta sor</span></label>
-          ${c && c.hasPassword ? '<button type="button" class="db-link" data-mb="clearPw">Kayıtlı parolayı sil</button>' : ''}
+          <label class="db-ck"><input type="checkbox" name="askPassword"${chk(v.askPassword)}><span>${esc(__('Parolayı kaydetme, her bağlanışta sor'))}</span></label>
+          ${c && c.hasPassword ? `<button type="button" class="db-link" data-mb="clearPw">${esc(__('Kayıtlı parolayı sil'))}</button>` : ''}
         </div>
-        <label class="db-f full"><span>Varsayılan veritabanı</span><input name="database" value="${esc(v.database || '')}" placeholder="Boş bırakılırsa sunucunun varsayılanı" spellcheck="false"></label>
-        <div class="db-f full"><span>Güvenlik</span>
-          <label class="db-ck"><input type="checkbox" name="ssl"${chk(v.ssl)}><span class="mssql-only">Bağlantıyı şifrele (encrypt)</span><span class="other-only">SSL/TLS kullan</span></label>
-          <label class="db-ck"><input type="checkbox" name="trustCert"${chk(v.trustCert)}><span class="mssql-only">Sunucu sertifikasına güven (trustServerCertificate)</span><span class="other-only">Sertifikayı doğrulama (kendinden imzalı sertifikalar için)</span></label>
-          <label class="db-ck"><input type="checkbox" name="readOnly"${chk(v.readOnly)}><span><b>Salt okunur:</b> INSERT, UPDATE, DELETE, DROP gibi yazma ifadelerini engelle</span></label>
+        <label class="db-f full"><span>${esc(__('Varsayılan veritabanı'))}</span><input name="database" value="${esc(v.database || '')}" placeholder="${esc(__('Boş bırakılırsa sunucunun varsayılanı'))}" spellcheck="false"></label>
+        <div class="db-f full"><span>${esc(__('Güvenlik'))}</span>
+          <label class="db-ck"><input type="checkbox" name="ssl"${chk(v.ssl)}><span class="mssql-only">${esc(__('Bağlantıyı şifrele (encrypt)'))}</span><span class="other-only">${esc(__('SSL/TLS kullan'))}</span></label>
+          <label class="db-ck"><input type="checkbox" name="trustCert"${chk(v.trustCert)}><span class="mssql-only">${esc(__('Sunucu sertifikasına güven (trustServerCertificate)'))}</span><span class="other-only">${esc(__('Sertifikayı doğrulama (kendinden imzalı sertifikalar için)'))}</span></label>
+          <label class="db-ck"><input type="checkbox" name="readOnly"${chk(v.readOnly)}><span>${__('<b>Salt okunur:</b> INSERT, UPDATE, DELETE, DROP gibi yazma ifadelerini engelle')}</span></label>
         </div>
-        <label class="db-f full"><span>Claude / Codex erişimi · sorguyu VoxStorm çalıştırır, adres ve parola ajana verilmez</span><select name="aiAccess"><option value=""${sel(v.aiAccess || '', '')}>Her oturumda ilk kullanımda sor</option><option value="allow"${sel(v.aiAccess, 'allow')}>Her zaman izin ver</option><option value="deny"${sel(v.aiAccess, 'deny')}>Asla izin verme (ajanlar bu bağlantıyı görmez)</option></select></label>
-        <label class="db-f"><span>Zaman aşımı (sn)</span><input name="timeout" value="${esc(v.timeout || 15)}" inputmode="numeric"></label>
-        <div class="db-f wide"><span>Renk etiketi</span><div class="db-colors">${COLORS.map(([k, l]) => `<label title="${l}"><input type="radio" name="color" value="${k}"${chk((v.color || '') === k)}><i class="db-sw db-c-${k || 'none'}"></i></label>`).join('')}</div></div>
-        <p class="db-note full mssql-only"><i class="fa-solid fa-circle-info"></i> Windows tümleşik kimlik doğrulaması (kullanıcı adı ve parola girmeden oturumdaki Windows kimliğiyle) yerel sürücü gerektirdiği için desteklenmiyor; alan hesabıyla bağlanmak için NTLM seçeneğini kullan.</p>
-        ${D.canEncrypt ? '' : '<p class="db-note full warn"><i class="fa-solid fa-triangle-exclamation"></i> Windows şifreleme hizmeti kullanılamıyor; parolalar diske yazılmaz, her açılışta sorulur.</p>'}
+        <label class="db-f full"><span>${esc(__('Claude / Codex erişimi · sorguyu VoxStorm çalıştırır, adres ve parola ajana verilmez'))}</span><select name="aiAccess"><option value=""${sel(v.aiAccess || '', '')}>${esc(__('Her oturumda ilk kullanımda sor'))}</option><option value="allow"${sel(v.aiAccess, 'allow')}>${esc(__('Her zaman izin ver'))}</option><option value="deny"${sel(v.aiAccess, 'deny')}>${esc(__('Asla izin verme (ajanlar bu bağlantıyı görmez)'))}</option></select></label>
+        <label class="db-f"><span>${esc(__('Zaman aşımı (sn)'))}</span><input name="timeout" value="${esc(v.timeout || 15)}" inputmode="numeric"></label>
+        <div class="db-f wide"><span>${esc(__('Renk etiketi'))}</span><div class="db-colors">${COLORS.map(([k, l]) => `<label title="${esc(l)}"><input type="radio" name="color" value="${k}"${chk((v.color || '') === k)}><i class="db-sw db-c-${k || 'none'}"></i></label>`).join('')}</div></div>
+        <p class="db-note full mssql-only"><i class="fa-solid fa-circle-info"></i> ${esc(__('Windows tümleşik kimlik doğrulaması (kullanıcı adı ve parola girmeden oturumdaki Windows kimliğiyle) yerel sürücü gerektirdiği için desteklenmiyor; alan hesabıyla bağlanmak için NTLM seçeneğini kullan.'))}</p>
+        ${D.canEncrypt ? '' : `<p class="db-note full warn"><i class="fa-solid fa-triangle-exclamation"></i> ${esc(__('Windows şifreleme hizmeti kullanılamıyor; parolalar diske yazılmaz, her açılışta sorulur.'))}</p>`}
         <div class="db-test full" id="dbTestOut" hidden></div>
       </div>`;
     let clearPw = false;
@@ -838,17 +839,17 @@
     };
     const draft = f => ({ id: c ? c.id : undefined, name: f.name, type: f.type, host: f.host, port: f.port, user: f.user, database: f.database, auth: f.auth, domain: f.domain, ssl: f.ssl, trustCert: f.trustCert, readOnly: f.readOnly, color: f.color, askPassword: f.askPassword, timeout: f.timeout, aiAccess: f.aiAccess });
     const r = await modal({
-      title: c ? 'Bağlantıyı düzenle' : 'Yeni bağlantı', icon: 'fa-plug', wide: true, body,
-      buttons: [['test', 'Bağlantıyı test et'], ['cancel', 'Vazgeç'], ['ok', 'Kaydet', 'primary']],
+      title: c ? __('Bağlantıyı düzenle') : __('Yeni bağlantı'), icon: 'fa-plug', wide: true, body,
+      buttons: [['test', __('Bağlantıyı test et')], ['cancel', __('Vazgeç')], ['ok', __('Kaydet'), 'primary']],
       onOpen: form => { sync(form); form.addEventListener('change', () => sync(form)); },
       onAction: async (act, f, form) => {
-        if (act === 'clearPw') { clearPw = true; form.querySelector('[name=pw]').placeholder = 'Kayıtlı parola kaydedilince silinecek'; return true; }
+        if (act === 'clearPw') { clearPw = true; form.querySelector('[name=pw]').placeholder = __('Kayıtlı parola kaydedilince silinecek'); return true; }
         if (act === 'test') {
           const out = form.querySelector('#dbTestOut');
-          out.hidden = false; out.className = 'db-test full'; out.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Bağlanılıyor…';
+          out.hidden = false; out.className = 'db-test full'; out.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> ${esc(__('Bağlanılıyor…'))}`;
           const res = await inv('db:test', draft(f), f.pw ? f.pw : clearPw ? '' : undefined);
           out.className = 'db-test full ' + (res.ok ? 'ok' : 'bad');
-          out.innerHTML = res.ok ? `<i class="fa-solid fa-circle-check"></i> Bağlantı başarılı (${fmtMs(res.ms)})<small>${esc(res.version || '')}</small>` : `<i class="fa-solid fa-circle-xmark"></i> ${esc(res.error || 'Bağlanılamadı')}`;
+          out.innerHTML = res.ok ? `<i class="fa-solid fa-circle-check"></i> ${esc(__('Bağlantı başarılı ({time})', { time: fmtMs(res.ms) }))}<small>${esc(res.version || '')}</small>` : `<i class="fa-solid fa-circle-xmark"></i> ${esc(res.error || __('Bağlanılamadı'))}`;
           out.scrollIntoView({ block: 'nearest' });
           return true;
         }
@@ -856,8 +857,8 @@
           if (!f.host.trim()) { form.querySelector('[name=host]').focus(); return true; }
           const pw = f.pw ? f.pw : clearPw ? null : c ? undefined : '';
           const res = await inv('db:save', draft(f), pw);
-          if (res.error) { toast('Kaydedilemedi', res.error); return true; }
-          if (res.warning) toast('Parola kaydedilmedi', res.warning);
+          if (res.error) { toast(__('Kaydedilemedi'), res.error); return true; }
+          if (res.warning) toast(__('Parola kaydedilmedi'), res.warning);
           f.savedId = res.connection.id;
           form.dataset.saved = res.connection.id;
           return false;
@@ -876,33 +877,33 @@
   }
   // connection details found in the projects' .env files and VNL config_definitions.php
   async function importFromProjects() {
-    toast('Projeler taranıyor…', '.env ve config_definitions.php dosyaları okunuyor');
+    toast(__('Projeler taranıyor…'), __('.env ve config_definitions.php dosyaları okunuyor'));
     const r = await inv('db:scanProjects');
-    if (r.error) { toast('Taranamadı', r.error); return; }
+    if (r.error) { toast(__('Taranamadı'), r.error); return; }
     const items = r.items || [];
-    if (!items.length) { uiAlert({ title: 'Bağlantı bulunamadı', message: 'Projelerin .env dosyalarında ve VNL config_definitions.php dosyalarında veritabanı bilgisi bulunamadı.' }); return; }
+    if (!items.length) { uiAlert({ title: __('Bağlantı bulunamadı'), message: __('Projelerin .env dosyalarında ve VNL config_definitions.php dosyalarında veritabanı bilgisi bulunamadı.') }); return; }
     const fresh = items.filter(x => !x.exists);
     const pick = await uiChoose({
-      title: 'Projelerden içe aktar', icon: 'fa-file-import', ok: 'İçe aktar',
-      message: fresh.length ? `${items.length} bağlantı bulundu. Eklemek istediklerini seç.` : 'Bulunan bağlantıların hepsi zaten ekli.',
-      detail: 'Parolalar da alınır ve Windows şifrelemesiyle saklanır. Bağlantılar test edilmeden eklenir.',
+      title: __('Projelerden içe aktar'), icon: 'fa-file-import', ok: __('İçe aktar'),
+      message: fresh.length ? __('{n} bağlantı bulundu. Eklemek istediklerini seç.', { n: items.length }) : __('Bulunan bağlantıların hepsi zaten ekli.'),
+      detail: __('Parolalar da alınır ve Windows şifrelemesiyle saklanır. Bağlantılar test edilmeden eklenir.'),
       choices: items.map(x => ({
         value: x.key, checked: !x.exists,
-        label: `${x.project}${x.label && !/^(DB_\*|PG|MYSQL_\*)$/.test(x.label) ? ' · ' + x.label : ''} — ${x.typeName} ${x.user ? x.user + '@' : ''}${x.host || 'localhost'}${x.port ? ':' + x.port : ''}${x.database ? ' / ' + x.database : ''}${x.exists ? '  (zaten ekli)' : ''}`,
-        hint: `${x.source} · ${x.sources.join(', ')}${x.hasPassword ? '' : ' · parola yok'}`,
+        label: `${x.project}${x.label && !/^(DB_\*|PG|MYSQL_\*)$/.test(x.label) ? ' · ' + x.label : ''} — ${x.typeName} ${x.user ? x.user + '@' : ''}${x.host || 'localhost'}${x.port ? ':' + x.port : ''}${x.database ? ' / ' + x.database : ''}${x.exists ? '  ' + __('(zaten ekli)') : ''}`,
+        hint: `${x.source} · ${x.sources.join(', ')}${x.hasPassword ? '' : ' · ' + __('parola yok')}`,
       })),
     });
     if (!pick || !pick.length) return;
     const res = await inv('db:importFound', pick);
-    if (res.error) { toast('İçe aktarılamadı', res.error); return; }
-    if (res.warning) toast('Parola kaydedilmedi', res.warning);
+    if (res.error) { toast(__('İçe aktarılamadı'), res.error); return; }
+    if (res.warning) toast(__('Parola kaydedilmedi'), res.warning);
     await loadConns();
     renderTree(); renderTabs(); renderBar(); renderStatus();
-    toast(res.added ? `${res.added} bağlantı eklendi` : 'Yeni bağlantı eklenmedi', res.added ? 'Gezginde listelendi; bağlanmak için tıkla.' : 'Seçilenler zaten ekliydi.');
+    toast(res.added ? __('{n} bağlantı eklendi', { n: res.added }) : __('Yeni bağlantı eklenmedi'), res.added ? __('Gezginde listelendi; bağlanmak için tıkla.') : __('Seçilenler zaten ekliydi.'));
   }
   async function deleteConn(id) {
     const c = conn(id); if (!c) return;
-    const r = await modal({ title: 'Bağlantıyı sil', icon: 'fa-trash', danger: true, body: `<p><b>${esc(c.name || c.host)}</b> bağlantısı ve kayıtlı parolası silinsin mi? Sunucudaki verilere dokunulmaz.</p>`, buttons: [['cancel', 'Vazgeç'], ['ok', 'Sil', 'danger']], focus: 'cancel' });
+    const r = await modal({ title: __('Bağlantıyı sil'), icon: 'fa-trash', danger: true, body: `<p>${__('<b>{name}</b> bağlantısı ve kayıtlı parolası silinsin mi? Sunucudaki verilere dokunulmaz.', { name: esc(c.name || c.host) })}</p>`, buttons: [['cancel', __('Vazgeç')], ['ok', __('Sil'), 'danger']], focus: 'cancel' });
     if (!r) return;
     await disconnect(id);
     await inv('db:delete', id);
@@ -912,7 +913,7 @@
   }
   async function duplicateConn(id) {
     const r = await inv('db:duplicate', id);
-    if (r.error) { toast('Çoğaltılamadı', r.error); return; }
+    if (r.error) { toast(__('Çoğaltılamadı'), r.error); return; }
     await loadConns(); renderConn();
     editConn(r.connection.id);
   }
@@ -946,24 +947,24 @@
     let items;
     if (n.t === 'c') {
       items = [
-        live && live.status === 'ok' ? ['disconnect', 'Bağlantıyı kes', 'fa-plug-circle-xmark'] : ['connect', 'Bağlan', 'fa-plug'],
-        ['newq', 'Yeni sorgu', 'fa-file-circle-plus'],
-        ['refresh', 'Yenile', 'fa-rotate-right', !(live && live.status === 'ok')],
+        live && live.status === 'ok' ? ['disconnect', __('Bağlantıyı kes'), 'fa-plug-circle-xmark'] : ['connect', __('Bağlan'), 'fa-plug'],
+        ['newq', __('Yeni sorgu'), 'fa-file-circle-plus'],
+        ['refresh', __('Yenile'), 'fa-rotate-right', !(live && live.status === 'ok')],
         '-',
-        ['edit', 'Düzenle…', 'fa-pen'], ['dup', 'Çoğalt', 'fa-clone'], ['del', 'Sil…', 'fa-trash'],
+        ['edit', __('Düzenle…'), 'fa-pen'], ['dup', __('Çoğalt'), 'fa-clone'], ['del', __('Sil…'), 'fa-trash'],
       ];
-    } else if (n.t === 'd') items = [['newq', 'Bu veritabanında yeni sorgu', 'fa-file-circle-plus'], ['refresh', 'Yenile', 'fa-rotate-right'], '-', ['copy', 'Adı kopyala', 'fa-copy']];
-    else if (n.t === 's') items = [['newq', 'Yeni sorgu', 'fa-file-circle-plus'], ['copy', 'Adı kopyala', 'fa-copy']];
-    else if (n.t === 'k') items = [['refresh', 'Yenile', 'fa-rotate-right']];
-    else if (n.t === 'o' && key.split(':').length > 6) items = [['copycol', 'Sütun adını kopyala', 'fa-copy'], ['insertcol', 'Düzenleyiciye ekle', 'fa-i-cursor']];
+    } else if (n.t === 'd') items = [['newq', __('Bu veritabanında yeni sorgu'), 'fa-file-circle-plus'], ['refresh', __('Yenile'), 'fa-rotate-right'], '-', ['copy', __('Adı kopyala'), 'fa-copy']];
+    else if (n.t === 's') items = [['newq', __('Yeni sorgu'), 'fa-file-circle-plus'], ['copy', __('Adı kopyala'), 'fa-copy']];
+    else if (n.t === 'k') items = [['refresh', __('Yenile'), 'fa-rotate-right']];
+    else if (n.t === 'o' && key.split(':').length > 6) items = [['copycol', __('Sütun adını kopyala'), 'fa-copy'], ['insertcol', __('Düzenleyiciye ekle'), 'fa-i-cursor']];
     else if (n.kind === 'tables' || n.kind === 'views') {
       items = [
-        ['top', 'İlk 100 satırı göster', 'fa-table-list'], ['pages', 'Verileri sayfa sayfa gez', 'fa-book-open'],
-        '-', ['sel', 'SELECT şablonu', 'fa-magnifying-glass'], ...(n.kind === 'tables' ? [['ins', 'INSERT şablonu', 'fa-plus']] : []), ['count', 'Satırları say', 'fa-hashtag'],
-        ...((n.kind === 'views' || isMy(c.type)) ? [['def', 'Tanımı göster', 'fa-code']] : []),
-        '-', ['copy', 'Adı kopyala', 'fa-copy'], ['copyfull', 'Tam adı kopyala', 'fa-copy'], ['claude', askLabel() + ' (şemasıyla)', 'fa-robot'], ['refresh', 'Sütunları yenile', 'fa-rotate-right'],
+        ['top', __('İlk 100 satırı göster'), 'fa-table-list'], ['pages', __('Verileri sayfa sayfa gez'), 'fa-book-open'],
+        '-', ['sel', __('SELECT şablonu'), 'fa-magnifying-glass'], ...(n.kind === 'tables' ? [['ins', __('INSERT şablonu'), 'fa-plus']] : []), ['count', __('Satırları say'), 'fa-hashtag'],
+        ...((n.kind === 'views' || isMy(c.type)) ? [['def', __('Tanımı göster'), 'fa-code']] : []),
+        '-', ['copy', __('Adı kopyala'), 'fa-copy'], ['copyfull', __('Tam adı kopyala'), 'fa-copy'], ['claude', __('{ask} (şemasıyla)', { ask: askLabel() }), 'fa-robot'], ['refresh', __('Sütunları yenile'), 'fa-rotate-right'],
       ];
-    } else items = [['def', 'Tanımı göster', 'fa-code'], ['exec', n.kind === 'procs' ? 'Çalıştırma şablonu' : 'Çağırma şablonu', 'fa-play'], '-', ['copy', 'Adı kopyala', 'fa-copy'], ['copyfull', 'Tam adı kopyala', 'fa-copy']];
+    } else items = [['def', __('Tanımı göster'), 'fa-code'], ['exec', n.kind === 'procs' ? __('Çalıştırma şablonu') : __('Çağırma şablonu'), 'fa-play'], '-', ['copy', __('Adı kopyala'), 'fa-copy'], ['copyfull', __('Tam adı kopyala'), 'fa-copy']];
     const a = await menu(e.clientX, e.clientY, items);
     if (a) nodeAction(a, key);
   }
@@ -983,9 +984,9 @@
       case 'dup': duplicateConn(n.id); break;
       case 'del': deleteConn(n.id); break;
       case 'newq': { const t = addTab({ connId: n.id, db: db || undefined, silent: true }); activateTab(t.id); break; }
-      case 'copy': copyText(n.t === 'd' ? n.db : n.t === 's' ? n.schema : n.name, 'Ad kopyalandı'); break;
-      case 'copyfull': copyText(full(c.type, obj), 'Tam ad kopyalandı'); break;
-      case 'copycol': copyText(dec(key.split(':')[6]), 'Sütun adı kopyalandı'); break;
+      case 'copy': copyText(n.t === 'd' ? n.db : n.t === 's' ? n.schema : n.name, __('Ad kopyalandı')); break;
+      case 'copyfull': copyText(full(c.type, obj), __('Tam ad kopyalandı')); break;
+      case 'copycol': copyText(dec(key.split(':')[6]), __('Sütun adı kopyalandı')); break;
       case 'insertcol': cm.replaceSelection(qi(c.type, dec(key.split(':')[6]))); cm.focus(); break;
       case 'top': { const t = tabFor(n.id, db, n.name); t.doc.setValue(topSql(c.type, obj)); await execute(t, t.doc.getValue(), 0, {}); break; }
       case 'pages': {
@@ -1000,14 +1001,14 @@
       case 'exec': insertOrOpen(execSql(c.type, obj), n.id, db, n.name); break;
       case 'def': {
         const r = await inv('db:explore', n.id, 'definition', { db, schema: n.schema, name: n.name, kind: n.kind });
-        if (r.error) { toast('Tanım alınamadı', r.error); break; }
-        if (!r.items) { toast('Tanım yok', 'Nesnenin tanımı okunamadı (şifrelenmiş ya da yetki yok).'); break; }
+        if (r.error) { toast(__('Tanım alınamadı'), r.error); break; }
+        if (!r.items) { toast(__('Tanım yok'), __('Nesnenin tanımı okunamadı (şifrelenmiş ya da yetki yok).')); break; }
         openSql(String(r.items), n.id, db, n.name);
         break;
       }
       case 'claude': {
         const cols = await columnsOf(obj);
-        const schema = `${n.kind === 'views' ? 'Görünüm' : 'Tablo'} ${full(c.type, obj)} sütunları:\n` + cols.map(x => `- ${x.name} ${x.type}${x.pk ? ' PRIMARY KEY' : ''}${x.nullable ? '' : ' NOT NULL'}${x.ident ? ' (otomatik artan)' : ''}`).join('\n');
+        const schema = (n.kind === 'views' ? __('Görünüm {name} sütunları:', { name: full(c.type, obj) }) : __('Tablo {name} sütunları:', { name: full(c.type, obj) })) + '\n' + cols.map(x => `- ${x.name} ${x.type}${x.pk ? ' PRIMARY KEY' : ''}${x.nullable ? '' : ' NOT NULL'}${x.ident ? ' ' + __('(otomatik artan)') : ''}`).join('\n');
         askClaude({ schema, connId: n.id, db, sql: '' });
         break;
       }
@@ -1038,29 +1039,41 @@
     const t = cur(); const c = conn(o.connId || (t && t.connId));
     const sql = o.sql != null ? o.sql : (cm.somethingSelected() ? cm.getSelection() : cm.getValue()).trim();
     const err = !o.schema && t ? (t.messages.find(m => m.type === 'error') || {}).text : '';
-    if (!S.projects.length) { toast('Önce bir proje ekle', "Claude oturumları bir proje klasöründe açılır; AI modunda Proje Başlat'tan ekleyebilirsin."); return; }
+    if (!S.projects.length) { toast(__('Önce bir proje ekle'), __("Claude oturumları bir proje klasöründe açılır; AI modunda Proje Başlat'tan ekleyebilirsin.")); return; }
     const activeTab = S.tabs.find(x => x.id === S.active);
     const defProj = (activeTab && activeTab.projectId) || S.projects[0].id;
-    const presets = o.schema ? ['Bu tablo için sık kullanılacak örnek sorgular yaz', 'Bu tablonun yapısını değerlendir; indeks ve tip önerilerin neler?'] : err ? ['Bu hatayı açıkla ve sorguyu düzelt', 'Bu sorguyu açıkla'] : ['Bu sorguyu açıkla', 'Bu sorgunun performansını nasıl iyileştirebilirim?', 'Bu sorguda hata ya da risk var mı?'];
+    const presets = o.schema ? [__('Bu tablo için sık kullanılacak örnek sorgular yaz'), __('Bu tablonun yapısını değerlendir; indeks ve tip önerilerin neler?')] : err ? [__('Bu hatayı açıkla ve sorguyu düzelt'), __('Bu sorguyu açıkla')] : [__('Bu sorguyu açıkla'), __('Bu sorgunun performansını nasıl iyileştirebilirim?'), __('Bu sorguda hata ya da risk var mı?')];
+    // what goes to the agent, in one sentence
+    const sending = sql
+      ? (o.schema
+        ? (err ? __('Gönderilecek: tablo şeması ve son hata mesajı, veritabanı türü. Parola ve bağlantı bilgisi gönderilmez.') : __('Gönderilecek: tablo şeması, veritabanı türü. Parola ve bağlantı bilgisi gönderilmez.'))
+        : (err ? __('Gönderilecek: {n} satır SQL ve son hata mesajı, veritabanı türü. Parola ve bağlantı bilgisi gönderilmez.', { n: fmtN(sql.split('\n').length) }) : __('Gönderilecek: {n} satır SQL, veritabanı türü. Parola ve bağlantı bilgisi gönderilmez.', { n: fmtN(sql.split('\n').length) })))
+      : o.schema ? __('Gönderilecek: tablo şeması ve veritabanı türü. Parola ve bağlantı bilgisi gönderilmez.') : __('Düzenleyici boş; yalnızca sorunu gönderirsin.');
     const r = await modal({
       title: askLabel(), icon: 'fa-robot', wide: true,
       body: `<div class="db-presets">${presets.map(p => `<button type="button" class="db-chipbtn" data-preset="${esc(p)}">${esc(p)}</button>`).join('')}</div>
-        <label class="db-f"><span>Soru</span><textarea name="q" rows="3" placeholder="${aiName()}’${aiName() === 'Codex' ? 'e' : 'a'} ne sormak istersin?">${esc(presets[0])}</textarea></label>
-        <label class="db-f"><span>Proje (${aiName()} bu klasörde açılır)</span><select name="proj">${S.projects.map(p => `<option value="${esc(p.id)}"${p.id === defProj ? ' selected' : ''}>${esc(p.name)}</option>`).join('')}</select></label>
-        <p class="db-muted">${sql ? `Gönderilecek: ${o.schema ? 'tablo şeması' : `${fmtN(sql.split('\n').length)} satır SQL`}${err ? ' ve son hata mesajı' : ''}, veritabanı türü. Parola ve bağlantı bilgisi gönderilmez.` : o.schema ? 'Gönderilecek: tablo şeması ve veritabanı türü. Parola ve bağlantı bilgisi gönderilmez.' : 'Düzenleyici boş; yalnızca sorunu gönderirsin.'}</p>`,
-      buttons: [['cancel', 'Vazgeç'], ['ok', `Yeni ${aiName()} oturumunda sor`, 'primary']],
+        <label class="db-f"><span>${esc(__('Soru'))}</span><textarea name="q" rows="3" placeholder="${esc(aiName() === 'Codex' ? __('Codex’e ne sormak istersin?') : __('Claude’a ne sormak istersin?'))}">${esc(presets[0])}</textarea></label>
+        <label class="db-f"><span>${esc(__('Proje ({name} bu klasörde açılır)', { name: aiName() }))}</span><select name="proj">${S.projects.map(p => `<option value="${esc(p.id)}"${p.id === defProj ? ' selected' : ''}>${esc(p.name)}</option>`).join('')}</select></label>
+        <p class="db-muted">${esc(sending)}</p>`,
+      buttons: [['cancel', __('Vazgeç')], ['ok', __('Yeni {name} oturumunda sor', { name: aiName() }), 'primary']],
       onOpen: form => form.addEventListener('click', e => { const b = e.target.closest('[data-preset]'); if (b) { const ta = form.querySelector('[name=q]'); ta.value = b.dataset.preset; ta.focus(); } }),
     });
     if (!r || r.value !== 'ok') return;
     const parts = [r.form.q.trim() || presets[0]];
-    if (c) parts.push(`Veritabanı: ${TYPE_NAME[c.type]}${(o.db || (t && t.db)) ? ` (veritabanı: ${o.db || t.db})` : ''}${c.readOnly ? ', salt okunur bağlantı' : ''}.`);
+    if (c) {
+      const dbName = o.db || (t && t.db);
+      const type = TYPE_NAME[c.type];
+      parts.push(dbName
+        ? (c.readOnly ? __('Veritabanı: {type} (veritabanı: {db}), salt okunur bağlantı.', { type, db: dbName }) : __('Veritabanı: {type} (veritabanı: {db}).', { type, db: dbName }))
+        : (c.readOnly ? __('Veritabanı: {type}, salt okunur bağlantı.', { type }) : __('Veritabanı: {type}.', { type })));
+    }
     if (o.schema) parts.push(o.schema);
     if (sql) parts.push('SQL:\n```sql\n' + sql.slice(0, 20000) + '\n```');
-    if (err) parts.push('Aldığım hata:\n' + err.slice(0, 2000));
-    parts.push('Not: Veritabanına bağlanmaya ya da sorgu çalıştırmaya çalışma; yanıtını ve önerdiğin SQL\'i buraya yaz, ben VoxStorm\'un DB modunda çalıştıracağım.');
+    if (err) parts.push(__('Aldığım hata:') + '\n' + err.slice(0, 2000));
+    parts.push(__('Not: Veritabanına bağlanmaya ya da sorgu çalıştırmaya çalışma; yanıtını ve önerdiğin SQL\'i buraya yaz, ben VoxStorm\'un DB modunda çalıştıracağım.'));
     const prompt = parts.join('\n\n');
     setMode('claude');
-    const tt = await openTerminal({ kind: 'claude', projectId: r.form.proj, title: 'DB: ' + (o.schema ? 'şema' : 'sorgu') });
+    const tt = await openTerminal({ kind: 'claude', projectId: r.form.proj, title: 'DB: ' + (o.schema ? __('şema') : __('sorgu')) });
     if (!tt) return;
     // bracketed paste keeps the newlines inside Claude Code's input box instead of submitting early
     tt.pendingPrompt = '\x1b[200~' + prompt + '\x1b[201~';
@@ -1127,9 +1140,9 @@
         else if (act === 'claude') askClaude();
         else if (act === 'more') showMore(false);
         else if (act === 'moreAll') showMore(true);
-        else if (act === 'csv') { const m = await menu(e.clientX, e.clientY, [['c', 'CSV (virgülle ayrılmış)', 'fa-file-csv'], ['s', 'CSV (noktalı virgül, Türkçe Excel için)', 'fa-file-excel'], ['t', 'TSV (sekmeyle ayrılmış)', 'fa-file-lines']]); if (m) exportCsv(m === 's' ? ';' : m === 't' ? '\t' : ','); }
+        else if (act === 'csv') { const m = await menu(e.clientX, e.clientY, [['c', __('CSV (virgülle ayrılmış)'), 'fa-file-csv'], ['s', __('CSV (noktalı virgül, Türkçe Excel için)'), 'fa-file-excel'], ['t', __('TSV (sekmeyle ayrılmış)'), 'fa-file-lines']]); if (m) exportCsv(m === 's' ? ';' : m === 't' ? '\t' : ','); }
         else if (act === 'copyAll') { const t = cur(), r = t.results[t.view]; if (r) { const s = r.sel; r.sel = { r0: 0, r1: r.shown - 1, c0: 0, c1: r.columns.length - 1 }; copySel(r, true); r.sel = s; } }
-        else if (act === 'clearHistory') { const ok = await modal({ title: 'Geçmişi temizle', body: '<p>Tüm sorgu geçmişi silinsin mi?</p>', buttons: [['cancel', 'Vazgeç'], ['ok', 'Temizle', 'danger']], focus: 'cancel' }); if (ok) { await inv('db:historyClear'); loadHistory(); } }
+        else if (act === 'clearHistory') { const ok = await modal({ title: __('Geçmişi temizle'), body: `<p>${esc(__('Tüm sorgu geçmişi silinsin mi?'))}</p>`, buttons: [['cancel', __('Vazgeç')], ['ok', __('Temizle'), 'danger']], focus: 'cancel' }); if (ok) { await inv('db:historyClear'); loadHistory(); } }
         else if (act === 'clearFilter') { const f = document.getElementById('dbFilter'); f.value = ''; f.dispatchEvent(new Event('input')); f.focus(); }
         return;
       }
@@ -1159,7 +1172,7 @@
         else if (n.t === 'o') nodeAction('def', key);
         return;
       }
-      const hi = e.target.closest('[data-hist]'); if (hi) { const h = D.history.find(x => x.id === hi.dataset.hist); if (h) openSql(h.sql, conn(h.connId) ? h.connId : '', h.db, 'Geçmişten'); return; }
+      const hi = e.target.closest('[data-hist]'); if (hi) { const h = D.history.find(x => x.id === hi.dataset.hist); if (h) openSql(h.sql, conn(h.connId) ? h.connId : '', h.db, __('Geçmişten')); return; }
       const tb = e.target.closest('[data-tab]');
       if (tb && !e.target.closest('[data-close]')) { renameTab(tb.dataset.tab); return; }
       const cell = e.target.closest('.db-c'); if (cell) { const grid = cell.closest('.db-grid'); viewCell(grid._r, +cell.parentElement.dataset.r, +cell.dataset.c); return; }
@@ -1172,18 +1185,18 @@
       const hi = e.target.closest('[data-hist]');
       if (hi) {
         e.preventDefault(); const h = D.history.find(x => x.id === hi.dataset.hist); if (!h) return;
-        const a = await menu(e.clientX, e.clientY, [['open', 'Yeni sekmede aç', 'fa-file-circle-plus'], ['insert', 'Düzenleyiciye ekle', 'fa-i-cursor'], ['copy', 'Kopyala', 'fa-copy']]);
-        if (a === 'open') openSql(h.sql, conn(h.connId) ? h.connId : '', h.db, 'Geçmişten');
-        else if (a === 'insert') { cm.replaceSelection(h.sql); cm.focus(); } else if (a === 'copy') copyText(h.sql, 'Sorgu kopyalandı');
+        const a = await menu(e.clientX, e.clientY, [['open', __('Yeni sekmede aç'), 'fa-file-circle-plus'], ['insert', __('Düzenleyiciye ekle'), 'fa-i-cursor'], ['copy', __('Kopyala'), 'fa-copy']]);
+        if (a === 'open') openSql(h.sql, conn(h.connId) ? h.connId : '', h.db, __('Geçmişten'));
+        else if (a === 'insert') { cm.replaceSelection(h.sql); cm.focus(); } else if (a === 'copy') copyText(h.sql, __('Sorgu kopyalandı'));
         return;
       }
       const si = e.target.closest('[data-saved]');
       if (si) {
         e.preventDefault(); const q = D.saved.find(x => x.id === si.dataset.saved); if (!q) return;
-        const a = await menu(e.clientX, e.clientY, [['open', 'Aç', 'fa-folder-open'], ['rename', 'Yeniden adlandır…', 'fa-pen'], ['copy', 'Kopyala', 'fa-copy'], '-', ['del', 'Sil', 'fa-trash']]);
+        const a = await menu(e.clientX, e.clientY, [['open', __('Aç'), 'fa-folder-open'], ['rename', __('Yeniden adlandır…'), 'fa-pen'], ['copy', __('Kopyala'), 'fa-copy'], '-', ['del', __('Sil'), 'fa-trash']]);
         if (a === 'open') openSql(q.sql, conn(q.connId) ? q.connId : '', q.db, q.name, q.id);
-        else if (a === 'copy') copyText(q.sql, 'Sorgu kopyalandı');
-        else if (a === 'rename') { const r = await modal({ title: 'Yeniden adlandır', body: `<label class="db-f"><span>Ad</span><input name="name" value="${esc(q.name)}" maxlength="120"></label>`, buttons: [['cancel', 'Vazgeç'], ['ok', 'Kaydet', 'primary']] }); if (r) { await inv('db:savedSave', { ...q, name: r.form.name }); D.tabs.forEach(t => { if (t.savedId === q.id) t.title = r.form.name.trim() || t.title; }); renderTabs(); loadSaved(); } }
+        else if (a === 'copy') copyText(q.sql, __('Sorgu kopyalandı'));
+        else if (a === 'rename') { const r = await modal({ title: __('Yeniden adlandır'), body: `<label class="db-f"><span>${esc(__('Ad'))}</span><input name="name" value="${esc(q.name)}" maxlength="120"></label>`, buttons: [['cancel', __('Vazgeç')], ['ok', __('Kaydet'), 'primary']] }); if (r) { await inv('db:savedSave', { ...q, name: r.form.name }); D.tabs.forEach(t => { if (t.savedId === q.id) t.title = r.form.name.trim() || t.title; }); renderTabs(); loadSaved(); } }
         else if (a === 'del') { await inv('db:savedDelete', q.id); D.tabs.forEach(t => { if (t.savedId === q.id) t.savedId = ''; }); loadSaved(); renderTabs(); }
         return;
       }
@@ -1191,9 +1204,9 @@
       if (tb) {
         e.preventDefault();
         const id = tb.dataset.tab;
-        const a = await menu(e.clientX, e.clientY, [['rename', 'Yeniden adlandır…', 'fa-pen'], ['dup', 'Sekmeyi çoğalt', 'fa-clone'], '-', ['close', 'Kapat', 'fa-xmark', false, 'Ctrl+W'], ['others', 'Diğerlerini kapat', 'fa-xmark']]);
+        const a = await menu(e.clientX, e.clientY, [['rename', __('Yeniden adlandır…'), 'fa-pen'], ['dup', __('Sekmeyi çoğalt'), 'fa-clone'], '-', ['close', __('Kapat'), 'fa-xmark', false, 'Ctrl+W'], ['others', __('Diğerlerini kapat'), 'fa-xmark']]);
         if (a === 'rename') renameTab(id);
-        else if (a === 'dup') { const t = D.tabs.find(x => x.id === id); addTab({ connId: t.connId, db: t.db, sql: t.doc.getValue(), title: t.title + ' (kopya)' }); }
+        else if (a === 'dup') { const t = D.tabs.find(x => x.id === id); addTab({ connId: t.connId, db: t.db, sql: t.doc.getValue(), title: __('{name} (kopya)', { name: t.title }) }); }
         else if (a === 'close') closeTab(id);
         else if (a === 'others') for (const t of [...D.tabs]) if (t.id !== id) await closeTab(t.id);
         return;
@@ -1205,8 +1218,8 @@
         const s = selRange(r);
         if (!s || i < s.r0 || i > s.r1 || j < s.c0 || j > s.c1) { r.sel = { r0: i, r1: i, c0: j, c1: j }; paintRows(grid); updateSelInfo(grid); }
         const a = await menu(e.clientX, e.clientY, [
-          ['cell', 'Kopyala', 'fa-copy', false, 'Ctrl+C'], ['cellh', 'Başlıklarla kopyala', 'fa-copy'], ['row', 'Satırları kopyala', 'fa-grip-lines'], ['json', 'JSON olarak kopyala', 'fa-code'], ['ins', 'INSERT olarak kopyala', 'fa-plus'],
-          '-', ['view', 'Değeri görüntüle', 'fa-expand'], ['col', 'Sütun adını kopyala', 'fa-heading'], ['fit', 'Sütunu sığdır', 'fa-arrows-left-right'],
+          ['cell', __('Kopyala'), 'fa-copy', false, 'Ctrl+C'], ['cellh', __('Başlıklarla kopyala'), 'fa-copy'], ['row', __('Satırları kopyala'), 'fa-grip-lines'], ['json', __('JSON olarak kopyala'), 'fa-code'], ['ins', __('INSERT olarak kopyala'), 'fa-plus'],
+          '-', ['view', __('Değeri görüntüle'), 'fa-expand'], ['col', __('Sütun adını kopyala'), 'fa-heading'], ['fit', __('Sütunu sığdır'), 'fa-arrows-left-right'],
         ]);
         if (a === 'cell') copySel(r, false);
         else if (a === 'cellh') copySel(r, true);
@@ -1214,7 +1227,7 @@
         else if (a === 'json') { const sv = r.sel, x = selRange(r); r.sel = { r0: x.r0, r1: x.r1, c0: 0, c1: r.columns.length - 1 }; copyRowsJson(r); r.sel = sv; }
         else if (a === 'ins') { const sv = r.sel, x = selRange(r); r.sel = { r0: x.r0, r1: x.r1, c0: 0, c1: r.columns.length - 1 }; copyRowsInsert(r, grid._t); r.sel = sv; }
         else if (a === 'view') viewCell(r, i, j);
-        else if (a === 'col') copyText(r.columns[j].name, 'Sütun adı kopyalandı');
+        else if (a === 'col') copyText(r.columns[j].name, __('Sütun adı kopyalandı'));
         else if (a === 'fit') autoFit(grid, j);
       }
     });
@@ -1315,25 +1328,25 @@
   }
   async function renameTab(id) {
     const t = D.tabs.find(x => x.id === id); if (!t) return;
-    const r = await modal({ title: 'Sekmeyi yeniden adlandır', body: `<label class="db-f"><span>Ad</span><input name="name" value="${esc(t.title)}" maxlength="80"></label>`, buttons: [['cancel', 'Vazgeç'], ['ok', 'Tamam', 'primary']] });
+    const r = await modal({ title: __('Sekmeyi yeniden adlandır'), body: `<label class="db-f"><span>${esc(__('Ad'))}</span><input name="name" value="${esc(t.title)}" maxlength="80"></label>`, buttons: [['cancel', __('Vazgeç')], ['ok', __('Tamam'), 'primary']] });
     if (r && r.form.name.trim()) { t.title = r.form.name.trim(); renderTabs(); saveState(); }
   }
 
   /* shortcut list in Settings > Kısayollar (display only; handled above) */
   try {
     SHORTCUTS.push(
-      { group: 'DB', keys: 'Ctrl+Enter / F5', label: 'Sorguyu çalıştır (seçili kısım ya da tamamı)' },
-      { group: 'DB', keys: 'Ctrl+Shift+Enter', label: 'İmlecin bulunduğu deyimi çalıştır' },
-      { group: 'DB', keys: 'Shift+F5', label: 'Çalışan sorguyu iptal et' },
-      { group: 'DB', keys: 'Ctrl+T', label: 'Yeni sorgu sekmesi' },
-      { group: 'DB', keys: 'Ctrl+W', label: 'Sorgu sekmesini kapat' },
-      { group: 'DB', keys: 'Ctrl+PageDown / Ctrl+PageUp', label: 'Sonraki / önceki sorgu sekmesi' },
-      { group: 'DB', keys: 'Ctrl+S', label: 'Sorguyu kaydet (Kayıtlı sorgular)' },
-      { group: 'DB', keys: 'Ctrl+Space', label: 'Tablo ve sütun tamamlama' },
-      { group: 'DB', keys: 'Ctrl+/', label: 'Satırları yorum yap / aç' },
-      { group: 'DB', keys: 'Ctrl+Shift+K', label: 'Seçili sorguyu yapay zekâya sor (varsayılan: Claude ya da Codex)' },
-      { group: 'DB', keys: 'Ctrl+Alt+N', label: 'Yeni bağlantı' },
-      { group: 'DB', keys: 'Ctrl+C / Ctrl+Shift+C', label: 'Sonuç tablosunda seçimi kopyala / başlıklarla kopyala' },
+      { group: 'DB', keys: 'Ctrl+Enter / F5', label: __('Sorguyu çalıştır (seçili kısım ya da tamamı)') },
+      { group: 'DB', keys: 'Ctrl+Shift+Enter', label: __('İmlecin bulunduğu deyimi çalıştır') },
+      { group: 'DB', keys: 'Shift+F5', label: __('Çalışan sorguyu iptal et') },
+      { group: 'DB', keys: 'Ctrl+T', label: __('Yeni sorgu sekmesi') },
+      { group: 'DB', keys: 'Ctrl+W', label: __('Sorgu sekmesini kapat') },
+      { group: 'DB', keys: 'Ctrl+PageDown / Ctrl+PageUp', label: __('Sonraki / önceki sorgu sekmesi') },
+      { group: 'DB', keys: 'Ctrl+S', label: __('Sorguyu kaydet (Kayıtlı sorgular)') },
+      { group: 'DB', keys: 'Ctrl+Space', label: __('Tablo ve sütun tamamlama') },
+      { group: 'DB', keys: 'Ctrl+/', label: __('Satırları yorum yap / aç') },
+      { group: 'DB', keys: 'Ctrl+Shift+K', label: __('Seçili sorguyu yapay zekâya sor (varsayılan: Claude ya da Codex)') },
+      { group: 'DB', keys: 'Ctrl+Alt+N', label: __('Yeni bağlantı') },
+      { group: 'DB', keys: 'Ctrl+C / Ctrl+Shift+C', label: __('Sonuç tablosunda seçimi kopyala / başlıklarla kopyala') },
     );
   } catch (_) {}
 
@@ -1366,8 +1379,8 @@
       const s = selRange(r);
       if (!s || i < s.r0 || i > s.r1 || j < s.c0 || j > s.c1) { r.sel = { r0: i, r1: i, c0: j, c1: j }; paintRows(grid); updateSelInfo(grid); }
       const a = await menu(e.clientX, e.clientY, [
-        ['cell', 'Kopyala', 'fa-copy', false, 'Ctrl+C'], ['cellh', 'Başlıklarla kopyala', 'fa-copy'], ['json', 'JSON olarak kopyala', 'fa-code'], ['ins', 'INSERT olarak kopyala', 'fa-plus'],
-        '-', ['view', 'Değeri görüntüle', 'fa-expand'], ['col', 'Sütun adını kopyala', 'fa-heading'], ['fit', 'Sütunu sığdır', 'fa-arrows-left-right'],
+        ['cell', __('Kopyala'), 'fa-copy', false, 'Ctrl+C'], ['cellh', __('Başlıklarla kopyala'), 'fa-copy'], ['json', __('JSON olarak kopyala'), 'fa-code'], ['ins', __('INSERT olarak kopyala'), 'fa-plus'],
+        '-', ['view', __('Değeri görüntüle'), 'fa-expand'], ['col', __('Sütun adını kopyala'), 'fa-heading'], ['fit', __('Sütunu sığdır'), 'fa-arrows-left-right'],
       ]);
       const rows = fn => { const sv = r.sel, x = selRange(r); r.sel = { r0: x.r0, r1: x.r1, c0: 0, c1: r.columns.length - 1 }; fn(); r.sel = sv; };
       if (a === 'cell') copySel(r, false);
@@ -1375,7 +1388,7 @@
       else if (a === 'json') rows(() => copyRowsJson(r));
       else if (a === 'ins') rows(() => copyRowsInsert(r, grid._t));
       else if (a === 'view') viewCell(r, i, j);
-      else if (a === 'col') copyText(r.columns[j].name, 'Sütun adı kopyalandı');
+      else if (a === 'col') copyText(r.columns[j].name, __('Sütun adı kopyalandı'));
       else if (a === 'fit') autoFit(grid, j);
     });
   }
@@ -1383,7 +1396,7 @@
     const want = all ? r.fetched : Math.min(r.fetched, r.shown + SHOW_STEP);
     while (r.rows.length < want) {
       const res = await inv('db:rows', r.id, r.rows.length, Math.min(20000, want - r.rows.length));
-      if (res.error) { toast('Satırlar alınamadı', res.error); break; }
+      if (res.error) { toast(__('Satırlar alınamadı'), res.error); break; }
       if (!res.rows.length) break;
       for (const row of res.rows) r.rows.push(row);
     }
@@ -1392,14 +1405,14 @@
   async function exportResult(r, sep, name) {
     const res = await inv('db:exportCsv', r.id, { sep, name });
     if (res.canceled) return;
-    if (res.error) { toast('Dışa aktarılamadı', res.error); return; }
-    toast('CSV kaydedildi', `${fmtN(res.rows)} satır${res.truncated ? ` (toplam ${fmtN(res.total)}; bellek sınırı nedeniyle tamamı değil)` : ''} · ${res.file}`);
+    if (res.error) { toast(__('Dışa aktarılamadı'), res.error); return; }
+    toast(__('CSV kaydedildi'), (res.truncated ? __('{n} satır (toplam {total}; bellek sınırı nedeniyle tamamı değil)', { n: fmtN(res.rows), total: fmtN(res.total) }) : __('{n} satır', { n: fmtN(res.rows) })) + ` · ${res.file}`);
   }
   // DB mode with this node (or this SQL) in front
   async function openInDbMode(o = {}) {
     setMode('db');
     if (window.dbMode) await window.dbMode.show();
-    if (o.sql != null) { openSql(o.sql, o.connId, o.db, o.title || "IDE'den"); return; }
+    if (o.sql != null) { openSql(o.sql, o.connId, o.db, o.title || __("IDE'den")); return; }
     if (!o.key) return;
     const n = parseKey(o.key);
     if (n.t === 'o' && (n.kind === 'tables' || n.kind === 'views') && o.key.split(':').length <= 6) { await nodeAction('top', o.key); return; }

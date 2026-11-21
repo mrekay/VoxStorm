@@ -7,6 +7,7 @@ const path = require('path');
 const fs = require('fs');
 const crypto = require('crypto');
 const { safeStorage } = require('electron');
+const I18N = require('../i18n/i18n.js'); const __ = I18N.t;
 
 const TYPES = { mssql: 'MSSQL', pg: 'PostgreSQL', mysql: 'MySQL', mariadb: 'MariaDB' };
 const DEFAULT_PORT = { mssql: 1433, pg: 5432, mysql: 3306, mariadb: 3306 };
@@ -208,7 +209,7 @@ module.exports = function registerDb({ ipcMain, app, dialog, getWin, DATA, getPr
                 if (['INSERT', 'UPDATE', 'DELETE', 'MERGE'].includes(r.command)) ctx.affected(r.rowCount || 0, r.command);
               } else if (r.command) {
                 if (['INSERT', 'UPDATE', 'DELETE', 'MERGE', 'COPY'].includes(r.command)) ctx.affected(r.rowCount || 0, r.command);
-                else ctx.message('ok', r.command + ' tamamlandı.');
+                else ctx.message('ok', __('{cmd} tamamlandı.', { cmd: r.command }));
               }
             }
           } catch (e) {
@@ -242,7 +243,7 @@ module.exports = function registerDb({ ipcMain, app, dialog, getWin, DATA, getPr
             if (r && r.constructor && r.constructor.name === 'ResultSetHeader') {
               cur = null; done++;
               ctx.affected(r.affectedRows || 0);
-              if (r.warningStatus) ctx.message('info', `${r.warningStatus} uyarı (ayrıntı için SHOW WARNINGS).`);
+              if (r.warningStatus) ctx.message('info', __('{n} uyarı (ayrıntı için SHOW WARNINGS).', { n: r.warningStatus }));
             } else if (cur) ctx.addRow(cur, Object.values(r));
           });
           query.on('error', e => {
@@ -299,17 +300,18 @@ module.exports = function registerDb({ ipcMain, app, dialog, getWin, DATA, getPr
   /* ---------------- errors ---------------- */
   function friendly(e, c) {
     const code = (e && (e.code || (e.originalError && e.originalError.code))) || '';
-    const msg = String((e && (e.message || e)) || 'Bilinmeyen hata');
+    const msg = String((e && (e.message || e)) || __('Bilinmeyen hata'));
     const where = c ? `${c.host}${c.port ? ':' + c.port : ''}` : '';
-    if (/auth_gssapi_client/.test(msg)) return 'Kimlik doğrulama başarısız: Access denied for user (kullanıcı adı ya da parola hatalı; sunucu GSSAPI ile Windows kimliğine geçmek istedi, bu desteklenmiyor).';
-    if (/ECONNREFUSED|Could not connect \(sequence\)/.test(code + msg)) return `Sunucuya bağlanılamadı (${where}): bağlantı reddedildi. Sunucu çalışıyor mu, port doğru mu?`;
-    if (/ENOTFOUND|EAI_AGAIN/.test(code + msg)) return `Sunucu adı çözümlenemedi: ${c ? c.host : ''}`;
-    if (/ETIMEOUT|ETIMEDOUT|timeout|timed out/i.test(code + msg) && !/statement timeout/i.test(msg)) return `Bağlantı zaman aşımına uğradı (${where}). ${msg}`;
-    if (/self[- ]signed|unable to verify|certificate/i.test(msg)) return `TLS sertifikası doğrulanamadı. "Sunucu sertifikasına güven" seçeneğini deneyebilirsin. (${msg})`;
-    if (/does not support SSL|server does not support secure/i.test(msg)) return 'Sunucu SSL/TLS desteklemiyor; bağlantıda SSL seçeneğini kapat.';
+    // the driver's words stay as they are: the login-failure check in withConn() looks for them
+    if (/auth_gssapi_client/.test(msg)) return __('Kimlik doğrulama başarısız: {error} (kullanıcı adı ya da parola hatalı; sunucu GSSAPI ile Windows kimliğine geçmek istedi, bu desteklenmiyor).', { error: 'Access denied for user' });
+    if (/ECONNREFUSED|Could not connect \(sequence\)/.test(code + msg)) return __('Sunucuya bağlanılamadı ({where}): bağlantı reddedildi. Sunucu çalışıyor mu, port doğru mu?', { where });
+    if (/ENOTFOUND|EAI_AGAIN/.test(code + msg)) return __('Sunucu adı çözümlenemedi: {host}', { host: c ? c.host : '' });
+    if (/ETIMEOUT|ETIMEDOUT|timeout|timed out/i.test(code + msg) && !/statement timeout/i.test(msg)) return __('Bağlantı zaman aşımına uğradı ({where}). {error}', { where, error: msg });
+    if (/self[- ]signed|unable to verify|certificate/i.test(msg)) return __('TLS sertifikası doğrulanamadı. "Sunucu sertifikasına güven" seçeneğini deneyebilirsin. ({error})', { error: msg });
+    if (/does not support SSL|server does not support secure/i.test(msg)) return __('Sunucu SSL/TLS desteklemiyor; bağlantıda SSL seçeneğini kapat.');
     return msg;
   }
-  const pgMessage = e => [e.message, e.detail && 'Ayrıntı: ' + e.detail, e.hint && 'İpucu: ' + e.hint].filter(Boolean).join('\n');
+  const pgMessage = e => [e.message, e.detail && __('Ayrıntı: {text}', { text: e.detail }), e.hint && __('İpucu: {text}', { text: e.hint })].filter(Boolean).join('\n');
   function mssqlType(x) {
     const t = x.type && (x.type.declaration || x.type.name);
     let n = String(t || '').toLowerCase();
@@ -335,7 +337,7 @@ module.exports = function registerDb({ ipcMain, app, dialog, getWin, DATA, getPr
     if (Buffer.isBuffer(v) || v instanceof Uint8Array) {
       const b = Buffer.isBuffer(v) ? v : Buffer.from(v.buffer, v.byteOffset, v.byteLength);
       const max = 4096;
-      return '0x' + b.subarray(0, max).toString('hex').toUpperCase() + (b.length > max ? `… (${b.length} bayt)` : '');
+      return '0x' + b.subarray(0, max).toString('hex').toUpperCase() + (b.length > max ? __('… ({n} bayt)', { n: b.length }) : '');
     }
     try { const s = JSON.stringify(v); return s && s.length > MAX_CELL ? s.slice(0, MAX_CELL) + '…' : s; } catch (_) { return String(v); }
   }
@@ -359,11 +361,11 @@ module.exports = function registerDb({ ipcMain, app, dialog, getWin, DATA, getPr
         ctx.results.push(r); return r;
       },
       addRow(r, row) { r.total++; if (r.rows.length < keep) r.rows.push(Array.from(row, cell)); },
-      affected(n, cmd) { ctx.affectedTotal += n; ctx.messages.push({ type: 'rows', text: `${n.toLocaleString('tr-TR')} satır etkilendi${cmd ? ' (' + cmd + ')' : ''}.` }); },
+      affected(n, cmd) { ctx.affectedTotal += n; ctx.messages.push({ type: 'rows', text: cmd ? __('{n} satır etkilendi ({cmd}).', { n: n.toLocaleString(I18N.locale()), cmd }) : __('{n} satır etkilendi.', { n: n.toLocaleString(I18N.locale()) }) }); },
       message(type, text, line) { ctx.messages.push({ type, text: String(text || ''), line: line || 0 }); },
       error(text, line, cancel) {
-        if (cancel) { ctx.cancelled = true; ctx.messages.push({ type: 'cancel', text: 'Sorgu iptal edildi.' }); return; }
-        ctx.failed = true; ctx.messages.push({ type: 'error', text: String(text || 'Hata'), line: line || 0 });
+        if (cancel) { ctx.cancelled = true; ctx.messages.push({ type: 'cancel', text: __('Sorgu iptal edildi.') }); return; }
+        ctx.failed = true; ctx.messages.push({ type: 'error', text: String(text || __('Hata')), line: line || 0 });
       },
     };
     return ctx;
@@ -438,8 +440,8 @@ module.exports = function registerDb({ ipcMain, app, dialog, getWin, DATA, getPr
       if (start && WRITE_START.has(t)) blocked.add(t);
       if (start && t === 'SET' && toks[k + 1] && ['GLOBAL', 'PERSIST', 'PERSIST_ONLY'].includes(toks[k + 1].t)) blocked.add('SET GLOBAL');
       start = false;
-      if (t === 'DROP' && prev !== 'ON') confirm.push('DROP: nesne kalıcı olarak silinir.');
-      else if (t === 'TRUNCATE') confirm.push('TRUNCATE: tablonun tüm satırları silinir.');
+      if (t === 'DROP' && prev !== 'ON') confirm.push(__('DROP: nesne kalıcı olarak silinir.'));
+      else if (t === 'TRUNCATE') confirm.push(__('TRUNCATE: tablonun tüm satırları silinir.'));
       else if ((t === 'UPDATE' || t === 'DELETE') && !NOT_STMT_BEFORE.has(prev)) {
         let where = false, target = '', cases = 0;
         for (let j = k + 1; j < toks.length; j++) {
@@ -452,7 +454,7 @@ module.exports = function registerDb({ ipcMain, app, dialog, getWin, DATA, getPr
           if (x.d === tk.d && x.t === 'WHERE') { where = true; break; }
           if (!target && x.w && x.t !== 'FROM' && x.t !== 'TOP' && x.t !== 'ONLY') target = x.t;
         }
-        if (!where) confirm.push(`WHERE koşulu olmayan ${t}: ${target ? target.toLowerCase() + ' tablosundaki ' : ''}tüm satırlar etkilenir.`);
+        if (!where) confirm.push(target ? __('WHERE koşulu olmayan {cmd}: {table} tablosundaki tüm satırlar etkilenir.', { cmd: t, table: target.toLowerCase() }) : __('WHERE koşulu olmayan {cmd}: tüm satırlar etkilenir.', { cmd: t }));
       }
     }
     return { blocked: [...blocked], confirm: [...new Set(confirm)] };
@@ -574,7 +576,7 @@ module.exports = function registerDb({ ipcMain, app, dialog, getWin, DATA, getPr
       }
       return out;
     }
-    throw new Error('Bilinmeyen istek: ' + what);
+    throw new Error(__('Bilinmeyen istek: {what}', { what }));
   }
   async function version(c, pw) {
     const m = await meta(c, pw, null);
@@ -589,7 +591,7 @@ module.exports = function registerDb({ ipcMain, app, dialog, getWin, DATA, getPr
   });
   function need(id, given) {
     const c = connById(id);
-    if (!c) throw new Error('Bağlantı bulunamadı.');
+    if (!c) throw new Error(__('Bağlantı bulunamadı.'));
     const pw = passwordOf(c, given);
     return { c, pw };
   }
@@ -619,7 +621,7 @@ module.exports = function registerDb({ ipcMain, app, dialog, getWin, DATA, getPr
       if (c.askPassword) { delete c.pwd; if (pw) memPw.set(c.id, pw); } // asked again after a restart
       else if (!pw) delete c.pwd; // an empty password needs no storage
       else if (canEncrypt()) c.pwd = encrypt(pw);
-      else { delete c.pwd; c.askPassword = true; memPw.set(c.id, pw); warning = 'Windows şifreleme hizmeti kullanılamadığı için parola kaydedilmedi; bu oturum boyunca bellekte tutulacak.'; }
+      else { delete c.pwd; c.askPassword = true; memPw.set(c.id, pw); warning = __('Windows şifreleme hizmeti kullanılamadığı için parola kaydedilmedi; bu oturum boyunca bellekte tutulacak.'); }
     }
     if (c.askPassword && c.pwd) delete c.pwd;
     write('conns', true);
@@ -665,7 +667,7 @@ module.exports = function registerDb({ ipcMain, app, dialog, getWin, DATA, getPr
       const c = { id: newId(), ...clean({ name, type: e.type, host: e.host, port: e.port, user: e.user, database: e.database }), created: Date.now() };
       if (e.password) {
         if (canEncrypt()) c.pwd = encrypt(e.password);
-        else { c.askPassword = true; memPw.set(c.id, e.password); warning = 'Windows şifreleme hizmeti kullanılamadığı için parolalar kaydedilmedi; bu oturum boyunca bellekte tutulacak.'; }
+        else { c.askPassword = true; memPw.set(c.id, e.password); warning = __('Windows şifreleme hizmeti kullanılamadığı için parolalar kaydedilmedi; bu oturum boyunca bellekte tutulacak.'); }
       }
       conns().push(c);
       added++;
@@ -682,8 +684,8 @@ module.exports = function registerDb({ ipcMain, app, dialog, getWin, DATA, getPr
     return { ok: true };
   });
   handle('db:duplicate', id => {
-    const c = connById(id); if (!c) throw new Error('Bağlantı bulunamadı.');
-    const copy = { ...c, id: newId(), name: (c.name || label(c)) + ' (kopya)', created: Date.now() };
+    const c = connById(id); if (!c) throw new Error(__('Bağlantı bulunamadı.'));
+    const copy = { ...c, id: newId(), name: __('{name} (kopya)', { name: c.name || label(c) }), created: Date.now() };
     conns().splice(conns().indexOf(c) + 1, 0, copy);
     if (memPw.has(id)) memPw.set(copy.id, memPw.get(id));
     write('conns', true);
@@ -717,13 +719,13 @@ module.exports = function registerDb({ ipcMain, app, dialog, getWin, DATA, getPr
   handle('db:run', async req => {
     const { tab, connId, db } = req || {};
     const text = String((req && req.sql) || '');
-    if (!text.trim()) return { error: 'Çalıştırılacak sorgu yok.' };
+    if (!text.trim()) return { error: __('Çalıştırılacak sorgu yok.') };
     return withConn(connId, req.password, async (c, pw) => {
       const a = analyze(text, c.type);
       if (c.readOnly && a.blocked.length) return { blocked: a.blocked, readOnly: true };
       if (!req.confirmed && a.confirm.length) return { confirm: a.confirm };
       const { s, x } = await sessionFor(tab, c, pw, db);
-      if (s.busy) return { error: 'Bu sekmede zaten çalışan bir sorgu var.' };
+      if (s.busy) return { error: __('Bu sekmede zaten çalışan bir sorgu var.') };
       s.busy = true;
       const ctx = makeCtx(tab);
       s.ctx = ctx;
@@ -741,7 +743,7 @@ module.exports = function registerDb({ ipcMain, app, dialog, getWin, DATA, getPr
         remember(r);
         return { id: r.id, columns: r.columns, total: r.total, fetched: r.rows.length, truncated: r.total > r.rows.length, rows: r.rows.slice(0, PAGE) };
       });
-      const summary = ctx.failed ? 'Hata' : ctx.cancelled ? 'İptal' : results.length ? results.map(r => r.total.toLocaleString('tr-TR') + ' satır').join(', ') : (ctx.affectedTotal ? ctx.affectedTotal.toLocaleString('tr-TR') + ' satır etkilendi' : 'Tamamlandı');
+      const summary = ctx.failed ? __('Hata') : ctx.cancelled ? __('İptal') : results.length ? results.map(r => __('{n} satır', { n: r.total.toLocaleString(I18N.locale()) })).join(', ') : (ctx.affectedTotal ? __('{n} satır etkilendi', { n: ctx.affectedTotal.toLocaleString(I18N.locale()) }) : __('Tamamlandı'));
       data.history.unshift({ id: newId(), at: Date.now(), connId: c.id, connName: label(c), db: currentDb, sql: text.slice(0, 20000), ms, ok: !ctx.failed && !ctx.cancelled, summary });
       if (data.history.length > MAX_HISTORY) data.history.length = MAX_HISTORY;
       write('history');
@@ -771,17 +773,17 @@ module.exports = function registerDb({ ipcMain, app, dialog, getWin, DATA, getPr
   });
   handle('db:rows', (id, offset, limit) => {
     const r = cache.get(id);
-    if (!r) return { error: 'Sonuç artık bellekte değil; sorguyu yeniden çalıştır.' };
+    if (!r) return { error: __('Sonuç artık bellekte değil; sorguyu yeniden çalıştır.') };
     const o = Math.max(0, offset | 0), l = Math.max(1, Math.min(20000, limit | 0 || PAGE));
     return { rows: r.rows.slice(o, o + l), fetched: r.rows.length };
   });
   handle('db:release', ids => { forget(ids); return { ok: true }; });
   handle('db:exportCsv', async (id, opts = {}) => {
     const r = cache.get(id);
-    if (!r) return { error: 'Sonuç artık bellekte değil; sorguyu yeniden çalıştır.' };
+    if (!r) return { error: __('Sonuç artık bellekte değil; sorguyu yeniden çalıştır.') };
     const sep = opts.sep === ';' ? ';' : opts.sep === '\t' ? '\t' : ',';
     const base = String(opts.name || 'sonuc').replace(/[\\/:*?"<>|]+/g, '_').slice(0, 60) || 'sonuc';
-    const w = getWin(), dopts = { title: 'CSV olarak kaydet', defaultPath: base + '.csv', filters: [{ name: 'CSV', extensions: ['csv'] }, { name: 'Tüm dosyalar', extensions: ['*'] }] };
+    const w = getWin(), dopts = { title: __('CSV olarak kaydet'), defaultPath: base + '.csv', filters: [{ name: 'CSV', extensions: ['csv'] }, { name: __('Tüm dosyalar'), extensions: ['*'] }] };
     const res = await (w ? dialog.showSaveDialog(w, dopts) : dialog.showSaveDialog(dopts));
     if (res.canceled || !res.filePath) return { canceled: true };
     const q = v => {
@@ -805,7 +807,7 @@ module.exports = function registerDb({ ipcMain, app, dialog, getWin, DATA, getPr
   handle('db:historyClear', () => { data.history = []; write('history', true); return { ok: true }; });
   handle('db:saved', () => ({ items: data.saved }));
   handle('db:savedSave', q => {
-    const name = String((q && q.name) || '').trim().slice(0, 120) || 'Adsız sorgu';
+    const name = String((q && q.name) || '').trim().slice(0, 120) || __('Adsız sorgu');
     const sqlText = String((q && q.sql) || '').slice(0, 500000);
     let it = q && q.id ? data.saved.find(x => x.id === q.id) : null;
     if (it) Object.assign(it, { name, sql: sqlText, connId: q.connId || '', db: q.db || '', at: Date.now() });
@@ -824,7 +826,7 @@ module.exports = function registerDb({ ipcMain, app, dialog, getWin, DATA, getPr
      The agent names a connection id and sends SQL; the password never leaves this process. Each
      agent session gets its own editor-like session per connection (tab key ai:<pty>:<conn>). */
   const agentList = () => conns().filter(c => c.aiAccess !== 'deny').map(c => ({
-    id: c.id, name: c.name || `Adsız ${TYPES[c.type]} bağlantısı ${c.id}`, typeName: TYPES[c.type], database: c.database,
+    id: c.id, name: c.name || __('Adsız {type} bağlantısı {id}', { type: TYPES[c.type], id: c.id }), typeName: TYPES[c.type], database: c.database,
     readOnly: c.readOnly, aiAccess: c.aiAccess || '', label: label(c) + (c.database ? ' / ' + c.database : ''),
   }));
   function setAiAccess(id, v) {
@@ -834,13 +836,13 @@ module.exports = function registerDb({ ipcMain, app, dialog, getWin, DATA, getPr
   }
   async function agentQuery(id, text, o) {
     const c = connById(id);
-    if (!c) throw new Error('Bağlantı bulunamadı.');
-    if (c.aiAccess === 'deny') throw new Error('Bu bağlantı ajanlara kapalı.');
+    if (!c) throw new Error(__('Bağlantı bulunamadı.'));
+    if (c.aiAccess === 'deny') throw new Error(__('Bu bağlantı ajanlara kapalı.'));
     const pw = passwordOf(c);
-    if (pw === null) throw new Error(`“${c.name || 'Bu bağlantı'}” için parola kayıtlı değil. Kullanıcının VoxStorm’un DB modunda bu bağlantıya bir kez bağlanması gerekiyor; sonra bu çalışma boyunca kullanılabilir.`);
+    if (pw === null) throw new Error(c.name ? __('“{name}” için parola kayıtlı değil. Kullanıcının VoxStorm’un DB modunda bu bağlantıya bir kez bağlanması gerekiyor; sonra bu çalışma boyunca kullanılabilir.', { name: c.name }) : __('Bu bağlantı için parola kayıtlı değil. Kullanıcının VoxStorm’un DB modunda bu bağlantıya bir kez bağlanması gerekiyor; sonra bu çalışma boyunca kullanılabilir.'));
     const a = analyze(text, c.type);
-    if (c.readOnly && a.blocked.length) throw new Error(`Bu bağlantı salt okunur; şu ifadeler çalıştırılmadı: ${a.blocked.join(', ')}.`);
-    if (a.confirm.length && !(await o.confirm(a.confirm))) throw new Error('Kullanıcı bu sorgunun çalışmasını onaylamadı.');
+    if (c.readOnly && a.blocked.length) throw new Error(__('Bu bağlantı salt okunur; şu ifadeler çalıştırılmadı: {list}.', { list: a.blocked.join(', ') }));
+    if (a.confirm.length && !(await o.confirm(a.confirm))) throw new Error(__('Kullanıcı bu sorgunun çalışmasını onaylamadı.'));
     const tab = `ai:${o.session}:${c.id}`;
     let s, x;
     try { ({ s, x } = await sessionFor(tab, c, pw, o.db)); } catch (e) {
@@ -848,7 +850,7 @@ module.exports = function registerDb({ ipcMain, app, dialog, getWin, DATA, getPr
       if (/login failed|password authentication failed|Access denied for user|Oturum açma başarısız/i.test(msg)) { memPw.delete(c.id); await closeConn(c.id); }
       throw new Error(msg);
     }
-    if (s.busy) throw new Error('Bu oturumun bu bağlantıda hâlâ çalışan bir sorgusu var.');
+    if (s.busy) throw new Error(__('Bu oturumun bu bağlantıda hâlâ çalışan bir sorgusu var.'));
     s.busy = true;
     const ctx = makeCtx(tab, o.maxRows);
     s.ctx = ctx;
@@ -861,8 +863,8 @@ module.exports = function registerDb({ ipcMain, app, dialog, getWin, DATA, getPr
     const ms = Date.now() - t0;
     let currentDb = o.db || '';
     if (x.alive()) { try { currentDb = await x.currentDb(); s.db = currentDb; } catch (_) {} }
-    const summary = ctx.failed ? 'Hata' : ctx.cancelled ? 'İptal' : ctx.results.length ? ctx.results.map(r => r.total.toLocaleString('tr-TR') + ' satır').join(', ') : (ctx.affectedTotal ? ctx.affectedTotal.toLocaleString('tr-TR') + ' satır etkilendi' : 'Tamamlandı');
-    data.history.unshift({ id: newId(), at: Date.now(), connId: c.id, connName: `${label(c)} · ${o.by || 'Ajan'}`, db: currentDb, sql: text.slice(0, 20000), ms, ok: !ctx.failed && !ctx.cancelled, summary });
+    const summary = ctx.failed ? __('Hata') : ctx.cancelled ? __('İptal') : ctx.results.length ? ctx.results.map(r => __('{n} satır', { n: r.total.toLocaleString(I18N.locale()) })).join(', ') : (ctx.affectedTotal ? __('{n} satır etkilendi', { n: ctx.affectedTotal.toLocaleString(I18N.locale()) }) : __('Tamamlandı'));
+    data.history.unshift({ id: newId(), at: Date.now(), connId: c.id, connName: `${label(c)} · ${o.by || __('Ajan')}`, db: currentDb, sql: text.slice(0, 20000), ms, ok: !ctx.failed && !ctx.cancelled, summary });
     if (data.history.length > MAX_HISTORY) data.history.length = MAX_HISTORY;
     write('history');
     return { failed: ctx.failed, cancelled: ctx.cancelled, results: ctx.results.map(r => ({ columns: r.columns, rows: r.rows, total: r.total })), messages: ctx.messages, ms, currentDb };

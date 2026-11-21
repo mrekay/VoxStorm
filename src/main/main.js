@@ -207,7 +207,7 @@ function findShell(kind) {
   if (kind === 'bash') {
     const cands = ['C:\\Program Files\\Git\\bin\\bash.exe', 'C:\\Program Files (x86)\\Git\\bin\\bash.exe', ...whereFirst('bash').filter(p => !/system32/i.test(p))];
     const f = cands.find(c => fs.existsSync(c));
-    if (!f) throw new Error('Git Bash bulunamadı.');
+    if (!f) throw new Error(__('Git Bash bulunamadı.'));
     return { file: f, args: ['--login', '-i'] };
   }
   const pw = whereFirst('pwsh')[0];
@@ -260,9 +260,9 @@ async function findSessionFile(sessionId, projectPath) {
 // the same record Claude Code's /rename appends, so the name also shows in its own /resume list
 async function renameSession(sessionId, projectPath, title) {
   const t = String(title || '').replace(/\s+/g, ' ').trim().slice(0, 120);
-  if (!t) return { ok: false, error: 'Ad boş olamaz.' };
+  if (!t) return { ok: false, error: __('Ad boş olamaz.') };
   const file = await findSessionFile(sessionId, projectPath);
-  if (!file) return { ok: false, error: 'Oturum dosyası bulunamadı.' };
+  if (!file) return { ok: false, error: __('Oturum dosyası bulunamadı.') };
   let lead = '';
   try { const end = await readTail(file, 1); if (end && end !== '\n') lead = '\n'; } catch (_) {}
   await fsp.appendFile(file, lead + JSON.stringify({ type: 'custom-title', customTitle: t, sessionId }) + '\n', 'utf8');
@@ -304,7 +304,7 @@ async function sessionMeta(file, mtimeMs) {
     scan(tail, { custom: true, ai: true });
     if (st.size > 256 * 1024 && (!custom || !ai)) scan(head, { custom: !custom, ai: !ai }); // older ones, only if the tail had none
   } catch (_) {}
-  const meta = { mtime: mtimeMs, title: (custom || ai || title || 'Adsız oturum').replace(/\s+/g, ' ').slice(0, 120), cwd };
+  const meta = { mtime: mtimeMs, title: (custom || ai || title || __('Adsız oturum')).replace(/\s+/g, ' ').slice(0, 120), cwd };
   titleCache.set(file, meta);
   return meta;
 }
@@ -426,7 +426,7 @@ async function scanLive() {
     for (const o of raw) {
       if (ownPid.get(o.pid)) continue;
       const file = path.join(PROJECTS_DIR, encodeProjectDir(o.cwd || ''), o.sessionId + '.jsonl');
-      let title = o.name || 'Oturum';
+      let title = o.name || __('Oturum');
       try { const st = await fsp.stat(file); title = (await sessionMeta(file, st.mtimeMs)).title; } catch (_) {}
       list.push({
         pid: o.pid, sessionId: o.sessionId, cwd: o.cwd || '', title,
@@ -473,7 +473,7 @@ function liveEntries(o, sidechain) {
     if (Array.isArray(c)) {
       const text = c.filter(b => b.type === 'text' && !String(b.text).startsWith('<')).map(b => b.text).join('\n').trim();
       const imgs = c.filter(b => b.type === 'image').length;
-      if (text || imgs) return [{ k: 'user', text: text + (imgs ? `${text ? '\n' : ''}[${imgs} görsel]` : ''), ts: o.timestamp }];
+      if (text || imgs) return [{ k: 'user', text: text + (imgs ? (text ? '\n' : '') + __('[{n} görsel]', { n: imgs }) : ''), ts: o.timestamp }];
     }
     return [];
   }
@@ -679,9 +679,9 @@ async function takeOver(sessionId) {
   // close the outside copy so the conversation can continue in a VoxStorm terminal
   const s = liveList.find(x => x.sessionId === sessionId);
   if (!s) return { ok: true };
-  try { process.kill(s.pid); } catch (e) { return { ok: false, error: 'Dışarıdaki oturum kapatılamadı: ' + e.message }; }
+  try { process.kill(s.pid); } catch (e) { return { ok: false, error: __('Dışarıdaki oturum kapatılamadı: {error}', { error: e.message }) }; }
   for (let i = 0; i < 50 && pidAlive(s.pid); i++) await new Promise(r => setTimeout(r, 100));
-  if (pidAlive(s.pid)) return { ok: false, error: 'Dışarıdaki oturum kapanmadı.' };
+  if (pidAlive(s.pid)) return { ok: false, error: __('Dışarıdaki oturum kapanmadı.') };
   await scanLive().catch(() => {});
   return { ok: true, cwd: s.cwd };
 }
@@ -701,12 +701,12 @@ function mirrorBinary() {
     if (fs.existsSync(exe)) return exe;
     const win = process.env.WINDIR || 'C:\\Windows';
     const csc = ['Framework64', 'Framework'].map(f => path.join(win, 'Microsoft.NET', f, 'v4.0.30319', 'csc.exe')).find(f => fs.existsSync(f));
-    if (!csc) throw new Error('Terminal bağlantısı için gereken .NET derleyicisi (csc.exe) bulunamadı.');
+    if (!csc) throw new Error(__('Terminal bağlantısı için gereken .NET derleyicisi (csc.exe) bulunamadı.'));
     fs.mkdirSync(DATA, { recursive: true });
     const cs = path.join(DATA, `mirror-${hash}.cs`);
     fs.writeFileSync(cs, src);
     await new Promise((resolve, reject) => execFile(csc, ['-nologo', '-target:winexe', '-optimize', '-out:' + exe, cs],
-      { windowsHide: true, timeout: 60000 }, (err, out) => (err ? reject(new Error('Terminal bağlantı aracı derlenemedi. ' + String(out || err.message).trim())) : resolve())));
+      { windowsHide: true, timeout: 60000 }, (err, out) => (err ? reject(new Error(__('Terminal bağlantı aracı derlenemedi. {error}', { error: String(out || err.message).trim() }))) : resolve())));
     try { fs.unlinkSync(cs); } catch (_) {}
     return exe;
   })();
@@ -715,9 +715,9 @@ function mirrorBinary() {
 }
 async function startMirror(sessionId, owner) {
   const s = liveList.find(x => x.sessionId === sessionId);
-  if (!s) throw new Error('Oturum artık açık değil.');
+  if (!s) throw new Error(__('Oturum artık açık değil.'));
   // attaching to another terminal's console is a Windows API; macOS shows the conversation only
-  if (!IS_WIN) throw new Error('Bu sistemde dışarıdaki terminale bağlanılamıyor; konuşma görünür, devralarak burada devam edebilirsin.');
+  if (!IS_WIN) throw new Error(__('Bu sistemde dışarıdaki terminale bağlanılamıyor; konuşma görünür, devralarak burada devam edebilirsin.'));
   const exe = await mirrorBinary();
   const id = crypto.randomUUID();
   const child = spawn(exe, [String(s.pid)], { windowsHide: true, stdio: ['pipe', 'pipe', 'ignore'] });
@@ -732,7 +732,7 @@ async function startMirror(sessionId, owner) {
       const line = buf.slice(0, i); buf = buf.slice(i + 1);
       const p = line.split(' ');
       if (p[0] === 'F') sendTo(mirrorOwner.get(id), 'mirror:frame', id, { cols: +p[1], rows: +p[2], cx: +p[3], cy: +p[4], vis: p[5] === '1', off: +p[6], max: +p[7], vt: Buffer.from(p[8] || '', 'base64').toString('utf8') });
-      else if (p[0] === 'E') sendTo(mirrorOwner.get(id), 'mirror:error', id, 'Terminale bağlanılamadı (Windows hata kodu ' + p[1] + ').');
+      else if (p[0] === 'E') sendTo(mirrorOwner.get(id), 'mirror:error', id, __('Terminale bağlanılamadı (Windows hata kodu {code}).', { code: p[1] }));
     }
   });
   child.stdin.on('error', () => {});
@@ -959,20 +959,20 @@ ipcMain.handle('usage:plan', async (_e, force) => {
     const d = await r.json();
     const rows = [];
     const win = (title, l) => { if (l && l.utilization != null) rows.push({ title, percent: l.utilization, resetsAt: l.resets_at || null, severity: 'normal' }); };
-    win('Bu oturum (5 saat)', d.five_hour);
+    win(__('Bu oturum (5 saat)'), d.five_hour);
     if (Array.isArray(d.limits) && d.limits.length) {
       for (const l of d.limits) {
         if (l.percent == null) continue;
         const model = l.scope && l.scope.model && l.scope.model.display_name;
-        const title = l.kind === 'weekly_all' ? 'Bu hafta (tüm modeller)' : model ? `Bu hafta (${model})` : String(l.kind || 'Limit').replace(/_/g, ' ');
+        const title = l.kind === 'weekly_all' ? __('Bu hafta (tüm modeller)') : model ? __('Bu hafta ({model})', { model }) : (l.kind ? String(l.kind).replace(/_/g, ' ') : __('Limit'));
         rows.push({ title, percent: l.percent, resetsAt: l.resets_at || null, severity: l.severity || 'normal' });
       }
     } else {
       // older answer shape: the fixed windows Claude Code itself falls back to
-      win('Bu hafta (tüm modeller)', d.seven_day);
-      win('Bu hafta (yalnızca Sonnet)', d.seven_day_sonnet);
-      win('Bu hafta (Opus)', d.seven_day_opus);
-      for (const m of d.model_scoped || []) win(`Bu hafta (${m.display_name})`, m);
+      win(__('Bu hafta (tüm modeller)'), d.seven_day);
+      win(__('Bu hafta (yalnızca Sonnet)'), d.seven_day_sonnet);
+      win(__('Bu hafta ({model})', { model: 'Opus' }), d.seven_day_opus);
+      for (const m of d.model_scoped || []) win(__('Bu hafta ({model})', { model: m.display_name }), m);
     }
     return (planCache = { at: Date.now(), rows, plan: oauth.subscriptionType || null });
   } catch (err) {
@@ -983,7 +983,7 @@ ipcMain.handle('usage:exportCsv', async (e, month) => {
   await computeUsage();
   const names = Object.fromEntries(config.projects.map(p => [encodeProjectDir(p.path), p.name]));
   const r = await dialog.showSaveDialog(BrowserWindow.fromWebContents(e.sender) || win, {
-    title: 'Kullanımı CSV olarak kaydet',
+    title: __('Kullanımı CSV olarak kaydet'),
     defaultPath: path.join(app.getPath('documents'), `claude-kullanim-${month || 'tum'}.csv`),
     filters: [{ name: 'CSV', extensions: ['csv'] }],
   });
@@ -1110,18 +1110,20 @@ function learnAddress(text) {
 }
 
 /* ---------------- "how to address me" prompt ---------------- */
-const TONES = {
-  samimi: 'Samimi, rahat bir dille konuş.',
-  resmi: 'Resmi ve saygılı bir dille konuş.',
-  kisa: 'Kısa ve öz cevap ver, gereksiz açıklama yapma.',
-};
-const LANGS = { tr: 'Türkçe', en: 'İngilizce', de: 'Almanca', es: 'İspanyolca', fr: 'Fransızca' };
+// functions, not tables: the text follows the interface language, chosen after this file loads
+const TONES = () => ({
+  samimi: __('Samimi, rahat bir dille konuş.'),
+  resmi: __('Resmi ve saygılı bir dille konuş.'),
+  kisa: __('Kısa ve öz cevap ver, gereksiz açıklama yapma.'),
+});
+const LANGS = () => ({ tr: __('Türkçe'), en: __('İngilizce'), de: __('Almanca'), es: __('İspanyolca'), fr: __('Fransızca') });
 function buildAppendPrompt() {
   const s = config.settings;
-  const lines = ['Kullanıcı tercihleri (VoxStorm):'];
-  if ((s.name || '').trim()) lines.push(`- Kullanıcıya "${s.name.trim()}" diye hitap et.`);
-  if (TONES[s.tone]) lines.push('- ' + TONES[s.tone]);
-  if (LANGS[s.lang]) lines.push(`- Yanıtlarını ${LANGS[s.lang]} ver.`);
+  const tones = TONES(), langs = LANGS();
+  const lines = [__('Kullanıcı tercihleri (VoxStorm):')];
+  if ((s.name || '').trim()) lines.push('- ' + __('Kullanıcıya "{name}" diye hitap et.', { name: s.name.trim() }));
+  if (tones[s.tone]) lines.push('- ' + tones[s.tone]);
+  if (langs[s.lang]) lines.push('- ' + __('Yanıtlarını {lang} ver.', { lang: langs[s.lang] }));
   (s.extra || '').split('\n').map(x => x.trim()).filter(Boolean).forEach(x => lines.push('- ' + x));
   return lines.join('\n');
 }
@@ -1142,7 +1144,7 @@ function spawnTerminal(opts, owner) {
     file = l.file; args = l.args; sessionId = opts.resume || null; // a new session's id comes with its first hook
   } else if (opts.kind === 'claude') {
     const launch = claudeLaunch();
-    if (!launch) throw new Error('claude komutu bulunamadı. Claude Code kurulu ve PATH içinde olmalı ya da Ayarlar → Claude oturumları → Açılış komutu doldurulmalı.');
+    if (!launch) throw new Error(__('claude komutu bulunamadı. Claude Code kurulu ve PATH içinde olmalı ya da Ayarlar → Claude oturumları → Açılış komutu doldurulmalı.'));
     args.push(...launch.pre);
     if (opts.resume) { args.push('--resume', opts.resume); sessionId = opts.resume; }
     else { sessionId = crypto.randomUUID(); args.push('--session-id', sessionId); }
@@ -1207,7 +1209,7 @@ function setupAgentLink() {
     getSsh: () => SSH, getDb: () => DB,
     enabled: () => config.settings.agentLink !== false,
     sessionInfo: id => {
-      const m = ptyMeta.get(id) || { agent: 'Ajan', cwd: '' };
+      const m = ptyMeta.get(id) || { agent: __('Ajan'), cwd: '' };
       const pr = m.cwd && config.projects.find(x => norm(x.path) === norm(m.cwd));
       const wc = ptyOwner.get(id);
       return { agent: m.agent, cwd: m.cwd, project: (pr && pr.name) || (m.cwd ? path.basename(m.cwd) : '?'), win: (wc && !wc.isDestroyed() && BrowserWindow.fromWebContents(wc)) || ownerWin('claude') };
@@ -1284,8 +1286,8 @@ async function quitFlow() {
   if (n > 0) {
     if (win && !win.isVisible()) showWindow();
     const opts = {
-      title: 'Çıkılsın mı?', message: `${n} terminal hâlâ açık.`, ok: 'Çık', danger: true, icon: 'fa-power-off',
-      detail: 'Terminaller kapanır. Claude oturumları geçmişte kalır, sonra kaldığın yerden devam edebilirsin.',
+      title: __('Çıkılsın mı?'), message: __('{n} terminal hâlâ açık.', { n }), ok: __('Çık'), danger: true, icon: 'fa-power-off',
+      detail: __('Terminaller kapanır. Claude oturumları geçmişte kalır, sonra kaldığın yerden devam edebilirsin.'),
     };
     let yes;
     // only the app's own themed dialog, never a system message box; a page that cannot answer lets the quit go on
@@ -1330,16 +1332,17 @@ async function welcomeData() {
 function rebuildTrayMenu() {
   if (!tray) return;
   const { running, pending } = trayStats;
-  tray.setToolTip(`VoxStorm · ${running} çalışıyor · ${pending} karar bekliyor`);
+  const counts = __('{running} çalışıyor · {pending} karar bekliyor', { running, pending });
+  tray.setToolTip('VoxStorm · ' + counts);
   tray.setContextMenu(Menu.buildFromTemplate([
-    { label: win && win.isVisible() ? 'Pencereyi gizle' : 'Pencereyi göster', click: () => (win.isVisible() ? win.hide() : showWindow()) },
-    { label: 'Karşılama ekranı', click: () => showWelcome() },
-    { label: 'Ayarlar', click: () => { showWindow(); sendMain('open-settings'); } },
-    { label: 'Rahatsız etme', type: 'checkbox', checked: !!config.settings.notif.quiet, click: m => { config.settings.notif.quiet = m.checked; saveConfig(); send('config-changed', config); } },
+    { label: win && win.isVisible() ? __('Pencereyi gizle') : __('Pencereyi göster'), click: () => (win.isVisible() ? win.hide() : showWindow()) },
+    { label: __('Karşılama ekranı'), click: () => showWelcome() },
+    { label: __('Ayarlar'), click: () => { showWindow(); sendMain('open-settings'); } },
+    { label: __('Rahatsız etme'), type: 'checkbox', checked: !!config.settings.notif.quiet, click: m => { config.settings.notif.quiet = m.checked; saveConfig(); send('config-changed', config); } },
     { type: 'separator' },
-    { label: `${running} çalışıyor · ${pending} karar bekliyor`, enabled: false },
+    { label: counts, enabled: false },
     { type: 'separator' },
-    { label: 'Çık', click: () => quitFlow() },
+    { label: __('Çık'), click: () => quitFlow() },
   ]));
 }
 function createTray() {
@@ -1399,7 +1402,7 @@ function pageEvents(w) {
    window that closes hands its terminals to whichever window shows AI mode. */
 const MODE_RE = /^[a-z][\w.:-]{0,139}$/i;
 const MODE_TITLES = { claude: 'AI', ide: 'IDE', db: 'DB', ssh: 'SSH' };
-const modeTitle = m => `VoxStorm · ${MODE_TITLES[m] || (String(m).startsWith('plugin:') ? 'Eklenti' : m)}`;
+const modeTitle = m => `VoxStorm · ${MODE_TITLES[m] || (String(m).startsWith('plugin:') ? __('Eklenti') : m)}`;
 function focusWin(w) {
   if (!alive(w)) return;
   if (w.isMinimized()) w.restore();
@@ -1520,22 +1523,22 @@ function appMenu() {
     // terminals only work through them. Ctrl stays with the terminal (Ctrl+C stops, Ctrl+R searches).
     Menu.setApplicationMenu(Menu.buildFromTemplate([
       { label: 'VoxStorm', submenu: [
-        { role: 'about', label: 'VoxStorm hakkında' }, { type: 'separator' },
-        { label: 'Ayarlar…', accelerator: 'Cmd+,', click: () => { showWindow(); send('open-settings'); } },
-        { type: 'separator' }, { role: 'hide', label: 'VoxStorm\'u gizle' }, { role: 'hideOthers', label: 'Diğerlerini gizle' }, { role: 'unhide', label: 'Tümünü göster' },
-        { type: 'separator' }, { label: 'VoxStorm\'dan çık', accelerator: 'Cmd+Q', click: () => quitFlow() },
+        { role: 'about', label: __('VoxStorm hakkında') }, { type: 'separator' },
+        { label: __('Ayarlar…'), accelerator: 'Cmd+,', click: () => { showWindow(); send('open-settings'); } },
+        { type: 'separator' }, { role: 'hide', label: __('VoxStorm\'u gizle') }, { role: 'hideOthers', label: __('Diğerlerini gizle') }, { role: 'unhide', label: __('Tümünü göster') },
+        { type: 'separator' }, { label: __('VoxStorm\'dan çık'), accelerator: 'Cmd+Q', click: () => quitFlow() },
       ] },
-      { label: 'Düzen', submenu: [{ role: 'undo', label: 'Geri al' }, { role: 'redo', label: 'Yinele' }, { type: 'separator' }, { role: 'cut', label: 'Kes' }, { role: 'copy', label: 'Kopyala' }, { role: 'paste', label: 'Yapıştır' }, { role: 'selectAll', label: 'Tümünü seç' }] },
-      { label: 'Görünüm', submenu: [{ role: 'toggleDevTools', accelerator: 'Cmd+Alt+I' }, { role: 'resetZoom' }, { role: 'zoomIn' }, { role: 'zoomOut' }, { type: 'separator' }, { role: 'togglefullscreen', label: 'Tam ekran' }] },
-      { label: 'Pencere', submenu: [{ role: 'minimize', label: 'Küçült' }, { role: 'zoom', label: 'Yakınlaştır' }, { label: 'Kapat', accelerator: 'Cmd+W', click: () => win && win.close() }, { type: 'separator' }, { role: 'front', label: 'Tümünü öne getir' }] },
+      { label: __('Düzen'), submenu: [{ role: 'undo', label: __('Geri al') }, { role: 'redo', label: __('Yinele') }, { type: 'separator' }, { role: 'cut', label: __('Kes') }, { role: 'copy', label: __('Kopyala') }, { role: 'paste', label: __('Yapıştır') }, { role: 'selectAll', label: __('Tümünü seç') }] },
+      { label: __('Görünüm'), submenu: [{ role: 'toggleDevTools', accelerator: 'Cmd+Alt+I' }, { role: 'resetZoom' }, { role: 'zoomIn' }, { role: 'zoomOut' }, { type: 'separator' }, { role: 'togglefullscreen', label: __('Tam ekran') }] },
+      { label: __('Pencere'), submenu: [{ role: 'minimize', label: __('Küçült') }, { role: 'zoom', label: __('Yakınlaştır') }, { label: __('Kapat'), accelerator: 'Cmd+W', click: () => win && win.close() }, { type: 'separator' }, { role: 'front', label: __('Tümünü öne getir') }] },
     ]));
     return;
   }
   // keeps copy/paste shortcuts working, removes reload shortcuts that would wipe terminals
   Menu.setApplicationMenu(Menu.buildFromTemplate([
     // registerAccelerator:false lets Chromium handle Ctrl+C/V itself (no double paste into terminals)
-    { label: 'Düzen', submenu: ['undo', 'redo', 'cut', 'copy', 'paste', 'selectAll'].map(role => ({ role, registerAccelerator: false })) },
-    { label: 'Görünüm', submenu: [{ role: 'toggleDevTools', accelerator: 'Ctrl+Shift+I' }, { role: 'resetZoom' }, { role: 'zoomIn' }, { role: 'zoomOut' }] },
+    { label: __('Düzen'), submenu: ['undo', 'redo', 'cut', 'copy', 'paste', 'selectAll'].map(role => ({ role, registerAccelerator: false })) },
+    { label: __('Görünüm'), submenu: [{ role: 'toggleDevTools', accelerator: 'Ctrl+Shift+I' }, { role: 'resetZoom' }, { role: 'zoomIn' }, { role: 'zoomOut' }] },
   ]));
 }
 
@@ -1560,7 +1563,7 @@ function registerIpc() {
   ipcMain.handle('prompt:preview', () => buildAppendPrompt());
 
   ipcMain.handle('project:add', async e => {
-    const r = await dialog.showOpenDialog(BrowserWindow.fromWebContents(e.sender) || win, { title: 'Proje klasörü seç', properties: ['openDirectory'] });
+    const r = await dialog.showOpenDialog(BrowserWindow.fromWebContents(e.sender) || win, { title: __('Proje klasörü seç'), properties: ['openDirectory'] });
     if (r.canceled || !r.filePaths[0]) return null;
     return addProject(r.filePaths[0]);
   });
@@ -1604,15 +1607,15 @@ function registerIpc() {
     const raw = fs.readFileSync(USER_SETTINGS, 'utf8').replace(/^﻿/, '');
     if (!raw.trim()) return {};
     const j = JSON.parse(raw);
-    if (!j || typeof j !== 'object' || Array.isArray(j)) throw new Error('settings.json beklenen biçimde değil');
+    if (!j || typeof j !== 'object' || Array.isArray(j)) throw new Error(__('settings.json beklenen biçimde değil'));
     return j;
   };
   ipcMain.handle('claude:getCleanup', () => { try { const v = readUserSettings().cleanupPeriodDays; return Number.isFinite(v) ? v : null; } catch (_) { return null; } });
   ipcMain.handle('claude:setCleanup', (_e, days) => {
     const n = Math.round(Number(days));
-    if (!(n >= 1 && n <= 3650)) throw new Error('Geçersiz gün sayısı');
+    if (!(n >= 1 && n <= 3650)) throw new Error(__('Geçersiz gün sayısı'));
     let j;
-    try { j = readUserSettings(); } catch (e) { throw new Error('~/.claude/settings.json okunamadı, dokunmadım: ' + e.message); }
+    try { j = readUserSettings(); } catch (e) { throw new Error(__('~/.claude/settings.json okunamadı, dokunmadım: {error}', { error: e.message })); }
     j.cleanupPeriodDays = n;
     fs.mkdirSync(CLAUDE_DIR, { recursive: true });
     fs.writeFileSync(USER_SETTINGS + '.tmp', JSON.stringify(j, null, 2) + '\n');
@@ -1654,7 +1657,7 @@ function registerIpc() {
   ipcMain.handle('path:open', async (_e, p) => {
     p = String(p || '').replace(/^~(?=[\\/]|$)/, require('os').homedir());
     if (!path.isAbsolute(p)) return false;
-    let st; try { st = await fs.promises.stat(p); } catch (_) { return { error: 'Bulunamadı: ' + p }; }
+    let st; try { st = await fs.promises.stat(p); } catch (_) { return { error: __('Bulunamadı: {path}', { path: p }) }; }
     if (st.isDirectory()) { const r = await shell.openPath(p); return r ? { error: r } : true; }
     shell.showItemInFolder(p); return true;
   });
@@ -1713,7 +1716,7 @@ function registerIpc() {
     return true;
   });
   ipcMain.handle('welcome:addFolder', async () => {
-    const r = await dialog.showOpenDialog(welcome || win, { title: 'Proje klasörü seç', properties: ['openDirectory'] });
+    const r = await dialog.showOpenDialog(welcome || win, { title: __('Proje klasörü seç'), properties: ['openDirectory'] });
     if (r.canceled || !r.filePaths[0]) return null;
     const p = addProject(r.filePaths[0]);
     send('projects-changed', config.projects);
@@ -1769,10 +1772,10 @@ function registerIpc() {
     const w = senderWin(e);
     const out = alive(modeWins.get(mode));
     Menu.buildFromTemplate(out ? [
-      { label: 'Ayrı pencereye geç', enabled: modeWins.get(mode) !== w, click: () => focusWin(modeWins.get(mode)) },
-      { label: 'Ana pencereye geri al', click: () => attachMode(mode) },
+      { label: __('Ayrı pencereye geç'), enabled: modeWins.get(mode) !== w, click: () => focusWin(modeWins.get(mode)) },
+      { label: __('Ana pencereye geri al'), click: () => attachMode(mode) },
     ] : [
-      { label: 'Ayrı pencerede aç', enabled: !!canDetach, click: () => detachMode(mode) },
+      { label: __('Ayrı pencerede aç'), enabled: !!canDetach, click: () => detachMode(mode) },
     ]).popup(w ? { window: w } : {});
   });
   ipcMain.on('app:quit', () => quitFlow());
@@ -1780,7 +1783,7 @@ function registerIpc() {
   // IDE file access — limited to registered project folders
   const IGNORE = new Set(['node_modules', '.git', 'dist', 'build', 'out', '.next', '.cache', '__pycache__', '.venv', 'venv', 'bin', 'obj', '.idea', '.vs']);
   ipcMain.handle('fs:list', async (_e, dir) => {
-    if (!insideProject(dir)) throw new Error('Proje dışında');
+    if (!insideProject(dir)) throw new Error(__('Proje dışında'));
     const ents = await fsp.readdir(dir, { withFileTypes: true });
     return ents
       .filter(e => !IGNORE.has(e.name))
@@ -1788,20 +1791,20 @@ function registerIpc() {
       .sort((a, b) => (a.dir === b.dir ? a.name.localeCompare(b.name, 'tr') : a.dir ? -1 : 1));
   });
   ipcMain.handle('fs:read', async (_e, file) => {
-    if (!insideProject(file)) throw new Error('Proje dışında');
+    if (!insideProject(file)) throw new Error(__('Proje dışında'));
     const st = await fsp.stat(file);
-    if (st.size > 3 * 1024 * 1024) return { error: 'Dosya çok büyük (3 MB üstü).' };
+    if (st.size > 3 * 1024 * 1024) return { error: __('Dosya çok büyük (3 MB üstü).') };
     const buf = await fsp.readFile(file);
-    if (buf.subarray(0, 8000).includes(0)) return { error: 'İkili (binary) dosya, metin olarak açılamaz.' };
+    if (buf.subarray(0, 8000).includes(0)) return { error: __('İkili (binary) dosya, metin olarak açılamaz.') };
     return { text: buf.toString('utf8'), mtime: st.mtimeMs };
   });
   ipcMain.handle('fs:write', async (_e, file, text) => {
-    if (!insideProject(file)) throw new Error('Proje dışında');
+    if (!insideProject(file)) throw new Error(__('Proje dışında'));
     await fsp.writeFile(file, text, 'utf8');
     return true;
   });
   ipcMain.handle('fs:create', async (_e, file) => {
-    if (!insideProject(file)) throw new Error('Proje dışında');
+    if (!insideProject(file)) throw new Error(__('Proje dışında'));
     await fsp.mkdir(path.dirname(file), { recursive: true });
     if (!fs.existsSync(file)) await fsp.writeFile(file, '', 'utf8');
     return true;

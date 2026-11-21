@@ -7,16 +7,16 @@
 (() => {
   'use strict';
   const FIELDS = [
-    ['bg', 'Arka plan', 'Pencerenin en dış zemini'],
-    ['surface', 'Yüzey', 'Paneller, menüler, kartlar'],
-    ['fg', 'Yazı', 'Ana yazı rengi'],
-    ['muted', 'Soluk yazı', 'Açıklamalar, ikincil bilgiler'],
-    ['accent', 'Vurgu', 'Seçili öğeler, düğmeler, bağlantılar'],
-    ['warn', 'Uyarı', 'Karar bekleyen, dikkat'],
-    ['ok', 'Başarılı', 'Biten işler, ekleme'],
-    ['danger', 'Tehlike', 'Hata, silme'],
-    ['termBg', 'Terminal zemini', 'Terminal ve konsol arka planı'],
-    ['termFg', 'Terminal yazısı', '“Temaya uyumlu” terminal renklerinde yazı rengi'],
+    ['bg', __('Arka plan'), __('Pencerenin en dış zemini')],
+    ['surface', __('Yüzey'), __('Paneller, menüler, kartlar')],
+    ['fg', __('Yazı'), __('Ana yazı rengi')],
+    ['muted', __('Soluk yazı'), __('Açıklamalar, ikincil bilgiler')],
+    ['accent', __('Vurgu'), __('Seçili öğeler, düğmeler, bağlantılar')],
+    ['warn', __('Uyarı'), __('Karar bekleyen, dikkat')],
+    ['ok', __('Başarılı'), __('Biten işler, ekleme')],
+    ['danger', __('Tehlike'), __('Hata, silme')],
+    ['termBg', __('Terminal zemini'), __('Terminal ve konsol arka planı')],
+    ['termFg', __('Terminal yazısı'), __('“Temaya uyumlu” terminal renklerinde yazı rengi')],
   ];
   const BASE = { // starting point of a new theme: the default dark one
     dark: true,
@@ -45,7 +45,7 @@
     for (const [k] of FIELDS) { const v = norm(t.colors && t.colors[k]); if (v) c[k] = v; }
     const dark = typeof t.dark === 'boolean' ? t.dark : lum(c.bg) < 0.3;
     const im = t.image && t.image.url ? { url: String(t.image.url), file: String(t.image.file || ''), show: Math.max(5, Math.min(90, +t.image.show || 35)), blur: Math.max(0, Math.min(30, +t.image.blur || 0)) } : null;
-    return { id: String(t.id || ''), name: String(t.name || 'Tema').slice(0, 40), dark, colors: c, image: im, by: t.by ? String(t.by).slice(0, 20) : undefined };
+    return { id: String(t.id || ''), name: String(t.name || __('Tema')).slice(0, 40), dark, colors: c, image: im, by: t.by ? String(t.by).slice(0, 20) : undefined };
   }
 
   // every CSS variable the app uses, from the ten base colours
@@ -95,32 +95,33 @@
   function openEditor(id, preset) {
     if (ed) closeEditor(false);
     const orig = id ? byId(id) : null;
-    const th = clean(preset || orig || Object.assign({ name: 'Yeni tema' }, JSON.parse(JSON.stringify(BASE))));
+    const th = clean(preset || orig || Object.assign({ name: __('Yeni tema') }, JSON.parse(JSON.stringify(BASE))));
     if (orig) th.id = orig.id;
     const el = document.createElement('div');
     el.className = 'ui-dlg-bg in theme-ed-bg';
-    el.innerHTML = `<div class="ui-dlg theme-ed" role="dialog" aria-modal="true" aria-label="Tema düzenleyici">
-      <div class="ui-dlg-h"><i class="fa-solid fa-palette"></i><b>${orig ? 'Temayı düzenle' : 'Yeni tema'}</b></div>
+    const attr = s => String(s).replace(/&/g, '&amp;').replace(/"/g, '&quot;');
+    el.innerHTML = `<div class="ui-dlg theme-ed" role="dialog" aria-modal="true" aria-label="${attr(__('Tema düzenleyici'))}">
+      <div class="ui-dlg-h"><i class="fa-solid fa-palette"></i><b>${orig ? __('Temayı düzenle') : __('Yeni tema')}</b></div>
       <div class="te-body">
-        <label class="te-name"><span>Ad</span><input type="text" data-te="name" maxlength="40" spellcheck="false"></label>
-        <div class="seg te-mode"><button data-te-dark="1">Koyu</button><button data-te-dark="0">Açık</button></div>
-        <div class="te-grid">${FIELDS.map(([k, l, h]) => `<label class="te-c" title="${h}"><input type="color" data-tc="${k}"><span><b>${l}</b><small data-tx="${k}"></small></span></label>`).join('')}</div>
-        <h4>Arka plan resmi</h4>
+        <label class="te-name"><span>${__('Ad')}</span><input type="text" data-te="name" maxlength="40" spellcheck="false"></label>
+        <div class="seg te-mode"><button data-te-dark="1">${__('Koyu')}</button><button data-te-dark="0">${__('Açık')}</button></div>
+        <div class="te-grid">${FIELDS.map(([k, l, h]) => `<label class="te-c" title="${attr(h)}"><input type="color" data-tc="${k}"><span><b>${l}</b><small data-tx="${k}"></small></span></label>`).join('')}</div>
+        <h4>${__('Arka plan resmi')}</h4>
         <div class="te-img">
           <div class="te-thumb" data-te="thumb"></div>
           <div class="te-img-r">
-            <div class="te-img-b"><button class="btn" data-te="pick"><i class="fa-regular fa-image"></i> Resim seç…</button><button class="btn" data-te="noimg"><i class="fa-solid fa-xmark"></i> Kaldır</button></div>
-            <label class="te-sl"><span>Görünürlük</span><input type="range" min="5" max="90" data-te="show"><b data-te="showv"></b></label>
-            <label class="te-sl"><span>Bulanıklık</span><input type="range" min="0" max="30" data-te="blur"><b data-te="blurv"></b></label>
+            <div class="te-img-b"><button class="btn" data-te="pick"><i class="fa-regular fa-image"></i> ${__('Resim seç…')}</button><button class="btn" data-te="noimg"><i class="fa-solid fa-xmark"></i> ${__('Kaldır')}</button></div>
+            <label class="te-sl"><span>${__('Görünürlük')}</span><input type="range" min="5" max="90" data-te="show"><b data-te="showv"></b></label>
+            <label class="te-sl"><span>${__('Bulanıklık')}</span><input type="range" min="0" max="30" data-te="blur"><b data-te="blurv"></b></label>
           </div>
         </div>
-        <p class="set-note">Değişiklikler hemen önizlenir. Vazgeçersen önceki tema geri gelir.</p>
+        <p class="set-note">${__('Değişiklikler hemen önizlenir. Vazgeçersen önceki tema geri gelir.')}</p>
       </div>
       <div class="ui-dlg-f">
-        ${orig ? '<button class="btn te-del" data-te="del"><i class="fa-solid fa-trash-can"></i> Sil</button>' : ''}
-        <button class="btn" data-te="claude"><i class="fa-solid fa-robot"></i> Claude ile tasarla</button>
+        ${orig ? `<button class="btn te-del" data-te="del"><i class="fa-solid fa-trash-can"></i> ${__('Sil')}</button>` : ''}
+        <button class="btn" data-te="claude"><i class="fa-solid fa-robot"></i> ${__('Claude ile tasarla')}</button>
         <span style="flex:1"></span>
-        <button class="btn" data-te="cancel">Vazgeç</button><button class="btn primary" data-te="save">Kaydet ve uygula</button>
+        <button class="btn" data-te="cancel">${__('Vazgeç')}</button><button class="btn primary" data-te="save">${__('Kaydet ve uygula')}</button>
       </div></div>`;
     document.body.appendChild(el);
     ed = { th, orig, el, skinBefore: CFG.settings.skin };
@@ -167,14 +168,14 @@
     if (a === 'pick') {
       const r = await api.invoke('theme:pickImage');
       if (!r) return;
-      if (r.error) { uiAlert({ title: 'Resim eklenemedi', message: r.error }); return; }
+      if (r.error) { uiAlert({ title: __('Resim eklenemedi'), message: r.error }); return; }
       th.image = { url: r.url, file: r.file, show: th.image ? th.image.show : 35, blur: th.image ? th.image.blur : 0 };
       fill(); preview();
     } else if (a === 'noimg') { th.image = null; fill(); preview(); }
     else if (a === 'cancel') closeEditor(false);
     else if (a === 'save') { await save(th); closeEditor(true); }
     else if (a === 'del') {
-      if (!(await uiConfirm({ title: 'Tema silinsin mi?', message: `“${th.name}” silinecek.`, ok: 'Sil', danger: true }))) return;
+      if (!(await uiConfirm({ title: __('Tema silinsin mi?'), message: __('“{name}” silinecek.', { name: th.name }), ok: __('Sil'), danger: true }))) return;
       const cur = byId(th.id);
       if (cur && cur.image && cur.image.file) api.invoke('theme:removeImage', cur.image.file).catch(() => {});
       const back = CFG.settings.skin === 'custom:' + th.id ? 'mono' : CFG.settings.skin;
@@ -210,14 +211,14 @@
 
   /* ---------------- Claude designs it ---------------- */
   async function designWithClaude() {
-    const desc = await uiPrompt({ title: 'Claude ile tema tasarla', icon: 'fa-palette', message: 'Nasıl bir tema istiyorsun?', placeholder: 'Ör: gün batımı, sıcak turuncu vurgulu koyu tema; ya da “şu resme göre”', maxLength: 600, ok: 'Claude’a gönder' });
+    const desc = await uiPrompt({ title: __('Claude ile tema tasarla'), icon: 'fa-palette', message: __('Nasıl bir tema istiyorsun?'), placeholder: __('Ör: gün batımı, sıcak turuncu vurgulu koyu tema; ya da “şu resme göre”'), maxLength: 600, ok: __('Claude’a gönder') });
     if (!desc || !desc.trim()) return;
     const pid = (typeof projectHere === 'function' && projectHere()) || (S.projects[0] && S.projects[0].id);
-    if (!pid) { uiAlert({ title: 'Proje yok', message: 'Claude oturumu bir projede açılır. Önce bir proje ekle.' }); return; }
+    if (!pid) { uiAlert({ title: __('Proje yok'), message: __('Claude oturumu bir projede açılır. Önce bir proje ekle.') }); return; }
     if (S.mode !== 'claude') setMode('claude');
-    const t = await openTerminal({ kind: 'claude', projectId: pid, title: 'Tema tasarımı' });
+    const t = await openTerminal({ kind: 'claude', projectId: pid, title: __('Tema tasarımı') });
     if (!t) return;
-    t.pendingPrompt = `VoxStorm için yeni bir arayüz teması tasarla: ${desc.trim()}\n\nÖnce VoxStorm'un get_theme aracıyla şu anki temaya ve renk alanlarına bak. Sonra save_theme ile kaydet: ad, koyu/açık ve on rengin hepsi (#rrggbb). Yazı ile zemin arasında okunur bir kontrast olsun (WCAG AA). Bir resim kullanmak istersem image_path ile yerel bir resim yolu ver. Kaydedince tema hemen uygulanır; bana kısaca hangi renkleri neden seçtiğini anlat.`;
+    t.pendingPrompt = __('VoxStorm için yeni bir arayüz teması tasarla: {desc}\n\nÖnce VoxStorm\'un get_theme aracıyla şu anki temaya ve renk alanlarına bak. Sonra save_theme ile kaydet: ad, koyu/açık ve on rengin hepsi (#rrggbb). Yazı ile zemin arasında okunur bir kontrast olsun (WCAG AA). Bir resim kullanmak istersem image_path ile yerel bir resim yolu ver. Kaydedince tema hemen uygulanır; bana kısaca hangi renkleri neden seçtiğini anlat.', { desc: desc.trim() });
     setTimeout(() => sendPendingPrompt(t), 12000);
   }
 

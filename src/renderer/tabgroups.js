@@ -11,9 +11,9 @@ S.groups = [];
 S.tsel = new Set(); // tabs picked with Ctrl+click
 
 const TG_COLORS = [
-  ['grey', '#8a8f98', 'Gri'], ['blue', '#4c8bf5', 'Mavi'], ['red', '#e5534b', 'Kırmızı'],
-  ['yellow', '#d4a017', 'Sarı'], ['green', '#3fa45b', 'Yeşil'], ['pink', '#e0559a', 'Pembe'],
-  ['purple', '#9a6cf0', 'Mor'], ['cyan', '#1fa5b5', 'Camgöbeği'], ['orange', '#e8823a', 'Turuncu'],
+  ['grey', '#8a8f98', __('Gri')], ['blue', '#4c8bf5', __('Mavi')], ['red', '#e5534b', __('Kırmızı')],
+  ['yellow', '#d4a017', __('Sarı')], ['green', '#3fa45b', __('Yeşil')], ['pink', '#e0559a', __('Pembe')],
+  ['purple', '#9a6cf0', __('Mor')], ['cyan', '#1fa5b5', __('Camgöbeği')], ['orange', '#e8823a', __('Turuncu')],
 ];
 const tgColor = c => (TG_COLORS.find(x => x[0] === c) || TG_COLORS[0])[1];
 const groupById = id => id && S.groups.find(g => g.id === id);
@@ -43,14 +43,14 @@ function nextColor() {
   return (TG_COLORS.find(c => !used.has(c[0])) || TG_COLORS[S.groups.length % TG_COLORS.length])[0];
 }
 function makeGroup(name, color) {
-  const g = { id: 'g' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6), name: name || `Grup ${S.groups.length + 1}`, color: color || nextColor(), collapsed: false };
+  const g = { id: 'g' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6), name: name || __('Grup {n}', { n: S.groups.length + 1 }), color: color || nextColor(), collapsed: false };
   S.groups.push(g);
   return g;
 }
 // restoreTabs (app.js): bring a saved group definition back, return its id
 function restoreGroup(def) {
   if (!def || !def.id) return null;
-  if (!groupById(def.id)) S.groups.push({ id: def.id, name: def.name || 'Grup', color: def.color || 'grey', collapsed: false });
+  if (!groupById(def.id)) S.groups.push({ id: def.id, name: def.name || __('Grup'), color: def.color || 'grey', collapsed: false });
   return def.id;
 }
 function addToGroup(ids, gid) {
@@ -69,8 +69,8 @@ async function newGroupFrom(ids) {
   ids = ids.filter(id => tabById(id));
   if (!ids.length) return;
   const name = await uiPrompt({
-    title: 'Yeni sekme grubu', icon: 'fa-layer-group', input: `Grup ${S.groups.length + 1}`, ok: 'Oluştur', maxLength: 40,
-    detail: ids.length > 1 ? `${ids.length} sekme bu gruba alınacak.` : 'Başka sekmeleri sürükleyerek ya da sağ tıklayıp gruba ekleyebilirsin.',
+    title: __('Yeni sekme grubu'), icon: 'fa-layer-group', input: __('Grup {n}', { n: S.groups.length + 1 }), ok: __('Oluştur'), maxLength: 40,
+    detail: ids.length > 1 ? __('{n} sekme bu gruba alınacak.', { n: ids.length }) : __('Başka sekmeleri sürükleyerek ya da sağ tıklayıp gruba ekleyebilirsin.'),
   });
   const v = name == null ? '' : name.replace(/\s+/g, ' ').trim();
   if (!v) return;
@@ -112,7 +112,7 @@ function toggleGroup(gid) {
       const i = S.tabs.indexOf(act);
       const out = S.tabs.filter(t => t.group !== g.id);
       const next = out.find(t => S.tabs.indexOf(t) > i) || out[out.length - 1];
-      if (!next) { toast('Grup daraltılamadı', 'Gruptan başka açık sekme yok.'); return; }
+      if (!next) { toast(__('Grup daraltılamadı'), __('Gruptan başka açık sekme yok.')); return; }
       g.collapsed = true;
       activate(next.id);
       saveOpenTabs();
@@ -125,7 +125,7 @@ function toggleGroup(gid) {
 }
 async function renameGroup(gid) {
   const g = groupById(gid); if (!g) return;
-  const name = await uiPrompt({ title: 'Grubu yeniden adlandır', icon: 'fa-i-cursor', input: g.name, ok: 'Kaydet', maxLength: 40 });
+  const name = await uiPrompt({ title: __('Grubu yeniden adlandır'), icon: 'fa-i-cursor', input: g.name, ok: __('Kaydet'), maxLength: 40 });
   const v = name == null ? '' : name.replace(/\s+/g, ' ').trim();
   if (!v || v === g.name) return;
   g.name = v;
@@ -148,13 +148,13 @@ function chipHTML(g, members) {
   const s = tgSummary(members);
   const at = g.collapsed ? (members.some(t => t.attn === 'ask') ? 'ask' : members.some(t => t.attn) ? 'done' : null) : null;
   const projects = [...new Set(members.map(t => (proj(t.projectId) || {}).name).filter(Boolean))];
-  const tip = `${g.name}\n${s.total} sekme${projects.length ? ' · ' + projects.join(', ') : ''}`
-    + `${s.running ? `\n${s.running} çalışıyor` : ''}${s.waiting ? `\n${s.waiting} karar bekliyor` : ''}`
-    + `\nTıkla: ${g.collapsed ? 'genişlet' : 'daralt'} · Sağ tık: seçenekler`;
+  const tip = `${g.name}\n${__('{n} sekme', { n: s.total })}${projects.length ? ' · ' + projects.join(', ') : ''}`
+    + `${s.running ? '\n' + __('{n} çalışıyor', { n: s.running }) : ''}${s.waiting ? '\n' + __('{n} karar bekliyor', { n: s.waiting }) : ''}`
+    + '\n' + (g.collapsed ? __('Tıkla: genişlet · Sağ tık: seçenekler') : __('Tıkla: daralt · Sağ tık: seçenekler'));
   return `<button class="tg-chip${attnCls(at)}" data-tgroup="${g.id}" title="${esc(tip)}" aria-expanded="${!g.collapsed}">`
     + `<span class="tg-name">${esc(g.name)}</span>`
-    + (s.waiting ? `<span class="tg-b wait" aria-label="${s.waiting} karar bekliyor"><i class="fa-solid fa-hand"></i>${s.waiting}</span>` : '')
-    + (s.running ? `<span class="tg-b run" aria-label="${s.running} çalışıyor"><span class="dot running"></span>${s.running}</span>` : '')
+    + (s.waiting ? `<span class="tg-b wait" aria-label="${esc(__('{n} karar bekliyor', { n: s.waiting }))}"><i class="fa-solid fa-hand"></i>${s.waiting}</span>` : '')
+    + (s.running ? `<span class="tg-b run" aria-label="${esc(__('{n} çalışıyor', { n: s.running }))}"><span class="dot running"></span>${s.running}</span>` : '')
     + (g.collapsed ? `<span class="tg-b n">${s.total}</span>` : '')
     + '</button>';
 }
@@ -205,15 +205,15 @@ function openTabMenu(e, id) {
   const tabs = ids.map(tabById);
   const multi = ids.length > 1;
   const others = S.groups.filter(g => !tabs.every(t => t.group === g.id));
-  let html = multi ? `<div class="lbl">${ids.length} sekme seçili</div>` : '';
-  html += tgIt('newgroup', 'fa-solid fa-layer-group', multi ? 'Seçilenlerle yeni grup' : 'Yeni gruba ekle', '', 'accent');
-  if (others.length) html += tgSub('fa-solid fa-folder-plus', 'Gruba ekle', others.map(g => `<button data-tgm="addto" data-g="${g.id}" role="menuitem"><span class="mi"><span class="tg-sw" style="--g:${tgColor(g.color)}"></span>${esc(g.name)}</span><code>${groupTabs(g.id).length}</code></button>`).join(''));
-  if (tabs.some(t => t.group)) html += tgIt('ungroup', 'fa-solid fa-arrow-right-from-bracket', 'Gruptan çıkar');
+  let html = multi ? `<div class="lbl">${__('{n} sekme seçili', { n: ids.length })}</div>` : '';
+  html += tgIt('newgroup', 'fa-solid fa-layer-group', multi ? __('Seçilenlerle yeni grup') : __('Yeni gruba ekle'), '', 'accent');
+  if (others.length) html += tgSub('fa-solid fa-folder-plus', __('Gruba ekle'), others.map(g => `<button data-tgm="addto" data-g="${g.id}" role="menuitem"><span class="mi"><span class="tg-sw" style="--g:${tgColor(g.color)}"></span>${esc(g.name)}</span><code>${groupTabs(g.id).length}</code></button>`).join(''));
+  if (tabs.some(t => t.group)) html += tgIt('ungroup', 'fa-solid fa-arrow-right-from-bracket', __('Gruptan çıkar'));
   html += tgSep;
-  if (!multi && tabs[0].kind !== 'agent') html += tgIt('rename', 'fa-solid fa-i-cursor', 'Yeniden adlandır');
-  html += tgIt('close', 'fa-solid fa-xmark', multi ? 'Seçilenleri kapat' : 'Kapat', '', 'danger');
+  if (!multi && tabs[0].kind !== 'agent') html += tgIt('rename', 'fa-solid fa-i-cursor', __('Yeniden adlandır'));
+  html += tgIt('close', 'fa-solid fa-xmark', multi ? __('Seçilenleri kapat') : __('Kapat'), '', 'danger');
   if (!multi) html += plugMenuHtml('session', sessCtx(tabs[0]));
-  if (!multi) html += `<div class="lbl tg-hint">Ctrl+tık ile birden fazla sekme seç</div>`;
+  if (!multi) html += `<div class="lbl tg-hint">${__('Ctrl+tık ile birden fazla sekme seç')}</div>`;
   tgMenuAt(e, html);
 }
 // items plugins added to the session menu (plugins.js)
@@ -223,9 +223,9 @@ const sessCtx = t => ({ kind: t.kind === 'claude' ? 'claude' : t.kind, tabId: t.
 function openSessMenu(e, el) {
   const d = el.dataset;
   TGM.ctx = { kind: 'sess', data: { watch: d.watch, resume: d.resume, pid: d.pid } };
-  let html = d.watch ? tgIt('swatch', 'fa-solid fa-eye', 'İzle') + tgIt('stake', 'fa-solid fa-right-to-bracket', "VoxStorm'a taşı")
-    : tgIt('sresume', 'fa-solid fa-play', 'Kaldığı yerden devam et', '', 'accent');
-  html += tgSep + tgIt('rename', 'fa-solid fa-i-cursor', 'Yeniden adlandır');
+  let html = d.watch ? tgIt('swatch', 'fa-solid fa-eye', __('İzle')) + tgIt('stake', 'fa-solid fa-right-to-bracket', __("VoxStorm'a taşı"))
+    : tgIt('sresume', 'fa-solid fa-play', __('Kaldığı yerden devam et'), '', 'accent');
+  html += tgSep + tgIt('rename', 'fa-solid fa-i-cursor', __('Yeniden adlandır'));
   const ext = d.watch ? S.live.find(x => x.sessionId === d.watch) : null;
   const h = d.resume ? (S.history[d.pid] || []).find(x => x.id === d.resume) : null;
   html += plugMenuHtml('session', { kind: d.watch ? 'watch' : 'history', tabId: null, sessionId: d.watch || d.resume, projectId: d.pid || (ext && (projOfCwd(ext.cwd) || {}).id) || null, title: (ext || h || {}).title || '' });
@@ -236,14 +236,14 @@ function openGroupMenu(e, gid) {
   TGM.ctx = { kind: 'group', gid };
   const mine = [...new Set(groupTabs(gid).map(t => t.projectId))];
   const ps = [...S.projects].sort((a, b) => (mine.includes(b.id) ? 1 : 0) - (mine.includes(a.id) ? 1 : 0));
-  const projItems = ps.length ? ps.map(p => `<button data-tgm="newin" data-p="${p.id}" role="menuitem" title="${esc(p.path)}"><span class="mi"><i class="mic fa-regular fa-folder"></i>${esc(p.name)}</span>${mine.includes(p.id) ? '<code>grupta</code>' : ''}</button>`).join('') : '<div class="lbl">Proje yok</div>';
+  const projItems = ps.length ? ps.map(p => `<button data-tgm="newin" data-p="${p.id}" role="menuitem" title="${esc(p.path)}"><span class="mi"><i class="mic fa-regular fa-folder"></i>${esc(p.name)}</span>${mine.includes(p.id) ? `<code>${__('grupta')}</code>` : ''}</button>`).join('') : `<div class="lbl">${__('Proje yok')}</div>`;
   const html = `<div class="lbl">${esc(g.name)}</div>`
-    + tgSub('fa-solid fa-plus', 'Bu grupta yeni Claude oturumu', projItems)
-    + tgIt('grename', 'fa-solid fa-i-cursor', 'Yeniden adlandır')
-    + tgIt('gtoggle', g.collapsed ? 'fa-solid fa-angles-right' : 'fa-solid fa-angles-left', g.collapsed ? 'Genişlet' : 'Daralt')
-    + `<div class="tg-colors" role="group" aria-label="Grup rengi">${TG_COLORS.map(([k, c, l]) => `<button data-tgm="gcolor" data-c="${k}" class="tg-sw${g.color === k ? ' on' : ''}" style="--g:${c}" title="${l}" aria-label="${l}" aria-pressed="${g.color === k}"></button>`).join('')}</div>`
-    + tgSep + tgIt('gungroup', 'fa-solid fa-object-ungroup', 'Grubu çöz')
-    + tgIt('gclose', 'fa-solid fa-square-xmark', 'Gruptaki tümünü kapat', '', 'danger');
+    + tgSub('fa-solid fa-plus', __('Bu grupta yeni Claude oturumu'), projItems)
+    + tgIt('grename', 'fa-solid fa-i-cursor', __('Yeniden adlandır'))
+    + tgIt('gtoggle', g.collapsed ? 'fa-solid fa-angles-right' : 'fa-solid fa-angles-left', g.collapsed ? __('Genişlet') : __('Daralt'))
+    + `<div class="tg-colors" role="group" aria-label="${esc(__('Grup rengi'))}">${TG_COLORS.map(([k, c, l]) => `<button data-tgm="gcolor" data-c="${k}" class="tg-sw${g.color === k ? ' on' : ''}" style="--g:${c}" title="${esc(l)}" aria-label="${esc(l)}" aria-pressed="${g.color === k}"></button>`).join('')}</div>`
+    + tgSep + tgIt('gungroup', 'fa-solid fa-object-ungroup', __('Grubu çöz'))
+    + tgIt('gclose', 'fa-solid fa-square-xmark', __('Gruptaki tümünü kapat'), '', 'danger');
   tgMenuAt(e, html);
 }
 function tgMenuAction(b) {
@@ -265,7 +265,7 @@ function tgMenuAction(b) {
     else if (act === 'stake') takeOverSession(d.watch);
     else if (act === 'sresume') {
       const h = (S.history[d.pid] || []).find(x => x.id === d.resume);
-      openTerminal({ kind: 'claude', projectId: d.pid, resume: d.resume, title: h ? shorten(h.title, 48) : 'Oturum' });
+      openTerminal({ kind: 'claude', projectId: d.pid, resume: d.resume, title: h ? shorten(h.title, 48) : __('Oturum') });
     }
   } else if (ctx.kind === 'tab') {
     if (act === 'newgroup') newGroupFrom(ctx.ids);
@@ -368,7 +368,7 @@ function moveTabs(ids, targetId, after) {
   bar.addEventListener('dragend', () => { DRAG.ids = null; clearDropMarks(); $$('#tabs .dragging').forEach(x => x.classList.remove('dragging')); });
 
   SHORTCUTS.push({
-    group: 'Terminaller', keys: 'Ctrl+Shift+L', label: 'Seçili sekmeleri (ya da açık olanı) yeni gruba al (AI modu)',
+    group: __('Terminaller'), keys: 'Ctrl+Shift+L', label: __('Seçili sekmeleri (ya da açık olanı) yeni gruba al (AI modu)'),
     when: () => S.mode === 'claude', // in IDE Ctrl+Shift+L selects all matches
     run: () => {
       if (S.mode !== 'claude') return;

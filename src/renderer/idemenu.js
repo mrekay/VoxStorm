@@ -8,7 +8,7 @@ const FB = { rep: false, case: false, word: false, regex: false, overlay: null, 
 /* ---------- editor helpers ---------- */
 function edFile() { const fp = IDE.project && ist().file, f = fp && IDE.files[fp]; return f && f.doc ? fp : null; }
 function edRun(fn) {
-  if (!edFile()) { toast('Önce bir metin dosyası aç'); return; }
+  if (!edFile()) { toast(__('Önce bir metin dosyası aç')); return; }
   const cm = IDE.cm;
   if (IDE.mdView.has(edFile())) { IDE.mdView.delete(edFile()); showFile(); }
   fn(cm); cm.focus();
@@ -39,7 +39,7 @@ function edTrim() {
   edRun(cm => {
     let n = 0;
     edMapLines(cm, t => { const r = t.replace(/[ \t]+$/, ''); if (r !== t) n++; return r; });
-    toast('Sondaki boşluklar', n ? `${n} satır temizlendi` : 'Temizlenecek boşluk yok');
+    toast(__('Sondaki boşluklar'), n ? __('{n} satır temizlendi', { n }) : __('Temizlenecek boşluk yok'));
   });
 }
 function edIndent(toTabs) {
@@ -58,13 +58,13 @@ function edDedupe() {
     for (let i = from; i <= to; i++) { const t = cm.getLine(i); if (!seen.has(t)) { seen.add(t); out.push(t); } }
     const n = to - from + 1 - out.length;
     if (n) cm.replaceRange(out.join('\n'), CodeMirror.Pos(from, 0), CodeMirror.Pos(to, cm.getLine(to).length));
-    toast('Yinelenen satırlar', n ? `${n} satır kaldırıldı` : 'Yinelenen satır yok');
+    toast(__('Yinelenen satırlar'), n ? __('{n} satır kaldırıldı', { n }) : __('Yinelenen satır yok'));
   });
 }
 function edJson(compact) {
   edRun(cm => {
     const sel = cm.somethingSelected(), src = sel ? cm.getSelection() : cm.getValue();
-    let obj; try { obj = JSON.parse(src); } catch (e) { toast('JSON biçimlendirilemedi', e.message); return; }
+    let obj; try { obj = JSON.parse(src); } catch (e) { toast(__('JSON biçimlendirilemedi'), e.message); return; }
     const out = compact ? JSON.stringify(obj) : JSON.stringify(obj, null, cm.getOption('indentUnit') || 2);
     if (out === src) return;
     if (sel) cm.replaceSelection(out, 'around');
@@ -97,7 +97,7 @@ async function edClip(kind) {
       await navigator.clipboard.writeText(cm.getSelections().join('\n'));
       if (kind === 'cut') cm.replaceSelection('');
     }
-  } catch (e) { toast('Pano kullanılamadı', cleanErr(e)); }
+  } catch (e) { toast(__('Pano kullanılamadı'), cleanErr(e)); }
   cm.focus();
 }
 /* editor-only keys (the editor must have focus); listed in SHORTCUTS for the Kısayollar page */
@@ -126,15 +126,15 @@ function imNoteClosed(list) {
 function imReopenClosed() {
   const st = IM.closed[IDE.project] || [], open = ist().tabs;
   while (st.length) { const fp = st.pop(); if (!open.includes(fp)) { openFile(fp); return; } }
-  toast('Yeniden açılacak dosya yok');
+  toast(__('Yeniden açılacak dosya yok'));
 }
 
 /* ---------- file commands ---------- */
 async function imSaveAs() {
   const fp = edFile(), r = projRoot();
-  if (!fp || !r) { toast('Önce bir metin dosyası aç'); return; }
+  if (!fp || !r) { toast(__('Önce bir metin dosyası aç')); return; }
   const name = await askName({
-    title: 'Farklı kaydet', hint: 'Proje köküne göre yol · alt klasör için / kullanabilirsin',
+    title: __('Farklı kaydet'), hint: __('Proje köküne göre yol · alt klasör için / kullanabilirsin'),
     value: relOf(fp).replace(/\\/g, '/'), select: [Math.max(relOf(fp).lastIndexOf('\\'), relOf(fp).lastIndexOf('/')) + 1, relOf(fp).length - (extOf(fp) ? extOf(fp).length + 1 : 0)],
     validate: v => nameError(v, true),
   });
@@ -142,13 +142,13 @@ async function imSaveAs() {
   const to = joinP(r, name.replace(/[\\/]+/g, SEP).replace(/^[\\/]+|[\\/]+$/g, '')); // SEP: \ on Windows, / on macOS
   if (normPath(to) === normPath(fp)) { saveFile(fp); return; }
   let st = { exists: false }; try { st = await api.invoke('fs:stat', to); } catch (_) {}
-  if (st.exists && st.dir) { toast('Kaydedilemedi', 'Bu adda bir klasör var.'); return; }
-  if (st.exists && !(await uiConfirm({ title: 'Dosya zaten var', message: `${relOf(to)} dosyasının üzerine yazılsın mı?`, ok: 'Üzerine yaz', danger: true }))) return;
+  if (st.exists && st.dir) { toast(__('Kaydedilemedi'), __('Bu adda bir klasör var.')); return; }
+  if (st.exists && !(await uiConfirm({ title: __('Dosya zaten var'), message: __('{name} dosyasının üzerine yazılsın mı?', { name: relOf(to) }), ok: __('Üzerine yaz'), danger: true }))) return;
   const f = IDE.files[fp];
   let text = f.doc.getValue();
   if (f.eol === '\r\n') text = text.replace(/\n/g, '\r\n');
   if (f.bom) text = '\uFEFF' + text;
-  try { await api.invoke('fs:create', to); await api.invoke('fs:write', to, text); } catch (e) { toast('Kaydedilemedi', cleanErr(e)); return; }
+  try { await api.invoke('fs:create', to); await api.invoke('fs:write', to, text); } catch (e) { toast(__('Kaydedilemedi'), cleanErr(e)); return; }
   // the tab now shows the new file; the old file stays as it is on disk
   const s = ist();
   const old = Object.keys(IDE.files).find(k => normPath(k) === normPath(to));
@@ -160,17 +160,17 @@ async function imSaveAs() {
   imNoteOpened(s, to, true);
   IDE.dirCache = {}; delete IDE.index[IDE.project];
   saveIdeState(); showFile(); revealInTree(to);
-  toast('Kaydedildi', relOf(to));
+  toast(__('Kaydedildi'), relOf(to));
 }
 async function imRevert() {
   const fp = edFile(); if (!fp) return;
-  if (isDirty(fp) && !(await uiConfirm({ title: 'Diskteki sürüme dön', message: `${baseName(fp)} dosyasındaki kaydedilmemiş değişiklikler silinecek.`, ok: 'Diskten yükle', danger: true }))) return;
+  if (isDirty(fp) && !(await uiConfirm({ title: __('Diskteki sürüme dön'), message: __('{name} dosyasındaki kaydedilmemiş değişiklikler silinecek.', { name: baseName(fp) }), ok: __('Diskten yükle'), danger: true }))) return;
   await reloadFromDisk(fp, true);
 }
 function imSaveAll() { toolbar('saveall'); }
 // kind 'claude' with shell = an AI ('claude' | 'codex'); kind 'shell' with the shell's key
 function imTerminal(kind, shell) {
-  const p = IDE.project; if (!p) { toast('Önce bir proje ekle'); return; }
+  const p = IDE.project; if (!p) { toast(__('Önce bir proje ekle')); return; }
   if (!IDE.ui.panel) { IDE.ui.panel = true; saveIdeUi(); }
   openTerminal(kind === 'shell' ? { kind, shell, projectId: p } : { kind, agent: shell || 'claude', projectId: p });
 }
@@ -184,7 +184,7 @@ function imApplyUi() {
 }
 
 /* ---------- menus ---------- */
-const IM_MENUS = [['file', 'Dosya'], ['edit', 'Düzen'], ['sel', 'Seçim'], ['view', 'Görünüm'], ['term', 'Terminal'], ['help', 'Yardım']];
+const IM_MENUS = [['file', __('Dosya')], ['edit', __('Düzen')], ['sel', __('Seçim')], ['view', __('Görünüm')], ['term', __('Terminal')], ['help', __('Yardım')]];
 /* each item: [label, icon, key, run, { dis, chk }] — '-' is a separator, { lbl } a section title */
 function imItems(id) {
   const fp = IDE.project && ist().file, text = !!edFile(), cm = IDE.cm, s = IDE.project ? ist() : { tabs: [] };
@@ -195,118 +195,118 @@ function imItems(id) {
   if (id === 'file') {
     const recent = (s.recent || []).filter(x => x !== fp).slice(0, 6);
     return [
-      E('Yeni dosya', 'fa-solid fa-file-circle-plus', 'Ctrl+N', () => newEntry(projRoot(), false), { dis: !hasProj }),
-      E('Yeni klasör', 'fa-solid fa-folder-plus', '', () => newEntry(projRoot(), true), { dis: !hasProj }),
+      E(__('Yeni dosya'), 'fa-solid fa-file-circle-plus', 'Ctrl+N', () => newEntry(projRoot(), false), { dis: !hasProj }),
+      E(__('Yeni klasör'), 'fa-solid fa-folder-plus', '', () => newEntry(projRoot(), true), { dis: !hasProj }),
       '-',
-      E('Dosyaya git…', 'fa-solid fa-bolt', 'Ctrl+P', () => openPalette(''), { dis: !hasProj }),
-      E('Son kapatılanı yeniden aç', 'fa-solid fa-clock-rotate-left', '', imReopenClosed, { dis: !(IM.closed[IDE.project] || []).some(x => !s.tabs.includes(x)) }),
-      ...(recent.length ? [{ lbl: 'Son açılanlar' }, ...recent.map(r => E(baseName(r), null, dirOf(relOf(r)), () => openFile(r).then(() => revealInTree(r)), { file: r }))] : []),
+      E(__('Dosyaya git…'), 'fa-solid fa-bolt', 'Ctrl+P', () => openPalette(''), { dis: !hasProj }),
+      E(__('Son kapatılanı yeniden aç'), 'fa-solid fa-clock-rotate-left', '', imReopenClosed, { dis: !(IM.closed[IDE.project] || []).some(x => !s.tabs.includes(x)) }),
+      ...(recent.length ? [{ lbl: __('Son açılanlar') }, ...recent.map(r => E(baseName(r), null, dirOf(relOf(r)), () => openFile(r).then(() => revealInTree(r)), { file: r }))] : []),
       '-',
-      E('Kaydet', 'fa-solid fa-floppy-disk', 'Ctrl+S', () => saveFile(), { dis: !(fp && isDirty(fp)) }),
-      E('Farklı kaydet…', 'fa-regular fa-floppy-disk', 'Ctrl+Shift+S', imSaveAs, notText),
-      E('Tümünü kaydet', 'fa-solid fa-copy', '', imSaveAll, { dis: !s.tabs.some(isDirty) }),
-      E('Diskteki sürüme dön', 'fa-solid fa-rotate', '', imRevert, notText),
+      E(__('Kaydet'), 'fa-solid fa-floppy-disk', 'Ctrl+S', () => saveFile(), { dis: !(fp && isDirty(fp)) }),
+      E(__('Farklı kaydet…'), 'fa-regular fa-floppy-disk', 'Ctrl+Shift+S', imSaveAs, notText),
+      E(__('Tümünü kaydet'), 'fa-solid fa-copy', '', imSaveAll, { dis: !s.tabs.some(isDirty) }),
+      E(__('Diskteki sürüme dön'), 'fa-solid fa-rotate', '', imRevert, notText),
       '-',
-      E('Yolu kopyala', 'fa-regular fa-copy', '', () => copyText(fp, 'Yol kopyalandı'), { dis: !fp }),
-      E('Göreli yolu kopyala', 'fa-solid fa-link', '', () => copyText(relOf(fp), 'Göreli yol kopyalandı'), { dis: !fp }),
-      E('Dosya ağacında göster', 'fa-solid fa-folder-tree', '', () => { if (!IDE.ui.ex) toolbar('ex'); revealInTree(fp); }, { dis: !fp }),
-      E('Dosya Gezgini’nde göster', 'fa-regular fa-folder-open', '', () => api.invoke('fs:reveal', fp).catch(e => toast('Açılamadı', cleanErr(e))), { dis: !fp }),
+      E(__('Yolu kopyala'), 'fa-regular fa-copy', '', () => copyText(fp, __('Yol kopyalandı')), { dis: !fp }),
+      E(__('Göreli yolu kopyala'), 'fa-solid fa-link', '', () => copyText(relOf(fp), __('Göreli yol kopyalandı')), { dis: !fp }),
+      E(__('Dosya ağacında göster'), 'fa-solid fa-folder-tree', '', () => { if (!IDE.ui.ex) toolbar('ex'); revealInTree(fp); }, { dis: !fp }),
+      E(__('Dosya Gezgini’nde göster'), 'fa-regular fa-folder-open', '', () => api.invoke('fs:reveal', fp).catch(e => toast(__('Açılamadı'), cleanErr(e))), { dis: !fp }),
       '-',
-      E('Dosyayı kapat', 'fa-solid fa-xmark', 'Ctrl+W', () => closeFile(fp), { dis: !fp }),
-      E('Kaydedilmişleri kapat', 'fa-solid fa-check-double', '', () => closeFiles(s.tabs.filter(k => !isDirty(k))), { dis: !s.tabs.some(k => !isDirty(k)) }),
-      E('Tümünü kapat', 'fa-solid fa-square-xmark', '', () => closeFiles([...s.tabs]), { dis: !s.tabs.length }),
+      E(__('Dosyayı kapat'), 'fa-solid fa-xmark', 'Ctrl+W', () => closeFile(fp), { dis: !fp }),
+      E(__('Kaydedilmişleri kapat'), 'fa-solid fa-check-double', '', () => closeFiles(s.tabs.filter(k => !isDirty(k))), { dis: !s.tabs.some(k => !isDirty(k)) }),
+      E(__('Tümünü kapat'), 'fa-solid fa-square-xmark', '', () => closeFiles([...s.tabs]), { dis: !s.tabs.length }),
     ];
   }
   if (id === 'edit') return [
-    E('Geri al', 'fa-solid fa-rotate-left', 'Ctrl+Z', edExec('undo'), { dis: !h.undo }),
-    E('Yinele', 'fa-solid fa-rotate-right', 'Ctrl+Y', edExec('redo'), { dis: !h.redo }),
+    E(__('Geri al'), 'fa-solid fa-rotate-left', 'Ctrl+Z', edExec('undo'), { dis: !h.undo }),
+    E(__('Yinele'), 'fa-solid fa-rotate-right', 'Ctrl+Y', edExec('redo'), { dis: !h.redo }),
     '-',
-    E('Kes', 'fa-solid fa-scissors', 'Ctrl+X', () => edClip('cut'), { dis: !sel }),
-    E('Kopyala', 'fa-regular fa-copy', 'Ctrl+C', () => edClip('copy'), { dis: !sel }),
-    E('Yapıştır', 'fa-regular fa-paste', 'Ctrl+V', () => edClip('paste'), notText),
+    E(__('Kes'), 'fa-solid fa-scissors', 'Ctrl+X', () => edClip('cut'), { dis: !sel }),
+    E(__('Kopyala'), 'fa-regular fa-copy', 'Ctrl+C', () => edClip('copy'), { dis: !sel }),
+    E(__('Yapıştır'), 'fa-regular fa-paste', 'Ctrl+V', () => edClip('paste'), notText),
     '-',
-    E('Bul', 'fa-solid fa-magnifying-glass', 'Ctrl+F', () => imFind(false), notText),
-    E('Değiştir', 'fa-solid fa-right-left', 'Ctrl+H', () => imFind(true), notText),
-    E('Sonrakini bul', 'fa-solid fa-arrow-down', 'F3', () => imFindStep(false), notText),
-    E('Öncekini bul', 'fa-solid fa-arrow-up', 'Shift+F3', () => imFindStep(true), notText),
-    E('Projede ara', 'fa-solid fa-magnifying-glass-arrow-right', 'Ctrl+Shift+F', () => openProjectSearch(), { dis: !hasProj }),
+    E(__('Bul'), 'fa-solid fa-magnifying-glass', 'Ctrl+F', () => imFind(false), notText),
+    E(__('Değiştir'), 'fa-solid fa-right-left', 'Ctrl+H', () => imFind(true), notText),
+    E(__('Sonrakini bul'), 'fa-solid fa-arrow-down', 'F3', () => imFindStep(false), notText),
+    E(__('Öncekini bul'), 'fa-solid fa-arrow-up', 'Shift+F3', () => imFindStep(true), notText),
+    E(__('Projede ara'), 'fa-solid fa-magnifying-glass-arrow-right', 'Ctrl+Shift+F', () => openProjectSearch(), { dis: !hasProj }),
     '-',
-    E('Satır yorumu', 'fa-solid fa-hashtag', 'Ctrl+/', edExec('toggleComment'), notText),
-    E('Blok yorumu', 'fa-regular fa-comment', 'Shift+Alt+A', edBlockComment, notText),
+    E(__('Satır yorumu'), 'fa-solid fa-hashtag', 'Ctrl+/', edExec('toggleComment'), notText),
+    E(__('Blok yorumu'), 'fa-regular fa-comment', 'Shift+Alt+A', edBlockComment, notText),
     '-',
-    { lbl: 'Dönüştür' },
-    E('BÜYÜK HARFE çevir', 'fa-solid fa-arrow-up-a-z', '', () => edCase(true), notText),
-    E('küçük harfe çevir', 'fa-solid fa-arrow-down-a-z', '', () => edCase(false), notText),
-    E('Satırları sırala (A→Z)', 'fa-solid fa-arrow-down-short-wide', '', edExec('sortLinesInsensitive'), notText),
-    E('Satırları ters sırala (Z→A)', 'fa-solid fa-arrow-up-wide-short', '', edExec('reverseSortLinesInsensitive'), notText),
-    E('Yinelenen satırları kaldır', 'fa-solid fa-filter', '', edDedupe, notText),
-    E('Sondaki boşlukları sil', 'fa-solid fa-eraser', '', edTrim, notText),
-    E('Girintiyi boşluğa çevir', 'fa-solid fa-indent', '', () => edIndent(false), notText),
-    E('Girintiyi sekmeye çevir', 'fa-solid fa-outdent', '', () => edIndent(true), notText),
-    E('JSON biçimlendir', 'fa-solid fa-code', 'Shift+Alt+F', () => edJson(false), notText),
-    E('JSON sıkıştır', 'fa-solid fa-compress', '', () => edJson(true), notText),
+    { lbl: __('Dönüştür') },
+    E(__('BÜYÜK HARFE çevir'), 'fa-solid fa-arrow-up-a-z', '', () => edCase(true), notText),
+    E(__('küçük harfe çevir'), 'fa-solid fa-arrow-down-a-z', '', () => edCase(false), notText),
+    E(__('Satırları sırala (A→Z)'), 'fa-solid fa-arrow-down-short-wide', '', edExec('sortLinesInsensitive'), notText),
+    E(__('Satırları ters sırala (Z→A)'), 'fa-solid fa-arrow-up-wide-short', '', edExec('reverseSortLinesInsensitive'), notText),
+    E(__('Yinelenen satırları kaldır'), 'fa-solid fa-filter', '', edDedupe, notText),
+    E(__('Sondaki boşlukları sil'), 'fa-solid fa-eraser', '', edTrim, notText),
+    E(__('Girintiyi boşluğa çevir'), 'fa-solid fa-indent', '', () => edIndent(false), notText),
+    E(__('Girintiyi sekmeye çevir'), 'fa-solid fa-outdent', '', () => edIndent(true), notText),
+    E(__('JSON biçimlendir'), 'fa-solid fa-code', 'Shift+Alt+F', () => edJson(false), notText),
+    E(__('JSON sıkıştır'), 'fa-solid fa-compress', '', () => edJson(true), notText),
   ];
   if (id === 'sel') return [
-    E('Tümünü seç', 'fa-solid fa-object-group', 'Ctrl+A', edExec('selectAll'), notText),
-    E('Satırı seç', 'fa-solid fa-grip-lines', 'Ctrl+L', edExec('selectLine'), notText),
-    E('Sonraki eşleşmeyi de seç', 'fa-solid fa-i-cursor', 'Ctrl+D', edExec('selectNextOccurrence'), notText),
-    E('Tüm eşleşmeleri seç', 'fa-solid fa-layer-group', 'Ctrl+Shift+L', edExec('findAllUnder'), notText),
-    E('Üste imleç ekle', 'fa-solid fa-arrow-up', 'Ctrl+Alt+↑', edExec('addCursorToPrevLine'), notText),
-    E('Alta imleç ekle', 'fa-solid fa-arrow-down', 'Ctrl+Alt+↓', edExec('addCursorToNextLine'), notText),
-    E('Parantez içini seç', 'fa-solid fa-code', '', edExec('selectBetweenBrackets'), notText),
+    E(__('Tümünü seç'), 'fa-solid fa-object-group', 'Ctrl+A', edExec('selectAll'), notText),
+    E(__('Satırı seç'), 'fa-solid fa-grip-lines', 'Ctrl+L', edExec('selectLine'), notText),
+    E(__('Sonraki eşleşmeyi de seç'), 'fa-solid fa-i-cursor', 'Ctrl+D', edExec('selectNextOccurrence'), notText),
+    E(__('Tüm eşleşmeleri seç'), 'fa-solid fa-layer-group', 'Ctrl+Shift+L', edExec('findAllUnder'), notText),
+    E(__('Üste imleç ekle'), 'fa-solid fa-arrow-up', 'Ctrl+Alt+↑', edExec('addCursorToPrevLine'), notText),
+    E(__('Alta imleç ekle'), 'fa-solid fa-arrow-down', 'Ctrl+Alt+↓', edExec('addCursorToNextLine'), notText),
+    E(__('Parantez içini seç'), 'fa-solid fa-code', '', edExec('selectBetweenBrackets'), notText),
     '-',
-    E('Satırı yukarı taşı', 'fa-solid fa-angle-up', 'Alt+↑', edExec('swapLineUp'), notText),
-    E('Satırı aşağı taşı', 'fa-solid fa-angle-down', 'Alt+↓', edExec('swapLineDown'), notText),
-    E('Satırı yukarı çoğalt', 'fa-solid fa-angles-up', 'Shift+Alt+↑', () => edRun(edDupUp), notText),
-    E('Satırı aşağı çoğalt', 'fa-solid fa-angles-down', 'Shift+Alt+↓', edExec('duplicateLine'), notText),
-    E('Satırı sil', 'fa-solid fa-delete-left', 'Ctrl+Shift+K', edExec('deleteLine'), notText),
-    E('Satırları birleştir', 'fa-solid fa-compress', 'Ctrl+J', edExec('joinLines'), notText),
-    E('Alta satır ekle', 'fa-solid fa-turn-down', 'Ctrl+Enter', edExec('insertLineAfter'), notText),
-    E('Üste satır ekle', 'fa-solid fa-turn-up', 'Ctrl+Shift+Enter', edExec('insertLineBefore'), notText),
+    E(__('Satırı yukarı taşı'), 'fa-solid fa-angle-up', 'Alt+↑', edExec('swapLineUp'), notText),
+    E(__('Satırı aşağı taşı'), 'fa-solid fa-angle-down', 'Alt+↓', edExec('swapLineDown'), notText),
+    E(__('Satırı yukarı çoğalt'), 'fa-solid fa-angles-up', 'Shift+Alt+↑', () => edRun(edDupUp), notText),
+    E(__('Satırı aşağı çoğalt'), 'fa-solid fa-angles-down', 'Shift+Alt+↓', edExec('duplicateLine'), notText),
+    E(__('Satırı sil'), 'fa-solid fa-delete-left', 'Ctrl+Shift+K', edExec('deleteLine'), notText),
+    E(__('Satırları birleştir'), 'fa-solid fa-compress', 'Ctrl+J', edExec('joinLines'), notText),
+    E(__('Alta satır ekle'), 'fa-solid fa-turn-down', 'Ctrl+Enter', edExec('insertLineAfter'), notText),
+    E(__('Üste satır ekle'), 'fa-solid fa-turn-up', 'Ctrl+Shift+Enter', edExec('insertLineBefore'), notText),
     '-',
-    E('Satıra git…', 'fa-solid fa-arrow-right-to-bracket', 'Ctrl+G', () => openPalette(':'), notText),
-    E('Eşleşen paranteze git', 'fa-solid fa-code', 'Ctrl+M', edExec('goToBracket'), notText),
+    E(__('Satıra git…'), 'fa-solid fa-arrow-right-to-bracket', 'Ctrl+G', () => openPalette(':'), notText),
+    E(__('Eşleşen paranteze git'), 'fa-solid fa-code', 'Ctrl+M', edExec('goToBracket'), notText),
   ];
   if (id === 'view') {
     const md = !!fp && isMarkdown(fp);
     return [
-      E('Dosya gezgini', 'fa-solid fa-table-columns', 'Ctrl+Shift+E', () => toolbar('ex'), { chk: !!IDE.ui.ex }),
-      E('Claude paneli', 'fa-solid fa-terminal', 'Ctrl+Shift+D', () => toolbar('panel'), { chk: !!IDE.ui.panel }),
-      E(IDE.ui.dock === 'right' ? 'Paneli alta al' : 'Paneli sağa al', 'fa-solid fa-table-columns', '', () => toolbar('dock')),
-      E('Projede ara görünümü', 'fa-solid fa-magnifying-glass', '', () => openProjectSearch(), { dis: !hasProj }),
+      E(__('Dosya gezgini'), 'fa-solid fa-table-columns', 'Ctrl+Shift+E', () => toolbar('ex'), { chk: !!IDE.ui.ex }),
+      E(__('Claude paneli'), 'fa-solid fa-terminal', 'Ctrl+Shift+D', () => toolbar('panel'), { chk: !!IDE.ui.panel }),
+      E(IDE.ui.dock === 'right' ? __('Paneli alta al') : __('Paneli sağa al'), 'fa-solid fa-table-columns', '', () => toolbar('dock')),
+      E(__('Projede ara görünümü'), 'fa-solid fa-magnifying-glass', '', () => openProjectSearch(), { dis: !hasProj }),
       '-',
-      E('Satır sarma', 'fa-solid fa-arrow-turn-down', 'Alt+Z', () => toggleWrap(), { chk: !!IDE.ui.wrap }),
-      E('Satır numaraları', 'fa-solid fa-list-ol', '', () => imToggleUi('lnum', true), { chk: IDE.ui.lnum !== false }),
-      E('Katlama kenarı', 'fa-solid fa-caret-down', '', () => imToggleUi('fold', true), { chk: IDE.ui.fold !== false }),
-      E('Cetvel (80 / 120. sütun)', 'fa-solid fa-ruler-vertical', '', () => imToggleUi('ruler', false), { chk: !!IDE.ui.ruler }),
-      ...(md ? [E('Markdown görünümü', 'fa-solid fa-eye', '', () => { if (IDE.mdView.has(fp)) IDE.mdView.delete(fp); else IDE.mdView.add(fp); showFile(); }, { chk: IDE.mdView.has(fp) })] : []),
+      E(__('Satır sarma'), 'fa-solid fa-arrow-turn-down', 'Alt+Z', () => toggleWrap(), { chk: !!IDE.ui.wrap }),
+      E(__('Satır numaraları'), 'fa-solid fa-list-ol', '', () => imToggleUi('lnum', true), { chk: IDE.ui.lnum !== false }),
+      E(__('Katlama kenarı'), 'fa-solid fa-caret-down', '', () => imToggleUi('fold', true), { chk: IDE.ui.fold !== false }),
+      E(__('Cetvel (80 / 120. sütun)'), 'fa-solid fa-ruler-vertical', '', () => imToggleUi('ruler', false), { chk: !!IDE.ui.ruler }),
+      ...(md ? [E(__('Markdown görünümü'), 'fa-solid fa-eye', '', () => { if (IDE.mdView.has(fp)) IDE.mdView.delete(fp); else IDE.mdView.add(fp); showFile(); }, { chk: IDE.mdView.has(fp) })] : []),
       '-',
-      E('Bulunduğu bloğu katla / aç', 'fa-solid fa-square-minus', 'Ctrl+Q', () => edFold('toggle'), notText),
-      E('Tümünü katla', 'fa-solid fa-compress', '', () => edFold('all'), notText),
-      E('Tüm katlamaları aç', 'fa-solid fa-expand', '', () => edFold('none'), notText),
+      E(__('Bulunduğu bloğu katla / aç'), 'fa-solid fa-square-minus', 'Ctrl+Q', () => edFold('toggle'), notText),
+      E(__('Tümünü katla'), 'fa-solid fa-compress', '', () => edFold('all'), notText),
+      E(__('Tüm katlamaları aç'), 'fa-solid fa-expand', '', () => edFold('none'), notText),
       '-',
-      E('Yazıyı büyüt', 'fa-solid fa-magnifying-glass-plus', '', () => toolbar('bigger'), { dis: IDE.ui.size >= 22 }),
-      E('Yazıyı küçült', 'fa-solid fa-magnifying-glass-minus', '', () => toolbar('smaller'), { dis: IDE.ui.size <= 10 }),
-      E('Varsayılan yazı boyutu', 'fa-solid fa-text-height', `${IDE.ui.size}px`, () => { IDE.ui.size = 13; saveIdeUi(); }, { dis: IDE.ui.size === 13 }),
+      E(__('Yazıyı büyüt'), 'fa-solid fa-magnifying-glass-plus', '', () => toolbar('bigger'), { dis: IDE.ui.size >= 22 }),
+      E(__('Yazıyı küçült'), 'fa-solid fa-magnifying-glass-minus', '', () => toolbar('smaller'), { dis: IDE.ui.size <= 10 }),
+      E(__('Varsayılan yazı boyutu'), 'fa-solid fa-text-height', `${IDE.ui.size}px`, () => { IDE.ui.size = 13; saveIdeUi(); }, { dis: IDE.ui.size === 13 }),
     ];
   }
   if (id === 'term') return [
-    E('Yeni Claude oturumu', 'fa-solid fa-robot', '', () => imTerminal('claude'), { dis: !hasProj }),
-    ...(INFO && INFO.codex ? [E('Yeni Codex oturumu', 'fa-brands fa-openai', '', () => imTerminal('claude', 'codex'), { dis: !hasProj })] : []),
+    E(__('Yeni Claude oturumu'), 'fa-solid fa-robot', '', () => imTerminal('claude'), { dis: !hasProj }),
+    ...(INFO && INFO.codex ? [E(__('Yeni Codex oturumu'), 'fa-brands fa-openai', '', () => imTerminal('claude', 'codex'), { dis: !hasProj })] : []),
     // this system's shells: PowerShell / Komut İstemi / Git Bash on Windows, zsh / bash elsewhere
-    ...Object.keys(SHELLS).map(k => E('Yeni ' + SHELLS[k].name, k === 'bash' && IS_WIN ? 'fa-brands fa-git-alt' : 'fa-solid fa-terminal', '', () => imTerminal('shell', k), { dis: !hasProj })),
+    ...Object.keys(SHELLS).map(k => E(__('Yeni {name}', { name: SHELLS[k].name }), k === 'bash' && IS_WIN ? 'fa-brands fa-git-alt' : 'fa-solid fa-terminal', '', () => imTerminal('shell', k), { dis: !hasProj })),
     '-',
-    E(askLabel() + ' (dosya / seçim)', 'fa-solid fa-comment-dots', '', () => askClaude(), { dis: !fp, cls: 'accent' }),
+    E(__('{label} (dosya / seçim)', { label: askLabel() }), 'fa-solid fa-comment-dots', '', () => askClaude(), { dis: !fp, cls: 'accent' }),
     '-',
-    E('Git / GitHub paneli', 'fa-brands fa-git-alt', 'Ctrl+Shift+G', () => toggleGitPanel()),
-    E('Dosya ağacını ve git durumunu yenile', 'fa-solid fa-arrows-rotate', '', () => { IDE.dirCache = {}; delete IDE.index[IDE.project]; renderTree(); refreshGit(); }, { dis: !hasProj }),
+    E(__('Git / GitHub paneli'), 'fa-brands fa-git-alt', 'Ctrl+Shift+G', () => toggleGitPanel()),
+    E(__('Dosya ağacını ve git durumunu yenile'), 'fa-solid fa-arrows-rotate', '', () => { IDE.dirCache = {}; delete IDE.index[IDE.project]; renderTree(); refreshGit(); }, { dis: !hasProj }),
   ];
   if (id === 'help') return [
-    E('Klavye kısayolları', 'fa-regular fa-keyboard', 'F1', () => openSettings('kisayol')),
-    E('Ayarlar', 'fa-solid fa-gear', 'Ctrl+,', () => openSettings()),
-    E('Karşılama ekranı', 'fa-solid fa-house', 'Ctrl+Shift+O', () => api.send('app:welcome')),
+    E(__('Klavye kısayolları'), 'fa-regular fa-keyboard', 'F1', () => openSettings('kisayol')),
+    E(__('Ayarlar'), 'fa-solid fa-gear', 'Ctrl+,', () => openSettings()),
+    E(__('Karşılama ekranı'), 'fa-solid fa-house', 'Ctrl+Shift+O', () => api.send('app:welcome')),
     '-',
-    E('Hakkında ve güncellemeler', 'fa-solid fa-circle-info', '', () => openSettings('hakkinda')),
+    E(__('Hakkında ve güncellemeler'), 'fa-solid fa-circle-info', '', () => openSettings('hakkinda')),
   ];
   return [];
 }
@@ -362,7 +362,7 @@ function imFocusBar(id) {
 function imRun(i) {
   const it = IM.items[i]; if (!it || it.dis) return;
   imClose(); imRestoreFocus();
-  try { it.run(); } catch (e) { toast('İşlem yapılamadı', cleanErr(e)); }
+  try { it.run(); } catch (e) { toast(__('İşlem yapılamadı'), cleanErr(e)); }
 }
 function imShift(id, d) { const i = IM_MENUS.findIndex(m => m[0] === id); return IM_MENUS[(i + d + IM_MENUS.length) % IM_MENUS.length][0]; }
 
@@ -375,8 +375,8 @@ function fbQuery() {
   if (FB.regex) src = q; else if (FB.word) src = `(?<![\\p{L}\\p{N}_])${reEsc(q)}(?![\\p{L}\\p{N}_])`; else src = null;
   if (src == null) return { query: q, fold: !FB.case, re: new RegExp(reEsc(q), FB.case ? 'g' : 'gi'), plain: true };
   const flags = (FB.case ? '' : 'i') + (FB.word && !FB.regex ? 'u' : '');
-  let re; try { re = new RegExp(src, flags); } catch (e) { return { err: 'Geçersiz düzenli ifade' }; }
-  if (re.test('')) return { err: 'İfade boş metinle eşleşiyor' };
+  let re; try { re = new RegExp(src, flags); } catch (e) { return { err: __('Geçersiz düzenli ifade') }; }
+  if (re.test('')) return { err: __('İfade boş metinle eşleşiyor') };
   return { query: re, fold: !FB.case, re: new RegExp(src, flags + 'g'), src, flags };
 }
 function fbHighlight() {
@@ -406,12 +406,12 @@ function fbCount() {
   const from = cm.getCursor('from'), to = cm.getCursor('to'), cur = cm.getSearchCursor(q.query, CodeMirror.Pos(cm.firstLine(), 0), { caseFold: q.fold });
   let n = 0, at = 0;
   while (n < 9999 && cur.findNext()) { n++; if (!at && CodeMirror.cmpPos(cur.from(), from) === 0 && CodeMirror.cmpPos(cur.to(), to) === 0) at = n; }
-  el.textContent = !n ? 'Sonuç yok' : at ? `${at} / ${n}${n >= 9999 ? '+' : ''}` : `${n}${n >= 9999 ? '+' : ''} eşleşme`;
+  el.textContent = !n ? __('Sonuç yok') : at ? `${at} / ${n}${n >= 9999 ? '+' : ''}` : n >= 9999 ? __('{n}+ eşleşme', { n }) : __('{n} eşleşme', { n });
   $('#findBar').classList.toggle('no-hit', !n);
 }
 function imFind(rep) {
   if (S.mode !== 'ide') return;
-  const fp = edFile(); if (!fp) { toast('Önce bir metin dosyası aç'); return; }
+  const fp = edFile(); if (!fp) { toast(__('Önce bir metin dosyası aç')); return; }
   if (IDE.mdView.has(fp)) { IDE.mdView.delete(fp); showFile(); }
   const cm = IDE.cm, sel = cm.somethingSelected() && cm.getSelection();
   const inp = $('#fbFind');
@@ -469,7 +469,7 @@ function fbReplace(all) {
       const cur = cm.getSearchCursor(q.query, CodeMirror.Pos(cm.firstLine(), 0), { caseFold: q.fold });
       let m; while (n < 100000 && (m = cur.findNext())) { cur.replace(fbRepText(q, m)); n++; }
     });
-    toast('Tümünü değiştir', n ? `${n} eşleşme değiştirildi` : 'Eşleşme yok');
+    toast(__('Tümünü değiştir'), n ? __('{n} eşleşme değiştirildi', { n }) : __('Eşleşme yok'));
     fbCount();
     return;
   }

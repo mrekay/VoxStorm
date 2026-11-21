@@ -75,6 +75,20 @@ if (process.argv.includes('--missing')) {
   const d = loc(arg('--missing'));
   const out = {};
   for (const k of keys.keys()) if (!Object.prototype.hasOwnProperty.call(d, k) || d[k] === '') out[k] = '';
+  // --chunk N --out DIR: write the missing keys as DIR/part-01.json … with N keys each, plus where each key is used
+  const size = Number(arg('--chunk')), dir = arg('--out');
+  if (size && dir) {
+    fs.mkdirSync(dir, { recursive: true });
+    const ks = Object.keys(out);
+    for (let i = 0, n = 1; i < ks.length; i += size, n++) {
+      const part = Object.fromEntries(ks.slice(i, i + size).map(k => [k, '']));
+      const where = Object.fromEntries(ks.slice(i, i + size).map(k => [k, keys.get(k).slice(0, 3)]));
+      fs.writeFileSync(path.join(dir, `part-${String(n).padStart(2, '0')}.json`), JSON.stringify(part, null, 1));
+      fs.writeFileSync(path.join(dir, `part-${String(n).padStart(2, '0')}.where.json`), JSON.stringify(where, null, 1));
+    }
+    console.log(`${ks.length} eksik anahtar, ${Math.ceil(ks.length / size)} parça: ${dir}`);
+    process.exit(0);
+  }
   console.log(JSON.stringify(out, null, 1));
   process.exit(0);
 }

@@ -8,8 +8,8 @@
 (() => {
   'use strict';
   const TAB = 'ide-' + Math.random().toString(36).slice(2, 10); // db:run session, separate from DB-mode tabs
-  const fmtN = n => Number(n || 0).toLocaleString('tr-TR');
-  const fmtMs = ms => (ms < 1000 ? ms + ' ms' : (ms / 1000).toLocaleString('tr-TR', { maximumFractionDigits: 2 }) + ' sn');
+  const fmtN = n => Number(n || 0).toLocaleString(I18N.locale());
+  const fmtMs = ms => (ms < 1000 ? ms + ' ms' : __('{n} sn', { n: (ms / 1000).toLocaleString(I18N.locale(), { maximumFractionDigits: 2 }) }));
   const errText = e => String((e && e.message) || e).replace(/^Error invoking remote method '[^']+': (Error: )?/, '');
   const inv = async (ch, ...a) => { try { return await api.invoke(ch, ...a); } catch (e) { return { error: errText(e) }; } };
   const byId = id => document.getElementById(id);
@@ -50,14 +50,14 @@
     const el = byId('idbSide');
     el.innerHTML = `
       <div class="idb-bar">
-        <div class="db-search"><i class="fa-solid fa-magnifying-glass"></i><input id="idbFilter" placeholder="Bağlantı, tablo ara…" spellcheck="false" autocomplete="off" aria-label="Veritabanında ara"></div>
-        <button class="db-ib" data-idb="newConn" title="Yeni bağlantı" aria-label="Yeni bağlantı"><i class="fa-solid fa-plus"></i></button>
-        <button class="db-ib" data-idb="reload" title="Bağlantı listesini yenile" aria-label="Bağlantı listesini yenile"><i class="fa-solid fa-arrows-rotate"></i></button>
-        <button class="db-ib" data-idb="dbmode" title="DB modunda aç" aria-label="DB modunda aç"><i class="fa-solid fa-up-right-from-square"></i></button>
+        <div class="db-search"><i class="fa-solid fa-magnifying-glass"></i><input id="idbFilter" placeholder="${esc(__('Bağlantı, tablo ara…'))}" spellcheck="false" autocomplete="off" aria-label="${esc(__('Veritabanında ara'))}"></div>
+        <button class="db-ib" data-idb="newConn" title="${esc(__('Yeni bağlantı'))}" aria-label="${esc(__('Yeni bağlantı'))}"><i class="fa-solid fa-plus"></i></button>
+        <button class="db-ib" data-idb="reload" title="${esc(__('Bağlantı listesini yenile'))}" aria-label="${esc(__('Bağlantı listesini yenile'))}"><i class="fa-solid fa-arrows-rotate"></i></button>
+        <button class="db-ib" data-idb="dbmode" title="${esc(__('DB modunda aç'))}" aria-label="${esc(__('DB modunda aç'))}"><i class="fa-solid fa-up-right-from-square"></i></button>
       </div>
       <div class="idb-tgt" id="idbTgt"></div>
-      <div class="db-list" id="idbTree" tabindex="0" role="tree" aria-label="Veritabanı bağlantıları"></div>
-      <div class="idb-hint">Tıkla: sorgu hedefi · Çift tık: adı düzenleyiciye ekle · Sağ tık: işlemler</div>`;
+      <div class="db-list" id="idbTree" tabindex="0" role="tree" aria-label="${esc(__('Veritabanı bağlantıları'))}"></div>
+      <div class="idb-hint">${esc(__('Tıkla: sorgu hedefi · Çift tık: adı düzenleyiciye ekle · Sağ tık: işlemler'))}</div>`;
     el.addEventListener('click', onSideClick);
     el.addEventListener('dblclick', onSideDbl);
     el.addEventListener('contextmenu', onSideMenu);
@@ -77,8 +77,8 @@
     const el = byId('idbTgt'); if (!el) return;
     const c = target(), live = c && dbApi.live(c.id);
     el.innerHTML = c
-      ? `<span class="db-cdot db-c-${c.color || 'none'}${live && live.status === 'ok' ? ' on' : ''}"></span><span class="idb-tn" title="Ctrl+Shift+Enter bu bağlantıda çalışır"><b>${esc(c.name || c.host)}</b>${st().db ? ' / ' + esc(st().db) : ''}</span><button class="db-link" data-idb="drawer">${Q.drawer ? 'Paneli gizle' : 'Sorgu paneli'}</button>`
-      : '<span class="db-muted">Sorgu hedefi yok: bir bağlantıya ya da veritabanına tıkla.</span>';
+      ? `<span class="db-cdot db-c-${c.color || 'none'}${live && live.status === 'ok' ? ' on' : ''}"></span><span class="idb-tn" title="${esc(__('Ctrl+Shift+Enter bu bağlantıda çalışır'))}"><b>${esc(c.name || c.host)}</b>${st().db ? ' / ' + esc(st().db) : ''}</span><button class="db-link" data-idb="drawer">${esc(Q.drawer ? __('Paneli gizle') : __('Sorgu paneli'))}</button>`
+      : `<span class="db-muted">${esc(__('Sorgu hedefi yok: bir bağlantıya ya da veritabanına tıkla.'))}</span>`;
   }
   function selectNode(n) {
     byId('idbTree').querySelectorAll('.cur').forEach(x => x.classList.remove('cur'));
@@ -117,7 +117,7 @@
   function insertText(text) {
     if (!text) return;
     const cm = IDE.cm, f = IDE.files[ist().file];
-    if (!f || !f.doc || cm.getWrapperElement().hidden) { dbApi.copyText(text, 'Açık dosya yok; panoya kopyalandı'); return; }
+    if (!f || !f.doc || cm.getWrapperElement().hidden) { dbApi.copyText(text, __('Açık dosya yok; panoya kopyalandı')); return; }
     cm.replaceSelection(text);
     cm.focus();
   }
@@ -133,23 +133,23 @@
     selectNode(node);
     const key = node.dataset.key, n = dbApi.parseKey(key), c = dbApi.conn(n.id); if (!c) return;
     const live = dbApi.live(n.id), on = live && live.status === 'ok';
-    const toDb = ['dbmode', 'DB modunda aç', 'fa-up-right-from-square'];
+    const toDb = ['dbmode', __('DB modunda aç'), 'fa-up-right-from-square'];
     let items;
-    if (n.t === 'c') items = [on ? ['disconnect', 'Bağlantıyı kes', 'fa-plug-circle-xmark'] : ['connect', 'Bağlan', 'fa-plug'], ['target', 'Sorgu hedefi yap', 'fa-crosshairs'], ['refresh', 'Yenile', 'fa-rotate-right', !on], '-', ['edit', 'Düzenle…', 'fa-pen'], toDb];
-    else if (n.t === 'd' || n.t === 's') items = [['target', 'Sorgu hedefi yap', 'fa-crosshairs'], ['insert', 'Adı düzenleyiciye ekle', 'fa-i-cursor'], ['copy', 'Adı kopyala', 'fa-copy'], ...(n.t === 'd' ? [['refresh', 'Yenile', 'fa-rotate-right']] : []), '-', toDb];
-    else if (n.t === 'k') items = [['refresh', 'Yenile', 'fa-rotate-right']];
-    else if (isCol(key)) items = [['insert', 'Adı düzenleyiciye ekle', 'fa-i-cursor'], ['copy', 'Adı kopyala', 'fa-copy']];
+    if (n.t === 'c') items = [on ? ['disconnect', __('Bağlantıyı kes'), 'fa-plug-circle-xmark'] : ['connect', __('Bağlan'), 'fa-plug'], ['target', __('Sorgu hedefi yap'), 'fa-crosshairs'], ['refresh', __('Yenile'), 'fa-rotate-right', !on], '-', ['edit', __('Düzenle…'), 'fa-pen'], toDb];
+    else if (n.t === 'd' || n.t === 's') items = [['target', __('Sorgu hedefi yap'), 'fa-crosshairs'], ['insert', __('Adı düzenleyiciye ekle'), 'fa-i-cursor'], ['copy', __('Adı kopyala'), 'fa-copy'], ...(n.t === 'd' ? [['refresh', __('Yenile'), 'fa-rotate-right']] : []), '-', toDb];
+    else if (n.t === 'k') items = [['refresh', __('Yenile'), 'fa-rotate-right']];
+    else if (isCol(key)) items = [['insert', __('Adı düzenleyiciye ekle'), 'fa-i-cursor'], ['copy', __('Adı kopyala'), 'fa-copy']];
     else if (n.kind === 'tables' || n.kind === 'views') {
-      items = [['top', 'İlk 100 satırı göster', 'fa-table-list'], ['count', 'Satırları say', 'fa-hashtag'], '-',
-        ['insert', 'Tam adı düzenleyiciye ekle', 'fa-i-cursor'], ['sel', 'SELECT şablonunu ekle', 'fa-magnifying-glass'], ['copy', 'Adı kopyala', 'fa-copy'], ['refresh', 'Sütunları yenile', 'fa-rotate-right'], '-', toDb];
-    } else items = [['exec', n.kind === 'procs' ? 'Çalıştırma şablonunu ekle' : 'Çağırma şablonunu ekle', 'fa-play'], ['insert', 'Tam adı düzenleyiciye ekle', 'fa-i-cursor'], ['copy', 'Adı kopyala', 'fa-copy']];
+      items = [['top', __('İlk 100 satırı göster'), 'fa-table-list'], ['count', __('Satırları say'), 'fa-hashtag'], '-',
+        ['insert', __('Tam adı düzenleyiciye ekle'), 'fa-i-cursor'], ['sel', __('SELECT şablonunu ekle'), 'fa-magnifying-glass'], ['copy', __('Adı kopyala'), 'fa-copy'], ['refresh', __('Sütunları yenile'), 'fa-rotate-right'], '-', toDb];
+    } else items = [['exec', n.kind === 'procs' ? __('Çalıştırma şablonunu ekle') : __('Çağırma şablonunu ekle'), 'fa-play'], ['insert', __('Tam adı düzenleyiciye ekle'), 'fa-i-cursor'], ['copy', __('Adı kopyala'), 'fa-copy']];
     const a = await dbApi.menu(e.clientX, e.clientY, items);
     if (!a) return;
     const obj = { ...n };
     if (a === 'connect' || a === 'disconnect' || a === 'refresh' || a === 'edit') { dbApi.nodeAction(a, key); return; }
     if (a === 'target') { setTarget(n.id, n.t === 'c' ? undefined : n.db); showDrawer(true); }
     else if (a === 'insert') insertText(nameOf(key));
-    else if (a === 'copy') dbApi.copyText(n.t === 'd' ? n.db : n.t === 's' ? n.schema : isCol(key) ? decodeURIComponent(key.split(':')[6]) : n.name, 'Ad kopyalandı');
+    else if (a === 'copy') dbApi.copyText(n.t === 'd' ? n.db : n.t === 's' ? n.schema : isCol(key) ? decodeURIComponent(key.split(':')[6]) : n.name, __('Ad kopyalandı'));
     else if (a === 'dbmode') dbApi.openInDbMode({ key });
     else if (a === 'top' || a === 'count') {
       setTarget(n.id, n.db);
@@ -183,17 +183,17 @@
   function buildDrawer() {
     const el = byId('idbRes');
     el.innerHTML = `
-      <div class="idb-grip" title="Sürükle: boyutu değiştir · Çift tık: varsayılan boyut"></div>
+      <div class="idb-grip" title="${esc(__('Sürükle: boyutu değiştir · Çift tık: varsayılan boyut'))}"></div>
       <div class="idb-h">
-        <div class="db-rtabs idb-tabs" id="idbTabs" role="tablist" aria-label="DB sonuçları"></div>
+        <div class="db-rtabs idb-tabs" id="idbTabs" role="tablist" aria-label="${esc(__('DB sonuçları'))}"></div>
         <div class="idb-acts">
           <span class="db-cdot" id="idbDot"></span>
-          <select id="idbConn" aria-label="Bağlantı" title="Sorguların çalışacağı bağlantı"></select>
-          <select id="idbDb" aria-label="Veritabanı" title="Veritabanı"></select>
-          <button class="db-run" data-idb="run" id="idbRun"><i class="fa-solid fa-play"></i>Çalıştır</button>
-          <button class="db-tb danger" data-idb="cancel" title="Sorguyu iptal et" hidden><i class="fa-solid fa-stop"></i>İptal</button>
-          <button class="db-ib" data-idb="todb" title="Sorguyu DB modunda aç" aria-label="Sorguyu DB modunda aç"><i class="fa-solid fa-up-right-from-square"></i></button>
-          <button class="db-ib" data-idb="hide" title="DB panelini gizle" aria-label="DB panelini gizle"><i class="fa-solid fa-xmark"></i></button>
+          <select id="idbConn" aria-label="${esc(__('Bağlantı'))}" title="${esc(__('Sorguların çalışacağı bağlantı'))}"></select>
+          <select id="idbDb" aria-label="${esc(__('Veritabanı'))}" title="${esc(__('Veritabanı'))}"></select>
+          <button class="db-run" data-idb="run" id="idbRun"><i class="fa-solid fa-play"></i>${esc(__('Çalıştır'))}</button>
+          <button class="db-tb danger" data-idb="cancel" title="${esc(__('Sorguyu iptal et'))}" hidden><i class="fa-solid fa-stop"></i>${esc(__('İptal'))}</button>
+          <button class="db-ib" data-idb="todb" title="${esc(__('Sorguyu DB modunda aç'))}" aria-label="${esc(__('Sorguyu DB modunda aç'))}"><i class="fa-solid fa-up-right-from-square"></i></button>
+          <button class="db-ib" data-idb="hide" title="${esc(__('DB panelini gizle'))}" aria-label="${esc(__('DB panelini gizle'))}"><i class="fa-solid fa-xmark"></i></button>
         </div>
       </div>
       <div class="idb-ed" id="idbEd"></div>
@@ -256,36 +256,36 @@
   function renderHead() {
     const cs = byId('idbConn'); if (!cs) return;
     const c = target(), live = c && dbApi.live(c.id);
-    if (document.activeElement !== cs) cs.innerHTML = '<option value="">Bağlantı seç…</option>' + dbApi.conns().map(x => `<option value="${esc(x.id)}"${c && x.id === c.id ? ' selected' : ''}>${esc(x.name || x.host)} (${esc(dbApi.TYPE_NAME[x.type])})</option>`).join('');
+    if (document.activeElement !== cs) cs.innerHTML = `<option value="">${esc(__('Bağlantı seç…'))}</option>` + dbApi.conns().map(x => `<option value="${esc(x.id)}"${c && x.id === c.id ? ' selected' : ''}>${esc(x.name || x.host)} (${esc(dbApi.TYPE_NAME[x.type])})</option>`).join('');
     const ds = byId('idbDb');
     if (document.activeElement !== ds) {
       const names = ((live && live.dbs) || []).map(d => d.name);
       if (st().db && !names.includes(st().db)) names.unshift(st().db);
-      ds.innerHTML = (c ? `<option value="">${c.type === 'pg' ? 'postgres (varsayılan)' : 'Varsayılan veritabanı'}</option>` : '<option value="">—</option>') + names.map(n => `<option${n === st().db ? ' selected' : ''}>${esc(n)}</option>`).join('');
+      ds.innerHTML = (c ? `<option value="">${esc(c.type === 'pg' ? __('postgres (varsayılan)') : __('Varsayılan veritabanı'))}</option>` : '<option value="">—</option>') + names.map(n => `<option${n === st().db ? ' selected' : ''}>${esc(n)}</option>`).join('');
       ds.disabled = !c;
     }
     byId('idbDot').className = 'db-cdot db-c-' + ((c && c.color) || 'none') + (live && live.status === 'ok' ? ' on' : '');
     const run = byId('idbRun');
     run.hidden = Q.running;
-    run.innerHTML = Q.view === 'sql' || !Q.last ? '<i class="fa-solid fa-play"></i>Çalıştır' : '<i class="fa-solid fa-rotate-right"></i>Yeniden çalıştır';
-    run.title = Q.view === 'sql' || !Q.last ? 'Sorgu kutusunu çalıştır: seçili kısım ya da tamamı (Ctrl+Enter)\nDüzenleyicide: seçili SQL ya da .sql dosyasında imleçteki deyim (Ctrl+Shift+Enter)' : 'Son sorguyu yeniden çalıştır';
+    run.innerHTML = Q.view === 'sql' || !Q.last ? `<i class="fa-solid fa-play"></i>${esc(__('Çalıştır'))}` : `<i class="fa-solid fa-rotate-right"></i>${esc(__('Yeniden çalıştır'))}`;
+    run.title = Q.view === 'sql' || !Q.last ? __('Sorgu kutusunu çalıştır: seçili kısım ya da tamamı (Ctrl+Enter)\nDüzenleyicide: seçili SQL ya da .sql dosyasında imleçteki deyim (Ctrl+Shift+Enter)') : __('Son sorguyu yeniden çalıştır');
     byId('idbRes').querySelector('[data-idb="cancel"]').hidden = !Q.running;
   }
   function render() {
     if (!Q.drawer || !Q.cm) return;
     renderHead();
     const errs = Q.messages.filter(m => m.type === 'error').length;
-    byId('idbTabs').innerHTML = `<button class="db-rtab${Q.view === 'sql' ? ' on' : ''}" data-iview="sql" role="tab"><i class="fa-solid fa-pen-to-square"></i>Sorgu</button>`
-      + Q.results.map((r, i) => `<button class="db-rtab${Q.view === i ? ' on' : ''}" data-iview="${i}" role="tab"><i class="fa-solid fa-table-list"></i>Sonuç ${i + 1}<small>${fmtN(r.total)}</small></button>`).join('')
-      + (Q.messages.length || Q.ms != null || Q.running ? `<button class="db-rtab${Q.view === 'msg' ? ' on' : ''}${errs ? ' err' : ''}" data-iview="msg" role="tab"><i class="fa-solid ${Q.running ? 'fa-spinner fa-spin' : errs ? 'fa-circle-exclamation' : 'fa-message'}"></i>Mesajlar${Q.messages.length ? `<small>${Q.messages.length}</small>` : ''}</button>` : '')
+    byId('idbTabs').innerHTML = `<button class="db-rtab${Q.view === 'sql' ? ' on' : ''}" data-iview="sql" role="tab"><i class="fa-solid fa-pen-to-square"></i>${esc(__('Sorgu'))}</button>`
+      + Q.results.map((r, i) => `<button class="db-rtab${Q.view === i ? ' on' : ''}" data-iview="${i}" role="tab"><i class="fa-solid fa-table-list"></i>${esc(__('Sonuç {i}', { i: i + 1 }))}<small>${fmtN(r.total)}</small></button>`).join('')
+      + (Q.messages.length || Q.ms != null || Q.running ? `<button class="db-rtab${Q.view === 'msg' ? ' on' : ''}${errs ? ' err' : ''}" data-iview="msg" role="tab"><i class="fa-solid ${Q.running ? 'fa-spinner fa-spin' : errs ? 'fa-circle-exclamation' : 'fa-message'}"></i>${esc(__('Mesajlar'))}${Q.messages.length ? `<small>${Q.messages.length}</small>` : ''}</button>` : '')
       + (Q.running ? `<span class="idb-time">${fmtMs(Date.now() - Q.started)}</span>` : Q.ms != null ? `<span class="idb-time">${fmtMs(Q.ms)}</span>` : '');
     const ed = byId('idbEd'), body = byId('idbBody');
     ed.hidden = Q.view !== 'sql'; body.hidden = Q.view === 'sql';
     if (Q.view === 'sql') { Q.cm.refresh(); return; }
-    if (Q.running && (Q.view === 'msg' || !Q.results[Q.view])) { body.innerHTML = '<div class="db-wait"><i class="fa-solid fa-spinner fa-spin"></i> Sorgu çalışıyor… <button class="btn" data-idb="cancel">İptal et</button></div>'; return; }
+    if (Q.running && (Q.view === 'msg' || !Q.results[Q.view])) { body.innerHTML = `<div class="db-wait"><i class="fa-solid fa-spinner fa-spin"></i> ${esc(__('Sorgu çalışıyor…'))} <button class="btn" data-idb="cancel">${esc(__('İptal et'))}</button></div>`; return; }
     if (Q.view === 'msg' || !Q.results[Q.view]) {
-      body.innerHTML = `<div class="db-msgs">${Q.messages.map(m => `<div class="db-msg ${m.type}"${m.line && Q.src && Q.src.kind !== 'gen' ? ` data-line="${m.line}" title="Satıra git"` : ''}><i class="fa-solid ${m.type === 'error' ? 'fa-circle-xmark' : m.type === 'cancel' ? 'fa-ban' : m.type === 'rows' || m.type === 'ok' ? 'fa-check' : 'fa-circle-info'}"></i><span>${m.line ? `<b>Satır ${(Q.offset || 0) + m.line}:</b> ` : ''}${esc(m.text)}</span></div>`).join('')}`
-        + (Q.ms != null ? `<div class="db-msg muted"><i class="fa-regular fa-clock"></i><span>Süre: ${fmtMs(Q.ms)}${Q.results.length ? ' · ' + Q.results.length + ' sonuç kümesi' : ''}</span></div>` : '') + '</div>';
+      body.innerHTML = `<div class="db-msgs">${Q.messages.map(m => `<div class="db-msg ${m.type}"${m.line && Q.src && Q.src.kind !== 'gen' ? ` data-line="${m.line}" title="${esc(__('Satıra git'))}"` : ''}><i class="fa-solid ${m.type === 'error' ? 'fa-circle-xmark' : m.type === 'cancel' ? 'fa-ban' : m.type === 'rows' || m.type === 'ok' ? 'fa-check' : 'fa-circle-info'}"></i><span>${m.line ? `<b>${esc(__('Satır {line}:', { line: (Q.offset || 0) + m.line }))}</b> ` : ''}${esc(m.text)}</span></div>`).join('')}`
+        + (Q.ms != null ? `<div class="db-msg muted"><i class="fa-regular fa-clock"></i><span>${esc(Q.results.length ? __('Süre: {time} · {n} sonuç kümesi', { time: fmtMs(Q.ms), n: Q.results.length }) : __('Süre: {time}', { time: fmtMs(Q.ms) }))}</span></div>` : '') + '</div>';
       return;
     }
     dbApi.renderGrid(Q, Q.results[Q.view], body);
@@ -299,7 +299,7 @@
     const act = a.dataset.idb || a.dataset.act;
     const r = typeof Q.view === 'number' ? Q.results[Q.view] : null;
     if (act === 'run') { if (Q.view !== 'sql' && Q.last) runSql(Q.last.sql, Q.last.src, Q.last.offset); else runScratch(false); }
-    else if (act === 'cancel') { if (Q.running) { await inv('db:cancel', TAB); toast('İptal isteği gönderildi'); } }
+    else if (act === 'cancel') { if (Q.running) { await inv('db:cancel', TAB); toast(__('İptal isteği gönderildi')); } }
     else if (act === 'hide') showDrawer(false);
     else if (act === 'todb') {
       const c = target();
@@ -308,7 +308,7 @@
     } else if (r && (act === 'more' || act === 'moreAll')) { await dbApi.fetchMore(r, act === 'moreAll'); render(); }
     else if (r && act === 'copyAll') { const s = r.sel; r.sel = { r0: 0, r1: r.shown - 1, c0: 0, c1: r.columns.length - 1 }; dbApi.copySel(r, true); r.sel = s; }
     else if (r && act === 'csv') {
-      const m = await dbApi.menu(e.clientX, e.clientY, [['c', 'CSV (virgülle ayrılmış)', 'fa-file-csv'], ['s', 'CSV (noktalı virgül, Türkçe Excel için)', 'fa-file-excel'], ['t', 'TSV (sekmeyle ayrılmış)', 'fa-file-lines']]);
+      const m = await dbApi.menu(e.clientX, e.clientY, [['c', __('CSV (virgülle ayrılmış)'), 'fa-file-csv'], ['s', __('CSV (noktalı virgül, Türkçe Excel için)'), 'fa-file-excel'], ['t', __('TSV (sekmeyle ayrılmış)'), 'fa-file-lines']]);
       if (m) dbApi.exportResult(r, m === 's' ? ';' : m === 't' ? '\t' : ',', 'sorgu');
     }
   }
@@ -327,11 +327,11 @@
     let sql, offset = 0;
     if (stmt) {
       const x = dbApi.statementAt(Q.cm);
-      if (!x || !x.sql.trim()) { toast('Çalıştırılacak deyim yok'); return; }
+      if (!x || !x.sql.trim()) { toast(__('Çalıştırılacak deyim yok')); return; }
       sql = x.sql; offset = x.from;
       Q.cm.setSelection({ line: x.from, ch: 0 }, { line: x.to, ch: Q.cm.getLine(x.to).length });
     } else if (Q.cm.somethingSelected()) { sql = Q.cm.getSelection(); offset = Q.cm.getCursor('from').line; } else sql = Q.cm.getValue();
-    if (!sql.trim()) { toast('Çalıştırılacak sorgu yok', 'Sorgu kutusuna SQL yaz.'); return; }
+    if (!sql.trim()) { toast(__('Çalıştırılacak sorgu yok'), __('Sorgu kutusuna SQL yaz.')); return; }
     runSql(sql, { kind: 'scratch', doc: Q.cm.getDoc() }, offset);
   }
   // the code editor: the selection, or the statement under the cursor in a .sql file
@@ -339,17 +339,17 @@
     const cm = IDE.cm, fp = ist().file, f = fp && IDE.files[fp];
     if (!f || !f.doc || cm.getWrapperElement().hidden) {
       if (Q.drawer) { runScratch(false); return; }
-      toast('Açık dosya yok', 'Bir .sql dosyası aç ya da DB panelindeki sorgu kutusunu kullan.'); showDrawer(true); return;
+      toast(__('Açık dosya yok'), __('Bir .sql dosyası aç ya da DB panelindeki sorgu kutusunu kullan.')); showDrawer(true); return;
     }
     let sql, offset = 0;
     if (cm.somethingSelected()) { sql = cm.getSelection(); offset = cm.getCursor('from').line; }
     else if (extOf(fp) === 'sql') {
       const x = dbApi.statementAt(cm);
-      if (!x || !x.sql.trim()) { toast('Çalıştırılacak deyim yok'); return; }
+      if (!x || !x.sql.trim()) { toast(__('Çalıştırılacak deyim yok')); return; }
       sql = x.sql; offset = x.from;
       cm.setSelection({ line: x.from, ch: 0 }, { line: x.to, ch: cm.getLine(x.to).length });
-    } else { toast("Önce çalıştırılacak SQL'i seç", 'SQL dosyalarında seçim yoksa imlecin bulunduğu deyim çalışır.'); return; }
-    if (!sql.trim()) { toast('Çalıştırılacak sorgu yok'); return; }
+    } else { toast(__("Önce çalıştırılacak SQL'i seç"), __('SQL dosyalarında seçim yoksa imlecin bulunduğu deyim çalışır.')); return; }
+    if (!sql.trim()) { toast(__('Çalıştırılacak sorgu yok')); return; }
     runSql(sql, { kind: 'editor', file: fp, doc: f.doc }, offset);
   }
   function runSmart() {
@@ -367,12 +367,12 @@
     await ensureLoaded();
     const c = target();
     if (!c) {
-      toast('Önce bir bağlantı seç', 'Gezginin DB görünümünde bir bağlantıya ya da veritabanına tıkla.');
+      toast(__('Önce bir bağlantı seç'), __('Gezginin DB görünümünde bir bağlantıya ya da veritabanına tıkla.'));
       if (!IDE.ui.ex) { IDE.ui.ex = true; saveIdeUi(); }
       setExView('db'); showDrawer(true, true);
       return;
     }
-    if (Q.running) { toast('Bir sorgu zaten çalışıyor', 'Bitmesini bekle ya da iptal et.'); return; }
+    if (Q.running) { toast(__('Bir sorgu zaten çalışıyor'), __('Bitmesini bekle ya da iptal et.')); return; }
     if (!Q.drawer) await showDrawer(true, true);
     Q.running = true; Q.started = Date.now(); Q.connId = c.id; Q.db = st().db; Q.src = src; Q.offset = offset; Q.last = { sql, src, offset };
     Q.view = 'msg'; // the spinner shows there while the query runs
@@ -389,12 +389,12 @@
     }
     if (r.blocked) {
       render();
-      await dbApi.modal({ title: 'Salt okunur bağlantı', icon: 'fa-lock', body: `<p><b>${esc(c.name || c.host)}</b> salt okunur olarak işaretli; şu ifadeler bu bağlantıda çalıştırılmaz:</p><p class="db-codes">${r.blocked.map(b => `<code>${esc(b)}</code>`).join(' ')}</p>`, buttons: [['ok', 'Tamam', 'primary']] });
+      await dbApi.modal({ title: __('Salt okunur bağlantı'), icon: 'fa-lock', body: `<p>${__('<b>{name}</b> salt okunur olarak işaretli; şu ifadeler bu bağlantıda çalıştırılmaz:', { name: esc(c.name || c.host) })}</p><p class="db-codes">${r.blocked.map(b => `<code>${esc(b)}</code>`).join(' ')}</p>`, buttons: [['ok', __('Tamam'), 'primary']] });
       return;
     }
     if (r.confirm) {
       render();
-      const ok = await dbApi.modal({ title: 'Bu sorgu veri silebilir', icon: 'fa-triangle-exclamation', danger: true, body: `<p>Çalıştırmadan önce kontrol et:</p><ul class="db-risks">${r.confirm.map(x => `<li>${esc(x)}</li>`).join('')}</ul><p class="db-muted">Bağlantı: <b>${esc(c.name || c.host)}</b>${st().db ? ' · ' + esc(st().db) : ''}</p>`, buttons: [['cancel', 'Vazgeç'], ['ok', 'Yine de çalıştır', 'danger']], focus: 'cancel' });
+      const ok = await dbApi.modal({ title: __('Bu sorgu veri silebilir'), icon: 'fa-triangle-exclamation', danger: true, body: `<p>${esc(__('Çalıştırmadan önce kontrol et:'))}</p><ul class="db-risks">${r.confirm.map(x => `<li>${esc(x)}</li>`).join('')}</ul><p class="db-muted">${__('Bağlantı: <b>{name}</b>', { name: esc(c.name || c.host) })}${st().db ? ' · ' + esc(st().db) : ''}</p>`, buttons: [['cancel', __('Vazgeç')], ['ok', __('Yine de çalıştır'), 'danger']], focus: 'cancel' });
       if (ok && ok.value === 'ok') return runSql(sql, src, offset, { ...o, confirmed: true });
       return;
     }
@@ -435,7 +435,7 @@
       if (IDE.ui.db && IDE.ui.db.open) showDrawer(true, true);
     }, 200);
     try {
-      SHORTCUTS.push({ group: 'IDE', keys: 'Ctrl+Shift+Enter', label: "Seçili SQL'i (ya da .sql dosyasında imleçteki deyimi) seçili veritabanında çalıştır", ide: true, run: runSmart });
+      SHORTCUTS.push({ group: 'IDE', keys: 'Ctrl+Shift+Enter', label: __("Seçili SQL'i (ya da .sql dosyasında imleçteki deyimi) seçili veritabanında çalıştır"), ide: true, run: runSmart });
     } catch (_) {}
   }
   window.ideDb = { showSide, showDrawer, run: runEditor };

@@ -10,6 +10,7 @@ const fs = require('fs');
 const fsp = fs.promises;
 const os = require('os');
 const { IS_WIN, whereAll, userShell, shQuote } = require('./platform');
+const I18N = require('../i18n/i18n.js'); const __ = I18N.t;
 
 const CODEX_HOME = () => process.env.CODEX_HOME || path.join(os.homedir(), '.codex');
 const SESSIONS = () => path.join(CODEX_HOME(), 'sessions');
@@ -94,9 +95,9 @@ module.exports = function setupCodex({ config, hookPort, buildPrompt, encodeProj
   }
   // { file, args } for node-pty
   function launch(opts, ptyId) {
-    if (opts.resume && !ID_RE.test(opts.resume)) throw new Error('Geçersiz Codex oturum kimliği.');
+    if (opts.resume && !ID_RE.test(opts.resume)) throw new Error(__('Geçersiz Codex oturum kimliği.'));
     const l = launcher();
-    if (!l) throw new Error('codex komutu bulunamadı. Codex CLI kurulu ve PATH içinde olmalı (npm i -g @openai/codex) ya da Ayarlar → Codex oturumları → Açılış komutu doldurulmalı.');
+    if (!l) throw new Error(__('codex komutu bulunamadı. Codex CLI kurulu ve PATH içinde olmalı (npm i -g @openai/codex) ya da Ayarlar → Codex oturumları → Açılış komutu doldurulmalı.'));
     const all = [...l.pre, ...args(opts, ptyId)];
     if (!l.line) return { file: l.file, args: all };
     if (IS_WIN) return { file: 'cmd.exe', args: '/d /s /c "' + [quoteArg(l.file), ...all.map(quoteArg)].join(' ') + '"' };
@@ -104,9 +105,9 @@ module.exports = function setupCodex({ config, hookPort, buildPrompt, encodeProj
   }
   function summary() {
     const s = S();
-    const p = [s.model || 'varsayılan model'];
-    if (s.effort) p.push(s.effort + ' efor');
-    if (s.mode) p.push({ readonly: 'salt okunur', never: 'sormadan', full: 'tam yetki' }[s.mode] || s.mode);
+    const p = [s.model || __('varsayılan model')];
+    if (s.effort) p.push(__('{effort} efor', { effort: s.effort }));
+    if (s.mode) p.push({ readonly: __('salt okunur'), never: __('sormadan'), full: __('tam yetki') }[s.mode] || s.mode);
     return p.join(' · ');
   }
 
@@ -181,7 +182,7 @@ module.exports = function setupCodex({ config, hookPort, buildPrompt, encodeProj
     return list;
   }
   const names = () => config().codexNames || {};
-  const titleOf = t => (names()[t.id] || t.name || t.first || 'Adsız oturum').replace(/\s+/g, ' ').slice(0, 120);
+  const titleOf = t => (names()[t.id] || t.name || t.first || __('Adsız oturum')).replace(/\s+/g, ' ').slice(0, 120);
   async function listSessions(projectPath) {
     const list = (await threads()).filter(t => t.first && samePath(t.cwd, projectPath));
     return list.sort((a, b) => b.mtime - a.mtime).slice(0, 40).map(t => ({ id: t.id, title: titleOf(t), mtime: t.mtime, agent: 'codex' }));
@@ -189,8 +190,8 @@ module.exports = function setupCodex({ config, hookPort, buildPrompt, encodeProj
   // VoxStorm keeps its own names for Codex sessions; Codex's database is never written
   function rename(id, title, save) {
     const t = String(title || '').replace(/\s+/g, ' ').trim().slice(0, 120);
-    if (!t) return { ok: false, error: 'Ad boş olamaz.' };
-    if (!ID_RE.test(String(id || ''))) return { ok: false, error: 'Oturum bulunamadı.' };
+    if (!t) return { ok: false, error: __('Ad boş olamaz.') };
+    if (!ID_RE.test(String(id || ''))) return { ok: false, error: __('Oturum bulunamadı.') };
     config().codexNames = { ...names(), [id]: t };
     save();
     threadCache = null;
@@ -247,11 +248,11 @@ module.exports = function setupCodex({ config, hookPort, buildPrompt, encodeProj
       const resetMs = w.resets_at ? w.resets_at * 1000 : 0;
       const past = resetMs && resetMs <= now;
       const mins = w.window_minutes || 0;
-      const title = mins === 300 ? 'Bu oturum (5 saat)' : mins === 10080 ? 'Bu hafta' : mins ? (mins % 1440 === 0 ? `${mins / 1440} günlük` : `${Math.round(mins / 60)} saatlik`) + ' pencere' : fallback;
+      const title = mins === 300 ? __('Bu oturum (5 saat)') : mins === 10080 ? __('Bu hafta') : mins ? (mins % 1440 === 0 ? __('{n} günlük pencere', { n: mins / 1440 }) : __('{n} saatlik pencere', { n: Math.round(mins / 60) })) : fallback;
       rows.push({ title, percent: past ? 0 : w.used_percent, resetsAt: past ? null : resetMs ? new Date(resetMs).toISOString() : null, severity: 'normal' });
     };
-    win(rl.primary, 'Kısa pencere');
-    win(rl.secondary, 'Uzun pencere');
+    win(rl.primary, __('Kısa pencere'));
+    win(rl.secondary, __('Uzun pencere'));
     return { at: latest.at, plan: rl.plan_type || null, reached: rl.rate_limit_reached_type || null, rows };
   }
 

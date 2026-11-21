@@ -4,6 +4,7 @@ const path = require('path');
 const fs = require('fs');
 const crypto = require('crypto');
 const { pathToFileURL } = require('url');
+const I18N = require('../i18n/i18n.js'); const __ = I18N.t;
 
 const EXT = ['.png', '.jpg', '.jpeg', '.webp', '.gif', '.bmp', '.avif'];
 const MAX = 25 * 1024 * 1024;
@@ -13,12 +14,12 @@ module.exports = function registerThemes({ ipcMain, dialog, BrowserWindow, DATA 
 
   function importImage(src) {
     src = String(src || '');
-    if (!path.isAbsolute(src)) throw new Error('Resim yolu tam yol olmalı.');
+    if (!path.isAbsolute(src)) throw new Error(__('Resim yolu tam yol olmalı.'));
     const ext = path.extname(src).toLowerCase();
-    if (!EXT.includes(ext)) throw new Error('Desteklenen resim türleri: ' + EXT.join(', '));
+    if (!EXT.includes(ext)) throw new Error(__('Desteklenen resim türleri: {list}', { list: EXT.join(', ') }));
     const st = fs.statSync(src);
-    if (!st.isFile()) throw new Error('Resim bulunamadı: ' + src);
-    if (st.size > MAX) throw new Error('Resim 25 MB’tan büyük olamaz.');
+    if (!st.isFile()) throw new Error(__('Resim bulunamadı: {path}', { path: src }));
+    if (st.size > MAX) throw new Error(__('Resim 25 MB’tan büyük olamaz.'));
     fs.mkdirSync(DIR, { recursive: true });
     const file = path.join(DIR, crypto.randomBytes(8).toString('hex') + ext);
     fs.copyFileSync(src, file);
@@ -33,7 +34,7 @@ module.exports = function registerThemes({ ipcMain, dialog, BrowserWindow, DATA 
 
   ipcMain.handle('theme:pickImage', async e => {
     const w = BrowserWindow.fromWebContents(e.sender);
-    const r = await dialog.showOpenDialog(w, { title: 'Arka plan resmi seç', properties: ['openFile'], filters: [{ name: 'Resimler', extensions: EXT.map(x => x.slice(1)) }] });
+    const r = await dialog.showOpenDialog(w, { title: __('Arka plan resmi seç'), properties: ['openFile'], filters: [{ name: __('Resimler'), extensions: EXT.map(x => x.slice(1)) }] });
     if (r.canceled || !r.filePaths[0]) return null;
     try { return importImage(r.filePaths[0]); } catch (err) { return { error: err.message }; }
   });

@@ -11,6 +11,7 @@ const crypto = require('crypto');
 const { StringDecoder } = require('string_decoder');
 const { execFile, spawn } = require('child_process');
 const { safeStorage, shell } = require('electron');
+const I18N = require('../i18n/i18n.js'); const __ = I18N.t;
 const IS_WIN = process.platform === 'win32', IS_MAC = process.platform === 'darwin';
 
 const COLORS = new Set(['', 'red', 'orange', 'yellow', 'green', 'blue', 'purple', 'gray']);
@@ -104,7 +105,7 @@ module.exports = function registerSsh({ ipcMain, dialog, getWin, send, sendTo, D
   ipcMain.handle('ssh:list', () => ({ hosts: hosts().map(publicHost), canEncrypt: canEncrypt(), home: os.homedir() }));
   ipcMain.handle('ssh:save', (_e, d) => {
     const v = clean(d || {});
-    if (!v.host) throw new Error('Sunucu adresi boş olamaz.');
+    if (!v.host) throw new Error(__('Sunucu adresi boş olamaz.'));
     let h = d.id && hostById(d.id);
     if (h) { Object.assign(h, v); dropAgent(h.id); } else { h = { id: newId(), ...v }; hosts().push(h); }
     if (typeof d.pw === 'string' && d.pw) {
@@ -128,7 +129,7 @@ module.exports = function registerSsh({ ipcMain, dialog, getWin, send, sendTo, D
   });
   ipcMain.handle('ssh:duplicate', (_e, id) => {
     const h = hostById(id); if (!h) return null;
-    const c = { ...JSON.parse(JSON.stringify(h)), id: newId(), name: (h.name || label(h)) + ' (kopya)' };
+    const c = { ...JSON.parse(JSON.stringify(h)), id: newId(), name: __('{name} (kopya)', { name: h.name || label(h) }) };
     hosts().splice(hosts().indexOf(h) + 1, 0, c);
     write('hosts', true);
     return publicHost(c);
@@ -145,8 +146,8 @@ module.exports = function registerSsh({ ipcMain, dialog, getWin, send, sendTo, D
   ipcMain.handle('ssh:setState', (_e, st) => { data.state = st && typeof st === 'object' ? st : null; write('state'); return true; });
   ipcMain.handle('ssh:pickKey', async () => {
     const r = await dialog.showOpenDialog(getWin(), {
-      title: 'Özel anahtar dosyası seç', defaultPath: path.join(os.homedir(), '.ssh'), properties: ['openFile', 'showHiddenFiles'],
-      filters: [{ name: 'Anahtar dosyaları', extensions: ['*'] }],
+      title: __('Özel anahtar dosyası seç'), defaultPath: path.join(os.homedir(), '.ssh'), properties: ['openFile', 'showHiddenFiles'],
+      filters: [{ name: __('Anahtar dosyaları'), extensions: ['*'] }],
     });
     return r.canceled ? null : r.filePaths[0];
   });
@@ -159,9 +160,9 @@ module.exports = function registerSsh({ ipcMain, dialog, getWin, send, sendTo, D
   const knownKey = h => `${h.host.toLowerCase()}:${h.port || 22}`;
 
   function readKey(h) {
-    if (!h.keyPath) throw new Error('Özel anahtar dosyası seçilmedi.');
+    if (!h.keyPath) throw new Error(__('Özel anahtar dosyası seçilmedi.'));
     let p = h.keyPath.replace(/^~(?=[\\/]|$)/, os.homedir());
-    try { return fs.readFileSync(p); } catch (e) { throw new Error('Anahtar dosyası okunamadı: ' + p); }
+    try { return fs.readFileSync(p); } catch (e) { throw new Error(__('Anahtar dosyası okunamadı: {path}', { path: p })); }
   }
   function isPpk(buf) { return /^PuTTY-User-Key-File-/.test(buf.slice(0, 40).toString('latin1')); }
   function keyNeedsPassphrase(buf) {
@@ -231,32 +232,32 @@ module.exports = function registerSsh({ ipcMain, dialog, getWin, send, sendTo, D
         if (hostIssue) { finish(hostIssue); return; }
         const msg = scrub(err && err.message, pw, pp);
         if (err && err.level === 'client-authentication') {
-          if (h.auth === 'password') { mem.delete(h.id + ':pw'); finish({ needPassword: true, what: 'pw', loginFailed: true, error: 'Kullanıcı adı ya da parola hatalı.' }); return; }
-          if (h.auth === 'key') { finish({ error: 'Sunucu anahtarı kabul etmedi (' + msg + ').' }); return; }
-          finish({ error: 'Ajan (ssh-agent / Pageant) üzerinden giriş yapılamadı.' }); return;
+          if (h.auth === 'password') { mem.delete(h.id + ':pw'); finish({ needPassword: true, what: 'pw', loginFailed: true, error: __('Kullanıcı adı ya da parola hatalı.') }); return; }
+          if (h.auth === 'key') { finish({ error: __('Sunucu anahtarı kabul etmedi ({msg}).', { msg }) }); return; }
+          finish({ error: __('Ajan (ssh-agent / Pageant) üzerinden giriş yapılamadı.') }); return;
         }
-        if (/passphrase|decrypt|Encrypted private/i.test(msg)) { mem.delete(h.id + ':pp'); finish({ needPassword: true, what: 'pp', loginFailed: true, error: 'Anahtar parolası hatalı.' }); return; }
-        if (/Cannot parse privateKey|Unsupported key format/i.test(msg)) { finish({ error: 'Anahtar dosyası okunamadı: ' + msg }); return; }
+        if (/passphrase|decrypt|Encrypted private/i.test(msg)) { mem.delete(h.id + ':pp'); finish({ needPassword: true, what: 'pp', loginFailed: true, error: __('Anahtar parolası hatalı.') }); return; }
+        if (/Cannot parse privateKey|Unsupported key format/i.test(msg)) { finish({ error: __('Anahtar dosyası okunamadı: {path}', { path: msg }) }); return; }
         finish({ error: friendlyNetErr(msg) });
       });
-      c.on('close', () => { if (!done) finish(hostIssue || { error: 'Bağlantı kapandı.' }); else if (onClose) onClose(); });
+      c.on('close', () => { if (!done) finish(hostIssue || { error: __('Bağlantı kapandı.') }); else if (onClose) onClose(); });
       try { c.connect(cfg); } catch (e) { finish({ error: scrub(e.message, pw, pp) }); }
     });
   }
   function friendlyNetErr(msg) {
-    if (/ENOTFOUND|EAI_AGAIN/.test(msg)) return 'Sunucu adı çözümlenemedi (' + msg + ').';
-    if (/ECONNREFUSED/.test(msg)) return 'Bağlantı reddedildi: sunucuda SSH servisi bu portta çalışmıyor olabilir.';
-    if (/ETIMEDOUT|Timed out while waiting for handshake/i.test(msg)) return 'Zaman aşımı: sunucuya ulaşılamadı.';
-    if (/ECONNRESET/.test(msg)) return 'Bağlantı sunucu tarafından kesildi.';
+    if (/ENOTFOUND|EAI_AGAIN/.test(msg)) return __('Sunucu adı çözümlenemedi ({msg}).', { msg });
+    if (/ECONNREFUSED/.test(msg)) return __('Bağlantı reddedildi: sunucuda SSH servisi bu portta çalışmıyor olabilir.');
+    if (/ETIMEDOUT|Timed out while waiting for handshake/i.test(msg)) return __('Zaman aşımı: sunucuya ulaşılamadı.');
+    if (/ECONNRESET/.test(msg)) return __('Bağlantı sunucu tarafından kesildi.');
     return msg;
   }
 
   ipcMain.handle('ssh:connect', async (e, hostId, opts = {}) => {
     const h = hostById(hostId);
-    if (!h) return { error: 'Bağlantı bulunamadı.' };
-    if (h.kind !== 'ssh') return { error: 'Bu bir RDP bağlantısı.' };
+    if (!h) return { error: __('Bağlantı bulunamadı.') };
+    if (h.kind !== 'ssh') return { error: __('Bu bir RDP bağlantısı.') };
     const sid = 's' + (++seq) + crypto.randomBytes(3).toString('hex');
-    const r = await connectClient(h, opts, () => closeSession(sid, 'Bağlantı kapandı.'));
+    const r = await connectClient(h, opts, () => closeSession(sid, __('Bağlantı kapandı.')));
     if (!r.client) return r;
     const s = { id: sid, hostId, client: r.client, sftp: null, sftpWait: null, tunnels: [], closed: false, wc: e && e.sender };
     sessions.set(sid, s);
@@ -274,7 +275,7 @@ module.exports = function registerSsh({ ipcMain, dialog, getWin, send, sendTo, D
     sessions.delete(sid);
     for (const [ch, x] of shells) if (x.sid === sid) { shells.delete(ch); out(x.wc, 'ssh:exit', ch, reason || ''); }
     for (const t of s.tunnels) { try { t.server.close(); } catch (_) {} }
-    for (const j of jobs.values()) if (j.sid === sid && !j.finished) cancelJob(j, 'Bağlantı kapandı.');
+    for (const j of jobs.values()) if (j.sid === sid && !j.finished) cancelJob(j, __('Bağlantı kapandı.'));
     try { s.client.end(); } catch (_) {}
     out(s.wc, 'ssh:closed', sid, reason || '');
   }
@@ -305,7 +306,7 @@ module.exports = function registerSsh({ ipcMain, dialog, getWin, send, sendTo, D
     return c.ch;
   }
   ipcMain.handle('ssh:shell', (_e, sid, cols, rows) => new Promise(resolve => {
-    const s = sessions.get(sid); if (!s) { resolve({ error: 'Bağlantı yok.' }); return; }
+    const s = sessions.get(sid); if (!s) { resolve({ error: __('Bağlantı yok.') }); return; }
     s.client.shell({ term: 'xterm-256color', cols: cols || 80, rows: rows || 24 }, { env: { LANG: 'en_US.UTF-8' } }, (err, stream) => {
       if (err) { resolve({ error: err.message }); return; }
       resolve({ ch: streamChannel(s, stream) });
@@ -314,7 +315,7 @@ module.exports = function registerSsh({ ipcMain, dialog, getWin, send, sendTo, D
   // run a command on the server with a terminal (e.g. docker exec -it); its output is a channel
   function execPty(sid, cmd, cols, rows) {
     return new Promise(resolve => {
-      const s = sessions.get(sid); if (!s) { resolve({ error: 'Bağlantı kapalı.' }); return; }
+      const s = sessions.get(sid); if (!s) { resolve({ error: __('Bağlantı kapalı.') }); return; }
       s.client.exec(cmd, { pty: { term: 'xterm-256color', cols: cols || 80, rows: rows || 24 } }, (err, stream) => {
         if (err) { resolve({ error: err.message }); return; }
         resolve({ ch: streamChannel(s, stream) });
@@ -324,7 +325,7 @@ module.exports = function registerSsh({ ipcMain, dialog, getWin, send, sendTo, D
   // run a command on the server and collect its output (no terminal)
   function execOut(sid, cmd, { timeout = 30000, maxBytes = 8 * 1024 * 1024 } = {}) {
     return new Promise(resolve => {
-      const s = sessions.get(sid); if (!s) { resolve({ code: -1, stdout: '', stderr: 'Bağlantı kapalı.' }); return; }
+      const s = sessions.get(sid); if (!s) { resolve({ code: -1, stdout: '', stderr: __('Bağlantı kapalı.') }); return; }
       s.client.exec(cmd, (err, stream) => {
         if (err) { resolve({ code: -1, stdout: '', stderr: err.message }); return; }
         const out1 = [], out2 = []; let n = 0, done = false;
@@ -339,7 +340,7 @@ module.exports = function registerSsh({ ipcMain, dialog, getWin, send, sendTo, D
   }
   // a streaming command (docker logs -f): calls onData until stopped; returns stop()
   function execStream(sid, cmd, onData, onEnd) {
-    const s = sessions.get(sid); if (!s) { onEnd('Bağlantı kapalı.'); return () => {}; }
+    const s = sessions.get(sid); if (!s) { onEnd(__('Bağlantı kapalı.')); return () => {}; }
     let stream = null, stopped = false;
     s.client.exec(cmd, (err, st) => {
       if (err) { onEnd(err.message); return; }
@@ -367,7 +368,7 @@ module.exports = function registerSsh({ ipcMain, dialog, getWin, send, sendTo, D
         s.sftp = sf; s.sftpWait = null;
         sf.on('close', () => { if (s.sftp === sf) s.sftp = null; });
         return sf;
-      }, e => { s.sftpWait = null; throw new Error('SFTP açılamadı: ' + e.message); });
+      }, e => { s.sftpWait = null; throw new Error(__('SFTP açılamadı: {msg}', { msg: e.message })); });
     }
     return s.sftpWait;
   }
@@ -377,9 +378,9 @@ module.exports = function registerSsh({ ipcMain, dialog, getWin, send, sendTo, D
   const rparent = p => { if (p === '/' || !p) return '/'; const i = p.replace(/\/+$/, '').lastIndexOf('/'); return i <= 0 ? '/' : p.slice(0, i); };
   const sftpErr = (e, p) => {
     const code = e && e.code;
-    if (code === 2) return 'Bulunamadı: ' + p;
-    if (code === 3) return 'İzin yok: ' + p;
-    if (code === 4) return 'İşlem başarısız: ' + p + ' (klasör boş olmayabilir ya da hedef zaten var)';
+    if (code === 2) return __('Bulunamadı: {path}', { path: p });
+    if (code === 3) return __('İzin yok: {path}', { path: p });
+    if (code === 4) return __('İşlem başarısız: {path} (klasör boş olmayabilir ya da hedef zaten var)', { path: p });
     return (e && e.message) || String(e);
   };
   function permString(mode, isDir, isLink) {
@@ -389,7 +390,7 @@ module.exports = function registerSsh({ ipcMain, dialog, getWin, send, sendTo, D
   }
   async function sess(sid) {
     const s = sessions.get(sid);
-    if (!s) throw new Error('Bağlantı kapalı. Yeniden bağlan.');
+    if (!s) throw new Error(__('Bağlantı kapalı. Yeniden bağlan.'));
     return { s, sf: await sftpOf(s) };
   }
   ipcMain.handle('ssh:ls', async (_e, sid, dir) => {
@@ -414,7 +415,7 @@ module.exports = function registerSsh({ ipcMain, dialog, getWin, send, sendTo, D
       if (op === 'mkdir') { await P(cb => sf.mkdir(a.path, cb)); return { ok: true }; }
       if (op === 'touch') {
         const exists = await P(cb => sf.stat(a.path, cb)).then(() => true, () => false);
-        if (exists) return { error: 'Bu adda bir öğe zaten var.' };
+        if (exists) return { error: __('Bu adda bir öğe zaten var.') };
         await P(cb => sf.writeFile(a.path, '', cb)); return { ok: true };
       }
       if (op === 'rename') { await P(cb => sf.rename(a.from, a.to, cb)); return { ok: true }; }
@@ -423,10 +424,10 @@ module.exports = function registerSsh({ ipcMain, dialog, getWin, send, sendTo, D
       if (op === 'stat') { const st = await P(cb => sf.stat(a.path, cb)); return { dir: st.isDirectory(), size: st.size, mode: st.mode & 0o7777 }; }
       if (op === 'read') {
         const st = await P(cb => sf.stat(a.path, cb));
-        if (st.isDirectory()) return { error: 'Bu bir klasör.' };
-        if (st.size > MAX_EDIT) return { error: `Dosya düzenlemek için çok büyük (${Math.round(st.size / 1048576)} MB). İndirip aç.` };
+        if (st.isDirectory()) return { error: __('Bu bir klasör.') };
+        if (st.size > MAX_EDIT) return { error: __('Dosya düzenlemek için çok büyük ({mb} MB). İndirip aç.', { mb: Math.round(st.size / 1048576) }), tooBig: true };
         const buf = await P(cb => sf.readFile(a.path, cb));
-        if (buf.includes(0)) return { error: 'İkili (binary) dosya; düzenleyicide açılamaz.', binary: true };
+        if (buf.includes(0)) return { error: __('İkili (binary) dosya; düzenleyicide açılamaz.'), binary: true };
         return { text: buf.toString('utf8'), size: st.size, mtime: st.mtime * 1000, crlf: /\r\n/.test(buf.toString('latin1', 0, Math.min(buf.length, 65536))) };
       }
       if (op === 'write') {
@@ -453,7 +454,7 @@ module.exports = function registerSsh({ ipcMain, dialog, getWin, send, sendTo, D
         for (const p of a.paths || []) await walk(p);
         return { total, files, dirs };
       }
-      return { error: 'Bilinmeyen işlem.' };
+      return { error: __('Bilinmeyen işlem.') };
     } catch (e) { return { error: sftpErr(e, a.path || a.from || '') }; }
   });
   async function rmRemote(sf, p) {
@@ -484,21 +485,21 @@ module.exports = function registerSsh({ ipcMain, dialog, getWin, send, sendTo, D
         items.push({ name: d.name, dir: isDir, link: d.isSymbolicLink(), size: isDir || !st ? null : st.size, mtime: st ? st.mtimeMs : 0, hidden: d.name.startsWith('.') });
       }
       return { path: p, items };
-    } catch (e) { return { error: e.code === 'ENOENT' ? 'Klasör bulunamadı: ' + dir : e.code === 'EPERM' || e.code === 'EACCES' ? 'Erişim izni yok: ' + dir : e.message }; }
+    } catch (e) { return { error: e.code === 'ENOENT' ? __('Klasör bulunamadı: {path}', { path: dir }) : e.code === 'EPERM' || e.code === 'EACCES' ? __('Erişim izni yok: {path}', { path: dir }) : e.message }; }
   });
   ipcMain.handle('ssh:localOp', async (_e, op, a = {}) => {
     try {
       if (op === 'mkdir') { await fs.promises.mkdir(a.path); return { ok: true }; }
-      if (op === 'rename') { if (fs.existsSync(a.to)) return { error: 'Bu adda bir öğe zaten var.' }; await fs.promises.rename(a.from, a.to); return { ok: true }; }
+      if (op === 'rename') { if (fs.existsSync(a.to)) return { error: __('Bu adda bir öğe zaten var.') }; await fs.promises.rename(a.from, a.to); return { ok: true }; }
       if (op === 'trash') { for (const p of a.paths || []) await shell.trashItem(p); return { ok: true }; }
       if (op === 'open') { const r = await shell.openPath(a.path); return r ? { error: r } : { ok: true }; }
       if (op === 'reveal') { shell.showItemInFolder(a.path); return { ok: true }; }
       if (op === 'pickDir') {
-        const r = await dialog.showOpenDialog(getWin(), { title: 'Klasör seç', defaultPath: a.path || os.homedir(), properties: ['openDirectory', 'createDirectory'] });
+        const r = await dialog.showOpenDialog(getWin(), { title: __('Klasör seç'), defaultPath: a.path || os.homedir(), properties: ['openDirectory', 'createDirectory'] });
         return r.canceled ? { canceled: true } : { path: r.filePaths[0] };
       }
       if (op === 'isDir') { try { return { dir: fs.statSync(a.path).isDirectory() }; } catch (_) { return { dir: false }; } }
-      return { error: 'Bilinmeyen işlem.' };
+      return { error: __('Bilinmeyen işlem.') };
     } catch (e) { return { error: e.message }; }
   });
 
@@ -547,10 +548,10 @@ module.exports = function registerSsh({ ipcMain, dialog, getWin, send, sendTo, D
 
   ipcMain.handle('ssh:transfer', async (_e, sid, dir, paths, target, opts = {}) => {
     const s = sessions.get(sid);
-    if (!s) return { error: 'Bağlantı kapalı.' };
-    if (!Array.isArray(paths) || !paths.length) return { error: 'Seçili öğe yok.' };
+    if (!s) return { error: __('Bağlantı kapalı.') };
+    if (!Array.isArray(paths) || !paths.length) return { error: __('Seçili öğe yok.') };
     const id = 'x' + (++seq);
-    const name = paths.length === 1 ? (dir === 'up' ? path.basename(paths[0]) : paths[0].split('/').pop()) : `${paths.length} öğe`;
+    const name = paths.length === 1 ? (dir === 'up' ? path.basename(paths[0]) : paths[0].split('/').pop()) : __('{n} öğe', { n: paths.length });
     const j = { id, sid, wc: s.wc, dir, name, target, total: 0, done: 0, files: 0, filesDone: 0, current: '', state: 'preparing', started: Date.now(), overwrite: opts.overwrite || 'ask' };
     jobs.set(id, j);
     emitJob(j);
@@ -632,13 +633,13 @@ module.exports = function registerSsh({ ipcMain, dialog, getWin, send, sendTo, D
   const tunnelList = s => s.tunnels.map(t => ({ localPort: t.localPort, remoteHost: t.remoteHost, remotePort: t.remotePort, conns: t.conns, error: t.error || '' }));
   function openTunnel(s, t) {
     return new Promise(resolve => {
-      if (s.tunnels.some(x => x.localPort === t.localPort)) { resolve(`${t.localPort} zaten açık.`); return; }
+      if (s.tunnels.some(x => x.localPort === t.localPort)) { resolve(__('{port} zaten açık.', { port: t.localPort })); return; }
       const rec = { ...t, conns: 0, server: null };
       const server = net.createServer(sock => {
         s.client.forwardOut('127.0.0.1', sock.remotePort || 0, t.remoteHost, t.remotePort, (err, stream) => {
           if (err) {
             sock.destroy();
-            rec.error = /prohibited|denied/i.test(err.message) ? 'Sunucu port yönlendirmeye izin vermiyor (sshd_config: AllowTcpForwarding).' : 'Hedefe bağlanılamadı: ' + err.message;
+            rec.error = /prohibited|denied/i.test(err.message) ? __('Sunucu port yönlendirmeye izin vermiyor (sshd_config: AllowTcpForwarding).') : __('Hedefe bağlanılamadı: {msg}', { msg: err.message });
             out(s.wc, 'ssh:tunnels', s.id, tunnelList(s));
             return;
           }
@@ -650,15 +651,15 @@ module.exports = function registerSsh({ ipcMain, dialog, getWin, send, sendTo, D
           stream.on('close', () => { sock.destroy(); rec.conns = Math.max(0, rec.conns - 1); out(s.wc, 'ssh:tunnels', s.id, tunnelList(s)); });
         });
       });
-      server.once('error', e => resolve(e.code === 'EADDRINUSE' ? `Yerel port ${t.localPort} kullanımda.` : e.message));
+      server.once('error', e => resolve(e.code === 'EADDRINUSE' ? __('Yerel port {port} kullanımda.', { port: t.localPort }) : e.message));
       server.listen(t.localPort, '127.0.0.1', () => { rec.server = server; s.tunnels.push(rec); resolve(null); });
     });
   }
   ipcMain.handle('ssh:tunnel', async (_e, sid, action, t) => {
-    const s = sessions.get(sid); if (!s) return { error: 'Bağlantı kapalı.' };
+    const s = sessions.get(sid); if (!s) return { error: __('Bağlantı kapalı.') };
     if (action === 'open') {
       const [c] = cleanTunnels([t]);
-      if (!c) return { error: 'Port numaraları geçersiz.' };
+      if (!c) return { error: __('Port numaraları geçersiz.') };
       const err = await openTunnel(s, c);
       if (err) return { error: err };
     } else if (action === 'close') {
@@ -670,13 +671,13 @@ module.exports = function registerSsh({ ipcMain, dialog, getWin, send, sendTo, D
 
   /* ---------------- RDP ---------------- */
   ipcMain.handle('ssh:rdp', async (_e, hostId, given) => {
-    const h = hostById(hostId); if (!h) return { error: 'Bağlantı bulunamadı.' };
+    const h = hostById(hostId); if (!h) return { error: __('Bağlantı bulunamadı.') };
     if (IS_MAC) { // Windows App (Microsoft Remote Desktop) opens rdp:// links
       const q = [`full address=s:${h.host}:${h.port || 3389}`];
       if (h.user) q.push(`username=s:${h.domain ? h.domain + '\\' : ''}${h.user}`);
       if (h.fullscreen) q.push('screen mode id=i:2');
       try { await shell.openExternal('rdp://' + q.map(x => encodeURIComponent(x).replace(/%3D/g, '=').replace(/%3A/g, ':')).join('&')); }
-      catch (_) { return { error: 'Windows App (Microsoft Remote Desktop) bulunamadı; App Store’dan kurabilirsin.' }; }
+      catch (_) { return { error: __('Windows App (Microsoft Remote Desktop) bulunamadı; App Store’dan kurabilirsin.') }; }
       return { ok: true };
     }
     if (!IS_WIN) return require('./rdp').openLinux(h, typeof given === 'string' ? given : secretOf(h, 'pw')); // FreeRDP / Remmina
@@ -715,9 +716,16 @@ module.exports = function registerSsh({ ipcMain, dialog, getWin, send, sendTo, D
     x.ready = connectClient(h, {}, () => { x.dead = true; if (agentConns.get(h.id) === x) agentConns.delete(h.id); }).then(r => {
       if (r.client) { r.client.on('error', () => {}); return r.client; }
       x.dead = true;
-      if (r.needPassword) throw new Error(`“${h.name || 'Bu sunucu'}” için ${r.what === 'pp' ? 'anahtar parolası' : 'parola'} kayıtlı değil. Kullanıcının VoxStorm’un SSH modunda bu sunucuya bir kez bağlanması gerekiyor; sonra bu çalışma boyunca kullanılabilir.`);
-      if (r.hostKey) throw new Error(`Sunucunun anahtarı ${r.changed ? 'değişmiş' : 'henüz onaylanmamış'}. Kullanıcının VoxStorm’un SSH modunda bu sunucuya bir kez bağlanıp anahtarı onaylaması gerekiyor.`);
-      throw new Error(r.error || 'Bağlanılamadı.');
+      if (r.needPassword) {
+        const name = h.name || __('Bu sunucu');
+        throw new Error(r.what === 'pp'
+          ? __('“{name}” için anahtar parolası kayıtlı değil. Kullanıcının VoxStorm’un SSH modunda bu sunucuya bir kez bağlanması gerekiyor; sonra bu çalışma boyunca kullanılabilir.', { name })
+          : __('“{name}” için parola kayıtlı değil. Kullanıcının VoxStorm’un SSH modunda bu sunucuya bir kez bağlanması gerekiyor; sonra bu çalışma boyunca kullanılabilir.', { name }));
+      }
+      if (r.hostKey) throw new Error(r.changed
+        ? __('Sunucunun anahtarı değişmiş. Kullanıcının VoxStorm’un SSH modunda bu sunucuya bir kez bağlanıp anahtarı onaylaması gerekiyor.')
+        : __('Sunucunun anahtarı henüz onaylanmamış. Kullanıcının VoxStorm’un SSH modunda bu sunucuya bir kez bağlanıp anahtarı onaylaması gerekiyor.'));
+      throw new Error(r.error || __('Bağlanılamadı.'));
     });
     x.ready.catch(() => { if (agentConns.get(h.id) === x) agentConns.delete(h.id); });
     agentConns.set(h.id, x);
@@ -725,15 +733,15 @@ module.exports = function registerSsh({ ipcMain, dialog, getWin, send, sendTo, D
   }
   async function agentExec(hostId, cmd, { stdin, timeout = 120000, maxBytes = 1024 * 1024 } = {}) {
     const h = hostById(hostId);
-    if (!h || h.kind !== 'ssh') throw new Error('Sunucu bulunamadı.');
-    if (h.aiAccess === 'deny') throw new Error('Bu sunucu ajanlara kapalı.');
+    if (!h || h.kind !== 'ssh') throw new Error(__('Sunucu bulunamadı.'));
+    if (h.aiAccess === 'deny') throw new Error(__('Bu sunucu ajanlara kapalı.'));
     const c = await agentClient(h);
     const x = agentConns.get(h.id) || { busy: 0 };
     x.busy++; x.last = Date.now();
     try {
       return await new Promise((resolve, reject) => {
         c.exec(cmd, (err, stream) => {
-          if (err) { reject(new Error('Komut başlatılamadı: ' + err.message)); return; }
+          if (err) { reject(new Error(__('Komut başlatılamadı: {msg}', { msg: err.message }))); return; }
           const out1 = [], out2 = []; let n1 = 0, n2 = 0, done = false, cut = false;
           const fin = code => {
             if (done) return; done = true; clearTimeout(t);
@@ -752,7 +760,7 @@ module.exports = function registerSsh({ ipcMain, dialog, getWin, send, sendTo, D
   // SFTP for agents: 'get' copies remote -> local, 'put' local -> remote
   async function agentSftp(hostId, op, local, remote) {
     const h = hostById(hostId);
-    if (!h || h.kind !== 'ssh' || h.aiAccess === 'deny') throw new Error('Sunucu bulunamadı.');
+    if (!h || h.kind !== 'ssh' || h.aiAccess === 'deny') throw new Error(__('Sunucu bulunamadı.'));
     const c = await agentClient(h);
     const sf = await new Promise((res, rej) => c.sftp((e, x) => (e ? rej(e) : res(x))));
     try { await new Promise((res, rej) => (op === 'put' ? sf.fastPut : sf.fastGet).call(sf, op === 'put' ? local : remote, op === 'put' ? remote : local, e => (e ? rej(e) : res()))); }
@@ -760,7 +768,7 @@ module.exports = function registerSsh({ ipcMain, dialog, getWin, send, sendTo, D
   }
   // what an agent may see: no host name, user, port or secret
   const agentList = () => hosts().filter(h => h.kind === 'ssh' && h.aiAccess !== 'deny').map(h => ({
-    id: h.id, name: h.name || `Adsız sunucu ${h.id}`, group: h.group, aiAccess: h.aiAccess || '', label: label(h),
+    id: h.id, name: h.name || __('Adsız sunucu {id}', { id: h.id }), group: h.group, aiAccess: h.aiAccess || '', label: label(h),
   }));
   function setAiAccess(id, v) {
     const h = hostById(id); if (!h) return;

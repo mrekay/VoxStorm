@@ -7,13 +7,13 @@
   'use strict';
   const SCHEME = 'voxplugin';
   const PERM_TEXT = {
-    notify: ['fa-regular fa-bell', 'Bildirim gösterme'],
-    storage: ['fa-solid fa-box-archive', 'Kendi verilerini saklama'],
-    'fs.read': ['fa-regular fa-file-lines', 'Projelerindeki dosyaları okuma'],
-    'fs.write': ['fa-solid fa-pen-to-square', 'Projelerindeki dosyaları değiştirme'],
-    shell: ['fa-solid fa-terminal', 'Projelerinde komut çalıştırma (bilgisayarında her şeyi yapabilir)'],
-    claude: ['fa-solid fa-robot', 'Claude oturumu başlatma ve açık oturuma mesaj yazma'],
-    net: ['fa-solid fa-globe', 'İnternete bağlanma'],
+    notify: ['fa-regular fa-bell', __('Bildirim gösterme')],
+    storage: ['fa-solid fa-box-archive', __('Kendi verilerini saklama')],
+    'fs.read': ['fa-regular fa-file-lines', __('Projelerindeki dosyaları okuma')],
+    'fs.write': ['fa-solid fa-pen-to-square', __('Projelerindeki dosyaları değiştirme')],
+    shell: ['fa-solid fa-terminal', __('Projelerinde komut çalıştırma (bilgisayarında her şeyi yapabilir)')],
+    claude: ['fa-solid fa-robot', __('Claude oturumu başlatma ve açık oturuma mesaj yazma')],
+    net: ['fa-solid fa-globe', __('İnternete bağlanma')],
   };
   const RISKY = new Set(['shell', 'fs.write']);
   const THEME_VARS = ['--bg', '--surface', '--surface-2', '--hover', '--line', '--fg', '--muted', '--accent', '--accent-soft', '--on-accent', '--warn', '--warn-soft', '--ok', '--ok-soft', '--danger', '--violet', '--violet-soft', '--f-mono'];
@@ -81,25 +81,25 @@
 
   /* ---------------- requests from plugin frames ---------------- */
   function need(st, perm) {
-    if (!st.info.permissions.includes(perm)) throw new Error(`Bu eklenti manifest.json'da "${perm}" iznini istemiyor`);
+    if (!st.info.permissions.includes(perm)) throw new Error(__('Bu eklenti manifest.json\'da "{perm}" iznini istemiyor', { perm }));
   }
   const API = {
     hello: (st, p, frame) => ({ id: st.info.id, name: st.info.name, version: st.info.version, permissions: st.info.permissions, theme: theme(), state: appState(), panel: frame.dataset.panel || null, place: frame.dataset.panel ? ((st.panels.get(frame.dataset.panel) || {}).place || null) : null }),
     'app.state': () => appState(),
     'app.setMode': (st, p) => { const m = String(p && p.mode || ''); if (['claude', 'ide', 'db', 'ssh'].includes(m)) setMode(m); return true; },
-    'app.openUrl': (st, p) => { const u = String(p && p.url || ''); if (!/^https:\/\//i.test(u)) throw new Error('Yalnızca https:// adresleri açılabilir'); window.open(u, '_blank'); return true; },
+    'app.openUrl': (st, p) => { const u = String(p && p.url || ''); if (!/^https:\/\//i.test(u)) throw new Error(__('Yalnızca https:// adresleri açılabilir')); window.open(u, '_blank'); return true; },
 
     'ui.toast': (st, p) => { toast(str(p && p.title, 120), str(p && p.body, 300)); return true; },
-    'ui.confirm': (st, p) => uiConfirm({ title: str(p && p.title || st.info.name, 120), message: str(p && p.message, 2000), detail: str(p && p.detail, 2000), ok: str(p && p.ok || 'Tamam', 40), cancel: str(p && p.cancel || 'Vazgeç', 40), danger: !!(p && p.danger), icon: 'fa-puzzle-piece' }),
-    'ui.prompt': (st, p) => uiPrompt({ title: str(p && p.title || st.info.name, 120), message: str(p && p.message, 2000), input: str(p && p.value, 2000), placeholder: str(p && p.placeholder, 200), ok: str(p && p.ok || 'Tamam', 40), icon: 'fa-puzzle-piece' }),
+    'ui.confirm': (st, p) => uiConfirm({ title: str(p && p.title || st.info.name, 120), message: str(p && p.message, 2000), detail: str(p && p.detail, 2000), ok: str(p && p.ok || __('Tamam'), 40), cancel: str(p && p.cancel || __('Vazgeç'), 40), danger: !!(p && p.danger), icon: 'fa-puzzle-piece' }),
+    'ui.prompt': (st, p) => uiPrompt({ title: str(p && p.title || st.info.name, 120), message: str(p && p.message, 2000), input: str(p && p.value, 2000), placeholder: str(p && p.placeholder, 200), ok: str(p && p.ok || __('Tamam'), 40), icon: 'fa-puzzle-piece' }),
     'ui.addButton': (st, p) => {
-      if (!p || !okId(p.id)) throw new Error('Düğmenin geçerli bir id\'si olmalı');
+      if (!p || !okId(p.id)) throw new Error(__('Düğmenin geçerli bir id\'si olmalı'));
       const place = p.place === 'statusbar' ? 'statusbar' : 'titlebar';
       st.buttons.set(p.id, { id: p.id, place, icon: str(p.icon, 60), label: str(p.label, 40), title: str(p.title, 200), badge: str(p.badge, 6), panel: p.panel && okId(p.panel) ? p.panel : '', menu: p.menu ? cleanItems(p.menu) : null });
       renderButtons(); return true;
     },
     'ui.updateButton': (st, p) => {
-      const b = p && st.buttons.get(p.id); if (!b) throw new Error('Böyle bir düğme yok');
+      const b = p && st.buttons.get(p.id); if (!b) throw new Error(__('Böyle bir düğme yok'));
       for (const [k, n] of [['icon', 60], ['label', 40], ['title', 200], ['badge', 6]]) if (p[k] !== undefined) b[k] = str(p[k], n);
       if (p.menu !== undefined) b.menu = p.menu ? cleanItems(p.menu) : null;
       renderButtons(); return true;
@@ -114,25 +114,25 @@
     },
     'ui.showMenu': (st, p, frame) => {
       const items = cleanItems(p && p.items);
-      if (!items.some(it => it.id != null)) throw new Error('Menüde en az bir öğe olmalı');
+      if (!items.some(it => it.id != null)) throw new Error(__('Menüde en az bir öğe olmalı'));
       const f = frame.getBoundingClientRect(), at = p && p.at;
       const pt = at && Number.isFinite(+at.x) && Number.isFinite(+at.y) ? { x: f.left + +at.x, y: f.top + +at.y } : { x: f.left + 20, y: f.top + 20 };
       if (at && Number.isFinite(+at.alignRight)) pt.alignRight = f.left + +at.alignRight;
       return showMenu(items, pt);
     },
     'ui.addMenuItem': (st, p) => {
-      if (!p || !okId(p.id)) throw new Error('Menü öğesinin geçerli bir id\'si olmalı');
+      if (!p || !okId(p.id)) throw new Error(__('Menü öğesinin geçerli bir id\'si olmalı'));
       const menu = MENUS.includes(p.menu) ? p.menu : null;
-      if (!menu) throw new Error(`menu şunlardan biri olmalı: ${MENUS.join(', ')}`);
+      if (!menu) throw new Error(__('menu şunlardan biri olmalı: {list}', { list: MENUS.join(', ') }));
       st.menuItems.set(p.id, { id: p.id, menu, title: str(p.title || p.id, 80), icon: str(p.icon, 60), danger: !!p.danger, when: ['claude', 'shell', 'watch', 'file', 'dir'].includes(p.when) ? p.when : '' });
       return true;
     },
     'ui.removeMenuItem': (st, p) => { st.menuItems.delete(p && p.id); return true; },
     'ui.removeButton': (st, p) => { st.buttons.delete(p && p.id); renderButtons(); return true; },
     'ui.addPanel': (st, p) => {
-      if (!p || !okId(p.id)) throw new Error('Panelin geçerli bir id\'si olmalı');
+      if (!p || !okId(p.id)) throw new Error(__('Panelin geçerli bir id\'si olmalı'));
       const page = str(p.page, 200).replace(/\\/g, '/').replace(/^\/+/, '');
-      if (!page || page.split('/').includes('..') || page.startsWith('__vox__')) throw new Error('page, eklenti klasöründeki bir .html dosyası olmalı');
+      if (!page || page.split('/').includes('..') || page.startsWith('__vox__')) throw new Error(__('page, eklenti klasöründeki bir .html dosyası olmalı'));
       const old = st.panels.get(p.id);
       if (old) removePanel(st, old);
       const place = ['mode', 'side'].includes(p.place) ? p.place : 'drawer';
@@ -148,11 +148,11 @@
     'ui.closePanel': (st, p) => { closePanel(st, p && p.id); return true; },
 
     'commands.register': (st, p) => {
-      if (!p || !okId(p.id)) throw new Error('Komutun geçerli bir id\'si olmalı');
+      if (!p || !okId(p.id)) throw new Error(__('Komutun geçerli bir id\'si olmalı'));
       const keys = normKeys(p.keys);
-      if (keys && SHORTCUTS.some(s => s.keys === keys && s.plugin !== st.info.id + ':' + p.id)) throw new Error(`${keys} kısayolu zaten kullanılıyor`);
+      if (keys && SHORTCUTS.some(s => s.keys === keys && s.plugin !== st.info.id + ':' + p.id)) throw new Error(__('{keys} kısayolu zaten kullanılıyor', { keys }));
       unregisterCommand(st, p.id);
-      const sc = { group: 'Eklenti · ' + st.info.name, keys: keys || '—', label: escH(str(p.title || p.id, 80)), plugin: st.info.id + ':' + p.id, run: keys ? () => emit(st, 'command', { id: p.id }) : null };
+      const sc = { group: __('Eklenti · {name}', { name: st.info.name }), keys: keys || '—', label: escH(str(p.title || p.id, 80)), plugin: st.info.id + ':' + p.id, run: keys ? () => emit(st, 'command', { id: p.id }) : null };
       SHORTCUTS.push(sc);
       st.commands.set(p.id, sc);
       return true;
@@ -187,7 +187,7 @@
     // tools a plugin offers to Claude / Codex sessions (agentlink.js: list_plugin_tools / call_plugin_tool)
     'agent.registerTool': (st, p) => {
       need(st, 'claude');
-      if (!p || !okId(p.name)) throw new Error('Aracın geçerli bir adı (name) olmalı');
+      if (!p || !okId(p.name)) throw new Error(__('Aracın geçerli bir adı (name) olmalı'));
       st.agentTools.set(p.name, { name: p.name, description: str(p.description, 2000), inputSchema: p.inputSchema && typeof p.inputSchema === 'object' ? JSON.parse(JSON.stringify(p.inputSchema)) : { type: 'object', properties: {} } });
       return true;
     },
@@ -202,16 +202,16 @@
     'claude.newSession': async (st, p) => {
       need(st, 'claude');
       const pid = (p && p.projectId) || projectHere();
-      if (!S.projects.some(x => x.id === pid)) throw new Error('Proje bulunamadı');
-      const t = await openTerminal({ kind: 'claude', projectId: pid, title: str(p && p.title || 'Yeni oturum', 48) });
-      if (!t) throw new Error('Oturum açılamadı');
+      if (!S.projects.some(x => x.id === pid)) throw new Error(__('Proje bulunamadı'));
+      const t = await openTerminal({ kind: 'claude', projectId: pid, title: str(p && p.title || __('Yeni oturum'), 48) });
+      if (!t) throw new Error(__('Oturum açılamadı'));
       if (p && p.prompt) { t.pendingPrompt = str(p.prompt, 20000); setTimeout(() => sendPendingPrompt(t), 12000); }
       return { id: t.id };
     },
     'claude.send': (st, p) => {
       need(st, 'claude');
       const t = tabById((p && p.tabId) || S.active);
-      if (!t || t.kind !== 'claude' || t.exited) throw new Error('Açık bir Claude oturumu seçili değil');
+      if (!t || t.kind !== 'claude' || t.exited) throw new Error(__('Açık bir Claude oturumu seçili değil'));
       const text = str(p && p.text, 20000).replace(/\r?\n/g, ' ');
       api.send('pty:write', t.id, text);
       if (!(p && p.submit === false)) setTimeout(() => { if (!t.exited) api.send('pty:write', t.id, '\r'); }, 300);
@@ -235,7 +235,7 @@
     const fn = Object.prototype.hasOwnProperty.call(API, m.method) ? API[m.method] : null;
     let result, error;
     try {
-      if (!fn) throw new Error('Bilinmeyen çağrı: ' + m.method);
+      if (!fn) throw new Error(__('Bilinmeyen çağrı: {method}', { method: m.method }));
       result = await fn(who.st, m.params && typeof m.params === 'object' ? m.params : {}, who.frame);
     } catch (err) { error = String(err && err.message || err).replace(/^Error invoking remote method '[^']+': (Error: )?/, ''); }
     try { e.source.postMessage({ vox: 1, re: m.id, result, error }, '*'); } catch (_) {}
@@ -307,7 +307,7 @@
       if (limit.length && !(ctx.projectId && limit.includes(ctx.projectId))) return;
       st.menuItems.forEach(it => {
         if (it.menu !== menu || (it.when && it.when !== ctx.kind)) return;
-        h += itemHtml(it, x => `data-plmi="${escH(st.info.id)}" data-plm="${escH(x.id)}" title="${escH(st.info.name)} eklentisi"`);
+        h += itemHtml(it, x => `data-plmi="${escH(st.info.id)}" data-plm="${escH(x.id)}" title="${escH(__('{name} eklentisi', { name: st.info.name }))}"`);
       });
     });
     if (!h) return '';
@@ -358,7 +358,7 @@
       const b = document.createElement('button');
       b.setAttribute('role', 'tab'); b.dataset.mode = k; b.dataset.plmode = '1';
       b.className = S.mode === k ? 'on' : '';
-      b.title = `${pn.title} · ${st.info.name} eklentisi`;
+      b.title = __('{title} · {name} eklentisi', { title: pn.title, name: st.info.name });
       b.innerHTML = `<i class="${icon(pn.icon)}"></i>${escH(pn.title)}`;
       pill.appendChild(b);
     }));
@@ -387,7 +387,7 @@
   const hasMode = m => { const [, id, panelId] = String(m).split(':'); const st = P.get(id); return !!(st && st.panels.get(panelId) && st.panels.get(panelId).place === 'mode'); };
   function openPanel(st, panelId) {
     const pn = st.panels.get(panelId);
-    if (!pn) throw new Error('Böyle bir panel yok');
+    if (!pn) throw new Error(__('Böyle bir panel yok'));
     if (pn.place === 'mode') { setMode(modeKey(st.info.id, pn.id)); return; }
     if (pn.place === 'side') { if (S.mode !== 'claude' && S.mode !== 'ide') setMode('claude'); setCollapsed(st, pn, false); if (S.mode === 'claude' && window.showPanel) showPanel(plugKey(st, pn)); return; }
     if (drawer) { const o = P.get(drawer.id); const op = o && o.panels.get(drawer.panelId); if (o && op) emit(o, 'panel', { id: op.id, visible: false }); }
@@ -460,7 +460,7 @@
         sec.className = 'psec' + (isCollapsed(st, pn) ? ' collapsed' : '');
         sec.dataset.plid = st.info.id; sec.dataset.panel = pn.id;
         if (mode === 'claude') sec.dataset.maxkey = plugKey(st, pn);
-        sec.innerHTML = `<div class="psec-h panel-h" role="button" tabindex="0" aria-expanded="${!isCollapsed(st, pn)}" title="${escH(st.info.name)} eklentisi · katlamak / açmak için tıkla"><span class="psec-t"><i class="${icon(pn.icon)}"></i>${escH(pn.title)}</span><i class="fa-solid fa-chevron-down psec-car"></i></div><div class="psec-b" style="height:${pn.height}px"></div>`;
+        sec.innerHTML = `<div class="psec-h panel-h" role="button" tabindex="0" aria-expanded="${!isCollapsed(st, pn)}" title="${escH(__('{name} eklentisi · katlamak / açmak için tıkla', { name: st.info.name }))}"><span class="psec-t"><i class="${icon(pn.icon)}"></i>${escH(pn.title)}</span><i class="fa-solid fa-chevron-down psec-car"></i></div><div class="psec-b" style="height:${pn.height}px"></div>`;
         const head = sec.querySelector('.psec-h');
         const flip = () => setCollapsed(st, pn, !sec.classList.contains('collapsed'));
         head.addEventListener('click', flip);
@@ -539,7 +539,7 @@
       if (l === 'ctrl' || l === 'control') mods.push('Ctrl'); else if (l === 'alt') mods.push('Alt'); else if (l === 'shift') mods.push('Shift');
       else key = x.length === 1 ? x.toUpperCase() : x[0].toUpperCase() + x.slice(1);
     }
-    if (!key || !mods.length && !/^F\d{1,2}$/.test(key)) throw new Error('Kısayol en az bir Ctrl / Alt tuşu içermeli (ya da F1–F12 olmalı)');
+    if (!key || !mods.length && !/^F\d{1,2}$/.test(key)) throw new Error(__('Kısayol en az bir Ctrl / Alt tuşu içermeli (ya da F1–F12 olmalı)'));
     return [...order.filter(o => mods.includes(o)), key].join('+');
   }
 
@@ -586,8 +586,8 @@
     await loadAll();
     const p = LIST.list.find(x => x.id === id);
     if (!p) return;
-    if (P.has(id)) { toast(`${p.name} yeniden yüklendi`, 'Dosya değişikliği algılandı'); return; }
-    if (wasRunning && p.needsGrant.length) { toast(`${p.name} yeni izin istiyor`, 'Ayarlar → Eklentiler'); return; }
+    if (P.has(id)) { toast(__('{name} yeniden yüklendi', { name: p.name }), __('Dosya değişikliği algılandı')); return; }
+    if (wasRunning && p.needsGrant.length) { toast(__('{name} yeni izin istiyor', { name: p.name }), __('Ayarlar → Eklentiler')); return; }
     // a plugin that just appeared (usually written by Claude): ask once whether to turn it on
     if (known && !known.has(id) && !offered.has(id) && !p.error && !p.enabled && p.main) {
       offered.add(id);
@@ -597,10 +597,10 @@
   async function claudeWrite(id) {
     const p = id ? LIST.list.find(x => x.id === id) : null;
     const want = await uiPrompt({
-      title: p ? `Claude ile düzenle: ${p.name}` : 'Claude ile eklenti yaz', icon: 'fa-robot', ok: 'Claude\'u başlat', maxLength: 1500,
-      message: p ? 'Bu eklentide ne değişsin?' : 'Eklenti ne yapsın? Nerede görünsün?',
-      placeholder: p ? 'ör. prod yayınından önce testleri çalıştır' : 'ör. AI modunda sağ sütunda açık oturumların özetini gösteren bir bölüm',
-      detail: 'Claude, çalışan VoxStorm\'un eklenti klasöründe çalışır. Dosyaları kaydettikçe eklenti kendiliğinden yeniden yüklenir.',
+      title: p ? __('Claude ile düzenle: {name}', { name: p.name }) : __('Claude ile eklenti yaz'), icon: 'fa-robot', ok: __('Claude\'u başlat'), maxLength: 1500,
+      message: p ? __('Bu eklentide ne değişsin?') : __('Eklenti ne yapsın? Nerede görünsün?'),
+      placeholder: p ? __('ör. prod yayınından önce testleri çalıştır') : __('ör. AI modunda sağ sütunda açık oturumların özetini gösteren bir bölüm'),
+      detail: __('Claude, çalışan VoxStorm\'un eklenti klasöründe çalışır. Dosyaları kaydettikçe eklenti kendiliğinden yeniden yüklenir.'),
     });
     const text = want == null ? '' : want.replace(/\s+/g, ' ').trim();
     if (!text) return;
@@ -609,9 +609,9 @@
     document.getElementById('settings').hidden = true;
     if (S.mode !== 'claude' && S.mode !== 'ide') setMode('claude');
     const prompt = p
-      ? `VoxStorm'daki "${p.id}" eklentisi üzerinde çalışacağız (klasör: ${p.id}). İstek: ${text}. Önce bu klasördeki CLAUDE.md'yi ve eklentinin dosyalarını oku. Kaydettiğin her değişiklik VoxStorm'da hemen yeniden yüklenir; hatalar için ${r.logDir}\\${p.id}.log dosyasına bak.`
-      : `VoxStorm için yeni bir eklenti yaz. İstek: ${text}. Önce bu klasördeki CLAUDE.md'yi oku: eklenti sistemini ve API'yi anlatıyor. Eklentiyi bu klasörde yeni bir alt klasöre yaz. Klasör belirince VoxStorm kullanıcıdan eklentiyi açmak için onay ister; sonra her kayıtta eklenti hemen yeniden yüklenir. Hatalar ${r.logDir}\\<id>.log dosyasına düşer.`;
-    const t = await openTerminal({ kind: 'claude', projectId: r.project.id, title: p ? `Eklenti: ${p.name}` : 'Yeni eklenti' });
+      ? __('VoxStorm\'daki "{id}" eklentisi üzerinde çalışacağız (klasör: {id}). İstek: {text}. Önce bu klasördeki CLAUDE.md\'yi ve eklentinin dosyalarını oku. Kaydettiğin her değişiklik VoxStorm\'da hemen yeniden yüklenir; hatalar için {log} dosyasına bak.', { id: p.id, text, log: `${r.logDir}\\${p.id}.log` })
+      : __('VoxStorm için yeni bir eklenti yaz. İstek: {text}. Önce bu klasördeki CLAUDE.md\'yi oku: eklenti sistemini ve API\'yi anlatıyor. Eklentiyi bu klasörde yeni bir alt klasöre yaz. Klasör belirince VoxStorm kullanıcıdan eklentiyi açmak için onay ister; sonra her kayıtta eklenti hemen yeniden yüklenir. Hatalar {log} dosyasına düşer.', { text, log: `${r.logDir}\\<id>.log` });
+    const t = await openTerminal({ kind: 'claude', projectId: r.project.id, title: p ? __('Eklenti: {name}', { name: p.name }) : __('Yeni eklenti') });
     if (!t) return;
     t.pendingPrompt = prompt;
     setTimeout(() => sendPendingPrompt(t), 12000);
@@ -623,9 +623,9 @@
       const st = P.get(p.id);
       const perms = p.permissions.length
         ? p.permissions.map(k => `<span class="pl-perm${RISKY.has(k) ? ' risky' : ''}" title="${escH((PERM_TEXT[k] || [])[1] || k)}"><i class="${(PERM_TEXT[k] || ['fa-solid fa-key'])[0]}"></i>${escH(k)}</span>`).join('')
-        : '<span class="pl-perm none">İzin istemiyor</span>';
+        : `<span class="pl-perm none">${__('İzin istemiyor')}</span>`;
       const warn = p.error ? `<div class="pl-warn"><i class="fa-solid fa-triangle-exclamation"></i>${escH(p.error)}</div>`
-        : p.wantsEnabled && p.needsGrant.length ? `<div class="pl-warn"><i class="fa-solid fa-key"></i>Yeni izin istiyor: ${escH(p.needsGrant.join(', '))}. Açmak için onay ver.</div>` : '';
+        : p.wantsEnabled && p.needsGrant.length ? `<div class="pl-warn"><i class="fa-solid fa-key"></i>${__('Yeni izin istiyor: {perms}. Açmak için onay ver.', { perms: escH(p.needsGrant.join(', ')) })}</div>` : '';
       const errs = st ? st.log.filter(l => l.level === 'error').slice(-1) : [];
       return `<div class="pl-row${p.enabled ? ' on' : ''}">
         <div class="pl-ic"><i class="${icon(p.icon)}"></i></div>
@@ -633,31 +633,31 @@
           <div class="pl-top"><b>${escH(p.name)}</b><span class="pl-v">${escH(p.version)}${p.author ? ' · ' + escH(p.author) : ''}</span></div>
           ${p.description ? `<div class="pl-d">${escH(p.description)}</div>` : ''}
           <div class="pl-perms">${perms}</div>
-          <div class="pl-projs"><i class="fa-solid fa-folder-tree"></i>${p.projects.length ? p.projects.map(id => (S.projects.find(x => x.id === id) || {}).name).filter(Boolean).map(n => `<span>${escH(n)}</span>`).join('') : '<em>Tüm projeler</em>'}</div>
+          <div class="pl-projs"><i class="fa-solid fa-folder-tree"></i>${p.projects.length ? p.projects.map(id => (S.projects.find(x => x.id === id) || {}).name).filter(Boolean).map(n => `<span>${escH(n)}</span>`).join('') : `<em>${__('Tüm projeler')}</em>`}</div>
           ${warn}${errs.length ? `<div class="pl-warn"><i class="fa-solid fa-bug"></i>${escH(errs[0].text)}</div>` : ''}
           <div class="pl-acts">
-            <button class="btn" data-plact="projects" data-plid="${escH(p.id)}"><i class="fa-solid fa-folder-tree"></i> Projeler</button>
-            <button class="btn" data-plact="claude" data-plid="${escH(p.id)}"><i class="fa-solid fa-robot"></i> Claude ile düzenle</button>
-            <button class="btn" data-plact="export" data-plid="${escH(p.id)}"><i class="fa-solid fa-file-export"></i> Dışa aktar</button>
-            <button class="btn" data-plact="reload" data-plid="${escH(p.id)}" ${p.enabled ? '' : 'disabled'}><i class="fa-solid fa-arrows-rotate"></i> Yeniden yükle</button>
-            <button class="btn" data-plact="dir" data-plid="${escH(p.id)}"><i class="fa-regular fa-folder-open"></i> Klasörü aç</button>
-            <button class="btn" data-plact="remove" data-plid="${escH(p.id)}"><i class="fa-regular fa-trash-can"></i> Kaldır</button>
+            <button class="btn" data-plact="projects" data-plid="${escH(p.id)}"><i class="fa-solid fa-folder-tree"></i> ${__('Projeler')}</button>
+            <button class="btn" data-plact="claude" data-plid="${escH(p.id)}"><i class="fa-solid fa-robot"></i> ${__('Claude ile düzenle')}</button>
+            <button class="btn" data-plact="export" data-plid="${escH(p.id)}"><i class="fa-solid fa-file-export"></i> ${__('Dışa aktar')}</button>
+            <button class="btn" data-plact="reload" data-plid="${escH(p.id)}" ${p.enabled ? '' : 'disabled'}><i class="fa-solid fa-arrows-rotate"></i> ${__('Yeniden yükle')}</button>
+            <button class="btn" data-plact="dir" data-plid="${escH(p.id)}"><i class="fa-regular fa-folder-open"></i> ${__('Klasörü aç')}</button>
+            <button class="btn" data-plact="remove" data-plid="${escH(p.id)}"><i class="fa-regular fa-trash-can"></i> ${__('Kaldır')}</button>
           </div>
         </div>
-        ${sw(`data-plon="${escH(p.id)}"${p.error ? ' disabled' : ''}`, p.enabled, p.name + ' eklentisi')}
+        ${sw(`data-plon="${escH(p.id)}"${p.error ? ' disabled' : ''}`, p.enabled, __('{name} eklentisi', { name: p.name }))}
       </div>`;
     }).join('');
-    return `<h4>Eklentiler</h4>
+    return `<h4>${__('Eklentiler')}</h4>
       <div class="pl-bar">
-        <button class="btn primary" data-plact="claude"><i class="fa-solid fa-robot"></i> Claude ile eklenti yaz</button>
-        <button class="btn" data-plact="add"><i class="fa-solid fa-folder-plus"></i> Klasörden ekle</button>
-        <button class="btn" data-plact="zip"><i class="fa-solid fa-file-zipper"></i> Dosyadan ekle (.zip)</button>
-        <button class="btn" data-plact="sample"><i class="fa-solid fa-wand-magic-sparkles"></i> Örnek eklenti oluştur</button>
-        <button class="btn" data-plact="dir"><i class="fa-regular fa-folder-open"></i> Eklenti klasörü</button>
-        <button class="btn" data-plact="reloadall"><i class="fa-solid fa-arrows-rotate"></i> Listeyi yenile</button>
+        <button class="btn primary" data-plact="claude"><i class="fa-solid fa-robot"></i> ${__('Claude ile eklenti yaz')}</button>
+        <button class="btn" data-plact="add"><i class="fa-solid fa-folder-plus"></i> ${__('Klasörden ekle')}</button>
+        <button class="btn" data-plact="zip"><i class="fa-solid fa-file-zipper"></i> ${__('Dosyadan ekle (.zip)')}</button>
+        <button class="btn" data-plact="sample"><i class="fa-solid fa-wand-magic-sparkles"></i> ${__('Örnek eklenti oluştur')}</button>
+        <button class="btn" data-plact="dir"><i class="fa-regular fa-folder-open"></i> ${__('Eklenti klasörü')}</button>
+        <button class="btn" data-plact="reloadall"><i class="fa-solid fa-arrows-rotate"></i> ${__('Listeyi yenile')}</button>
       </div>
-      ${rows || '<div class="pl-empty"><i class="fa-solid fa-puzzle-piece"></i><b>Henüz eklenti yok</b><span>“Örnek eklenti oluştur” ile çalışan bir örnekten başlayabilir ya da hazır bir eklenti klasörünü ekleyebilirsin.</span></div>'}
-      <p class="set-note">Eklentiler yalıtılmış bir çerçevede çalışır; bilgisayarına ve dosyalarına yalnızca açarken onay verdiğin izinler kadar erişebilir. Klasör: <code>${escH(LIST.dir)}</code>. Eklenti yazmak için: <a href="https://github.com/mrekay/claudelot/blob/main/src/plugin-sdk/REHBER.md" target="_blank">eklenti rehberi</a>.</p>`;
+      ${rows || `<div class="pl-empty"><i class="fa-solid fa-puzzle-piece"></i><b>${__('Henüz eklenti yok')}</b><span>${__('“Örnek eklenti oluştur” ile çalışan bir örnekten başlayabilir ya da hazır bir eklenti klasörünü ekleyebilirsin.')}</span></div>`}
+      <p class="set-note">${__('Eklentiler yalıtılmış bir çerçevede çalışır; bilgisayarına ve dosyalarına yalnızca açarken onay verdiğin izinler kadar erişebilir. Klasör: <code>{dir}</code>. Eklenti yazmak için: <a href="https://github.com/mrekay/claudelot/blob/main/src/plugin-sdk/REHBER.md" target="_blank">eklenti rehberi</a>.', { dir: escH(LIST.dir) })}</p>`;
   }
   async function setEnabled(id, on) {
     const p = LIST.list.find(x => x.id === id);
@@ -666,14 +666,14 @@
       const risky = p.permissions.some(k => RISKY.has(k));
       const lines = p.permissions.map(k => '• ' + ((PERM_TEXT[k] || [])[1] || k)).join('\n');
       const ok = await uiConfirm({
-        title: `${p.name} açılsın mı?`, icon: 'fa-puzzle-piece', ok: 'Aç', danger: risky,
-        message: p.permissions.length ? `Bu eklenti şunları yapmak istiyor:\n${lines}` : 'Bu eklenti özel bir izin istemiyor; yalnızca kendi düğme ve panellerini gösterebilir.',
-        detail: risky ? 'Yalnızca güvendiğin kaynaklardan gelen eklentileri aç.' : '',
+        title: __('{name} açılsın mı?', { name: p.name }), icon: 'fa-puzzle-piece', ok: __('Aç'), danger: risky,
+        message: p.permissions.length ? __('Bu eklenti şunları yapmak istiyor:\n{lines}', { lines }) : __('Bu eklenti özel bir izin istemiyor; yalnızca kendi düğme ve panellerini gösterebilir.'),
+        detail: risky ? __('Yalnızca güvendiğin kaynaklardan gelen eklentileri aç.') : '',
       });
       if (!ok) { renderSettings(); return; }
     }
     try { await api.invoke('plugins:setEnabled', id, on, on ? p.permissions : []); }
-    catch (e) { uiAlert({ title: 'Eklenti açılamadı', message: String(e.message || e).replace(/^Error invoking remote method '[^']+': (Error: )?/, '') }); }
+    catch (e) { uiAlert({ title: __('Eklenti açılamadı'), message: String(e.message || e).replace(/^Error invoking remote method '[^']+': (Error: )?/, '') }); }
     await loadAll();
   }
   document.addEventListener('click', async e => {
@@ -704,40 +704,40 @@
       return;
     }
     if (d.plon) { if (!b.disabled) setEnabled(d.plon, b.getAttribute('aria-checked') !== 'true'); return; }
-    const err = x => uiAlert({ title: 'Eklenti', message: String(x && x.message || x).replace(/^Error invoking remote method '[^']+': (Error: )?/, '') });
+    const err = x => uiAlert({ title: __('Eklenti'), message: String(x && x.message || x).replace(/^Error invoking remote method '[^']+': (Error: )?/, '') });
     try {
       if (d.plact === 'claude') await claudeWrite(d.plid || '');
-      else if (d.plact === 'reload') { await reload(d.plid); toast('Eklenti yeniden yüklendi', (LIST.list.find(x => x.id === d.plid) || {}).name || ''); }
+      else if (d.plact === 'reload') { await reload(d.plid); toast(__('Eklenti yeniden yüklendi'), (LIST.list.find(x => x.id === d.plid) || {}).name || ''); }
       else if (d.plact === 'dir') await api.invoke('plugins:openDir', d.plid || '');
       else if (d.plact === 'projects') {
         const p = LIST.list.find(x => x.id === d.plid);
         const pick = p && await uiChoose({
-          title: `${p.name}: projeler`, icon: 'fa-folder-tree', ok: 'Kaydet',
-          message: 'Eklenti hangi projelerde çalışsın?',
-          detail: 'Hiçbirini seçmezsen her projede çalışır. Seçince düğme ve bölümleri yalnızca bu projeler görünürken çıkar (AI modunda seçili oturumun projesi, IDE’de seçili proje); dosya ve komut erişimi de bu projelerin klasörleriyle sınırlanır.',
+          title: __('{name}: projeler', { name: p.name }), icon: 'fa-folder-tree', ok: __('Kaydet'),
+          message: __('Eklenti hangi projelerde çalışsın?'),
+          detail: __('Hiçbirini seçmezsen her projede çalışır. Seçince düğme ve bölümleri yalnızca bu projeler görünürken çıkar (AI modunda seçili oturumun projesi, IDE’de seçili proje); dosya ve komut erişimi de bu projelerin klasörleriyle sınırlanır.'),
           choices: S.projects.map(x => ({ value: x.id, label: x.name, hint: x.path, checked: p.projects.includes(x.id) })),
         });
         if (pick) { await api.invoke('plugins:setProjects', p.id, pick); await loadAll(); lastCtx = ''; renderTbOnly(); syncSide(); renderStatus(); }
       } else if (d.plact === 'export') {
         const r = await api.invoke('plugins:export', d.plid);
-        if (r) toast('Eklenti dışa aktarıldı', r.file);
+        if (r) toast(__('Eklenti dışa aktarıldı'), r.file);
       } else if (d.plact === 'zip') {
         const r = await api.invoke('plugins:addZip');
-        if (r) { stop(r.id); await loadAll(); toast('Eklenti eklendi', 'Kullanmak için listeden aç.'); }
+        if (r) { stop(r.id); await loadAll(); toast(__('Eklenti eklendi'), __('Kullanmak için listeden aç.')); }
       }
       else if (d.plact === 'reloadall') await loadAll();
       else if (d.plact === 'remove') {
         const p = LIST.list.find(x => x.id === d.plid);
-        if (p && await uiConfirm({ title: 'Eklenti kaldırılsın mı?', message: `"${p.name}" kapatılıp klasörü Geri Dönüşüm Kutusu'na taşınır.`, ok: 'Kaldır', danger: true })) {
+        if (p && await uiConfirm({ title: __('Eklenti kaldırılsın mı?'), message: __('"{name}" kapatılıp klasörü Geri Dönüşüm Kutusu\'na taşınır.', { name: p.name }), ok: __('Kaldır'), danger: true })) {
           stop(p.id); await api.invoke('plugins:remove', p.id); await loadAll();
         }
       } else if (d.plact === 'add') {
         const r = await api.invoke('plugins:addFolder');
-        if (r) { stop(r.id); await loadAll(); toast('Eklenti eklendi', 'Kullanmak için listeden aç.'); }
+        if (r) { stop(r.id); await loadAll(); toast(__('Eklenti eklendi'), __('Kullanmak için listeden aç.')); }
       } else if (d.plact === 'sample') {
         await api.invoke('plugins:createSample');
         await loadAll();
-        toast('Örnek eklenti hazır', '“Hızlı Notlar”ı açıp klasöründeki dosyalara göz at.');
+        toast(__('Örnek eklenti hazır'), __('“Hızlı Notlar”ı açıp klasöründeki dosyalara göz at.'));
       }
     } catch (x) { err(x); }
   });
@@ -749,11 +749,11 @@
     agentTools: () => [...P.values()].filter(st => st.agentTools.size).map(st => ({ plugin: st.info.id, name: st.info.name, tools: [...st.agentTools.values()] })),
     agentCall(plugin, tool, args) {
       const st = P.get(plugin);
-      if (!st) return Promise.resolve({ error: 'Eklenti bulunamadı ya da kapalı: ' + plugin });
-      if (!st.agentTools.has(tool)) return Promise.resolve({ error: `“${st.info.name}” eklentisinde “${tool}” adında bir araç yok.` });
+      if (!st) return Promise.resolve({ error: __('Eklenti bulunamadı ya da kapalı: {plugin}', { plugin }) });
+      if (!st.agentTools.has(tool)) return Promise.resolve({ error: __('“{name}” eklentisinde “{tool}” adında bir araç yok.', { name: st.info.name, tool }) });
       return new Promise(resolve => {
         const callId = 'a' + (++agentSeq);
-        const timer = setTimeout(() => { agentCalls.delete(callId); resolve({ error: 'Eklenti 5 dakika içinde cevap vermedi.' }); }, 300000);
+        const timer = setTimeout(() => { agentCalls.delete(callId); resolve({ error: __('Eklenti 5 dakika içinde cevap vermedi.') }); }, 300000);
         agentCalls.set(callId, { plugin, resolve, timer });
         emit(st, 'agent-call', { callId, tool, args });
       });

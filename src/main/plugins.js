@@ -11,6 +11,7 @@ const fsp = fs.promises;
 const os = require('os');
 const { spawn, execFile } = require('child_process');
 const { IS_WIN, userShell } = require('./platform');
+const I18N = require('../i18n/i18n.js'); const __ = I18N.t;
 
 // macOS: ditto, the system's own zip tool (keeps UTF-8 names)
 function dittoZip(args) {
@@ -23,7 +24,7 @@ function dittoZip(args) {
 function infoZip(cmd, args, cwd) {
   return new Promise((resolve, reject) => {
     execFile(cmd, args, { timeout: 120000, cwd }, (err, _out, stderr) => {
-      if (err && err.code === 'ENOENT') return reject(new Error(`${cmd} komutu bulunamadı; paket yöneticinden kur (ör. sudo apt install ${cmd}).`));
+      if (err && err.code === 'ENOENT') return reject(new Error(__('{cmd} komutu bulunamadı; paket yöneticinden kur (ör. sudo apt install {cmd}).', { cmd })));
       if (err) return reject(new Error(String(stderr || err.message).trim().split('\n')[0]));
       resolve();
     });
@@ -82,13 +83,13 @@ module.exports = function plugins({ app, ipcMain, protocol, shell, dialog, getWi
   function readManifest(dir) {
     const raw = JSON.parse(fs.readFileSync(path.join(dir, 'manifest.json'), 'utf8'));
     const id = String(raw.id || '').toLowerCase();
-    if (!ID_RE.test(id)) throw new Error('manifest.json: "id" küçük harf, rakam, nokta, tire ve alt çizgiden oluşmalı');
-    if (path.basename(dir).toLowerCase() !== id) throw new Error(`Klasör adı eklenti kimliğiyle ("${id}") aynı olmalı`);
+    if (!ID_RE.test(id)) throw new Error(__('manifest.json: "id" küçük harf, rakam, nokta, tire ve alt çizgiden oluşmalı'));
+    if (path.basename(dir).toLowerCase() !== id) throw new Error(__('Klasör adı eklenti kimliğiyle ("{id}") aynı olmalı', { id }));
     const str = (v, n) => String(v == null ? '' : v).slice(0, n);
     const permissions = [...new Set((Array.isArray(raw.permissions) ? raw.permissions : []).map(String))];
     const unknown = permissions.filter(p => !PERMS.includes(p));
-    if (unknown.length) throw new Error('Bilinmeyen izin: ' + unknown.join(', '));
-    const rel = v => { const s = str(v, 200).replace(/\\/g, '/').replace(/^\/+/, ''); if (s.split('/').includes('..')) throw new Error('Yol eklenti klasörünün dışına çıkamaz: ' + s); return s; };
+    if (unknown.length) throw new Error(__('Bilinmeyen izin: {list}', { list: unknown.join(', ') }));
+    const rel = v => { const s = str(v, 200).replace(/\\/g, '/').replace(/^\/+/, ''); if (s.split('/').includes('..')) throw new Error(__('Yol eklenti klasörünün dışına çıkamaz: {path}', { path: s })); return s; };
     return {
       id, name: str(raw.name || id, 60), version: str(raw.version || '0.0.0', 20), description: str(raw.description, 300),
       author: str(raw.author, 80), icon: str(raw.icon || 'fa-solid fa-puzzle-piece', 60), main: raw.main ? rel(raw.main) : '', permissions,
@@ -114,7 +115,7 @@ module.exports = function plugins({ app, ipcMain, protocol, shell, dialog, getWi
   scan();
   const plugin = id => cache.get(String(id || '').toLowerCase());
   const can = (id, perm) => { const p = plugin(id); return !!(p && p.enabled && p.permissions.includes(perm) && ((state[p.id] || {}).granted || []).includes(perm)); };
-  const need = (id, perm) => { if (!can(id, perm)) throw new Error(`Bu eklentinin "${perm}" izni yok`); };
+  const need = (id, perm) => { if (!can(id, perm)) throw new Error(__('Bu eklentinin "{perm}" izni yok', { perm })); };
 
   /* ---------------- voxplugin:// ---------------- */
   // a file inside base, after following links; null when it escapes
@@ -149,11 +150,11 @@ module.exports = function plugins({ app, ipcMain, protocol, shell, dialog, getWi
     let u;
     try { u = new URL(req.url); } catch (_) { return reply(400, 'bad url'); }
     const id = u.hostname.toLowerCase(), p = plugin(id);
-    if (!p || !p.enabled) return reply(404, 'Eklenti yok ya da kapalı', null, id);
+    if (!p || !p.enabled) return reply(404, __('Eklenti yok ya da kapalı'), null, id);
     let rel = decodeURIComponent(u.pathname).replace(/^\/+/, '');
     // the plugin's background page: the SDK plus its main script
     if (rel === '__vox__/main.html') {
-      if (!p.main) return reply(404, 'main yok', null, id);
+      if (!p.main) return reply(404, __('main yok'), null, id);
       return reply(200, `<!doctype html><meta charset="utf-8">${SDK_TAGS}<script src="/${encodeURI(p.main)}"></script>`, MIME['.html'], id);
     }
     let file;
@@ -162,10 +163,10 @@ module.exports = function plugins({ app, ipcMain, protocol, shell, dialog, getWi
       if (r.startsWith('css/') || r.startsWith('webfonts/')) file = await inside(FA_DIR, r);
       else file = await inside(SDK_DIR, r);
     } else file = await inside(p.dir, rel || 'index.html');
-    if (!file) return reply(404, 'Bulunamadı', null, id);
+    if (!file) return reply(404, __('Bulunamadı'), null, id);
     let st;
-    try { st = await fsp.stat(file); } catch (_) { return reply(404, 'Bulunamadı', null, id); }
-    if (!st.isFile() || st.size > 20 * 1024 * 1024) return reply(404, 'Bulunamadı', null, id);
+    try { st = await fsp.stat(file); } catch (_) { return reply(404, __('Bulunamadı'), null, id); }
+    if (!st.isFile() || st.size > 20 * 1024 * 1024) return reply(404, __('Bulunamadı'), null, id);
     const ext = path.extname(file).toLowerCase(), type = MIME[ext] || 'application/octet-stream';
     if (ext === '.html' || ext === '.htm') {
       // every page gets the SDK and the app's look first, so `vox` exists before the page's own scripts
@@ -185,7 +186,7 @@ module.exports = function plugins({ app, ipcMain, protocol, shell, dialog, getWi
   ipcMain.handle('plugins:list', () => ({ dir: DIR, list: scan().map(pub) }));
   ipcMain.handle('plugins:setProjects', (_e, id, ids) => {
     const p = plugin(id);
-    if (!p) throw new Error('Eklenti bulunamadı');
+    if (!p) throw new Error(__('Eklenti bulunamadı'));
     const known = new Set(getProjects().map(x => x.id));
     const list = [...new Set((Array.isArray(ids) ? ids : []).map(String))].filter(x => known.has(x));
     state[p.id] = Object.assign({}, state[p.id], { projects: list });
@@ -195,7 +196,7 @@ module.exports = function plugins({ app, ipcMain, protocol, shell, dialog, getWi
   ipcMain.handle('plugins:setEnabled', (_e, id, on, granted) => {
     scan();
     const p = plugin(id);
-    if (!p) throw new Error('Eklenti bulunamadı');
+    if (!p) throw new Error(__('Eklenti bulunamadı'));
     if (on && p.error) throw new Error(p.error);
     // the window asked the user; grant exactly what the manifest lists, nothing else
     state[p.id] = Object.assign({}, state[p.id], { enabled: !!on, granted: on ? p.permissions.filter(x => (granted || []).includes(x)) : ((state[p.id] || {}).granted || []) });
@@ -215,10 +216,10 @@ module.exports = function plugins({ app, ipcMain, protocol, shell, dialog, getWi
   const skipJunk = src => s => !/[\\/](node_modules|\.git)([\\/]|$)/.test(s.slice(src.length));
   // copy a plugin folder into the plugins folder (named after its id)
   async function install(src) {
-    if (!fs.existsSync(path.join(src, 'manifest.json'))) throw new Error('Seçilen yerde manifest.json yok.');
+    if (!fs.existsSync(path.join(src, 'manifest.json'))) throw new Error(__('Seçilen yerde manifest.json yok.'));
     const raw = JSON.parse(await fsp.readFile(path.join(src, 'manifest.json'), 'utf8'));
     const id = String(raw.id || '').toLowerCase();
-    if (!ID_RE.test(id)) throw new Error('manifest.json içindeki "id" geçersiz.');
+    if (!ID_RE.test(id)) throw new Error(__('manifest.json içindeki "id" geçersiz.'));
     const dest = path.join(DIR, id);
     if (path.resolve(src).toLowerCase() === dest.toLowerCase()) return { id };
     if (fs.existsSync(dest)) await shell.trashItem(dest); // updating: the old copy goes to the Recycle Bin
@@ -228,13 +229,13 @@ module.exports = function plugins({ app, ipcMain, protocol, shell, dialog, getWi
     return { id };
   }
   ipcMain.handle('plugins:addFolder', async () => {
-    const r = await dialog.showOpenDialog(getWin(), { title: 'Eklenti klasörü seç (içinde manifest.json olmalı)', properties: ['openDirectory'] });
+    const r = await dialog.showOpenDialog(getWin(), { title: __('Eklenti klasörü seç (içinde manifest.json olmalı)'), properties: ['openDirectory'] });
     if (r.canceled || !r.filePaths[0]) return null;
     return install(r.filePaths[0]);
   });
   // a plugin exported from VoxStorm (or any zip whose root, or single folder, holds manifest.json)
   ipcMain.handle('plugins:addZip', async () => {
-    const r = await dialog.showOpenDialog(getWin(), { title: 'Eklenti dosyası seç', filters: [{ name: 'VoxStorm eklentisi', extensions: ['zip'] }], properties: ['openFile'] });
+    const r = await dialog.showOpenDialog(getWin(), { title: __('Eklenti dosyası seç'), filters: [{ name: __('VoxStorm eklentisi'), extensions: ['zip'] }], properties: ['openFile'] });
     if (r.canceled || !r.filePaths[0]) return null;
     const tmp = await fsp.mkdtemp(path.join(os.tmpdir(), 'voxstorm-plugin-'));
     try {
@@ -250,10 +251,10 @@ module.exports = function plugins({ app, ipcMain, protocol, shell, dialog, getWi
   // <id>-<version>.zip with the plugin's folder inside; its data and granted permissions stay here
   ipcMain.handle('plugins:export', async (_e, id) => {
     const p = plugin(id);
-    if (!p) throw new Error('Eklenti bulunamadı');
+    if (!p) throw new Error(__('Eklenti bulunamadı'));
     const r = await dialog.showSaveDialog(getWin(), {
-      title: `${p.name} eklentisini dışa aktar`, defaultPath: path.join(app.getPath('downloads'), `${p.id}-${p.version || '0.0.0'}.zip`),
-      filters: [{ name: 'VoxStorm eklentisi', extensions: ['zip'] }],
+      title: __('{name} eklentisini dışa aktar', { name: p.name }), defaultPath: path.join(app.getPath('downloads'), `${p.id}-${p.version || '0.0.0'}.zip`),
+      filters: [{ name: __('VoxStorm eklentisi'), extensions: ['zip'] }],
     });
     if (r.canceled || !r.filePath) return null;
     const tmp = await fsp.mkdtemp(path.join(os.tmpdir(), 'voxstorm-export-'));
@@ -291,10 +292,10 @@ module.exports = function plugins({ app, ipcMain, protocol, shell, dialog, getWi
     if (op === 'get') return Object.prototype.hasOwnProperty.call(o, key) ? o[key] : null;
     if (op === 'set') {
       const next = { ...o, [key]: value };
-      if (Buffer.byteLength(JSON.stringify(next)) > MAX_STORE) throw new Error('Eklenti deposu 1 MB sınırını aşıyor');
+      if (Buffer.byteLength(JSON.stringify(next)) > MAX_STORE) throw new Error(__('Eklenti deposu 1 MB sınırını aşıyor'));
       o[key] = value;
     } else if (op === 'remove') delete o[key];
-    else throw new Error('Bilinmeyen işlem');
+    else throw new Error(__('Bilinmeyen işlem'));
     await fsp.mkdir(STORE, { recursive: true });
     await fsp.writeFile(path.join(STORE, plugin(id).id + '.json'), JSON.stringify(o));
     return true;
@@ -309,20 +310,20 @@ module.exports = function plugins({ app, ipcMain, protocol, shell, dialog, getWi
     return getProjects().filter(x => ids.includes(x.id)).some(x => { const r = path.resolve(x.path).toLowerCase(); return n === r || n.startsWith(r + path.sep); });
   }
   async function guardPath(p, id) {
-    if (typeof p !== 'string' || !p || p.includes('\0') || !path.isAbsolute(p) || !insideProject(p)) throw new Error('Yalnızca VoxStorm\'a ekli projelerin içindeki dosyalara erişilebilir');
-    if (!allowedFor(id, p)) throw new Error('Bu eklenti yalnızca seçilen projelerde çalışabilir (Ayarlar → Eklentiler → Projeler)');
+    if (typeof p !== 'string' || !p || p.includes('\0') || !path.isAbsolute(p) || !insideProject(p)) throw new Error(__('Yalnızca VoxStorm\'a ekli projelerin içindeki dosyalara erişilebilir'));
+    if (!allowedFor(id, p)) throw new Error(__('Bu eklenti yalnızca seçilen projelerde çalışabilir (Ayarlar → Eklentiler → Projeler)'));
     const abs = path.resolve(p);
     // links inside a project must not lead out of it
     let probe = abs;
     while (probe && !fs.existsSync(probe)) { const up = path.dirname(probe); if (up === probe) break; probe = up; }
     const real = await fsp.realpath(probe).catch(() => probe);
-    if (!insideProject(real) || !allowedFor(id, real)) throw new Error('Yalnızca VoxStorm\'a ekli projelerin içindeki dosyalara erişilebilir');
+    if (!insideProject(real) || !allowedFor(id, real)) throw new Error(__('Yalnızca VoxStorm\'a ekli projelerin içindeki dosyalara erişilebilir'));
     // VoxStorm's own folder (other plugins' code, their data, settings) is never a plugin's to touch,
     // even when the plugins folder is added as a project for writing plugins
     const data = path.resolve(DATA).toLowerCase();
     for (const x of [abs, real]) {
       const l = path.resolve(x).toLowerCase();
-      if (l === data || l.startsWith(data + path.sep)) throw new Error('Eklentiler VoxStorm\'un kendi klasörüne erişemez');
+      if (l === data || l.startsWith(data + path.sep)) throw new Error(__('Eklentiler VoxStorm\'un kendi klasörüne erişemez'));
     }
     return abs;
   }
@@ -331,20 +332,20 @@ module.exports = function plugins({ app, ipcMain, protocol, shell, dialog, getWi
     const abs = await guardPath(p, id);
     if (op === 'read') {
       const st = await fsp.stat(abs);
-      if (st.size > MAX_FILE) throw new Error('Dosya 5 MB\'tan büyük');
+      if (st.size > MAX_FILE) throw new Error(__('Dosya 5 MB\'tan büyük'));
       return fsp.readFile(abs, 'utf8');
     }
     if (op === 'list') return (await fsp.readdir(abs, { withFileTypes: true })).map(e => ({ name: e.name, dir: e.isDirectory() }));
     if (op === 'stat') { const st = await fsp.stat(abs); return { size: st.size, dir: st.isDirectory(), mtime: st.mtimeMs }; }
     if (op === 'write') {
       const s = String(data == null ? '' : data);
-      if (Buffer.byteLength(s) > MAX_FILE) throw new Error('İçerik 5 MB\'tan büyük');
+      if (Buffer.byteLength(s) > MAX_FILE) throw new Error(__('İçerik 5 MB\'tan büyük'));
       await fsp.mkdir(path.dirname(abs), { recursive: true });
       await fsp.writeFile(abs, s, 'utf8');
       return true;
     }
     if (op === 'mkdir') { await fsp.mkdir(abs, { recursive: true }); return true; }
-    throw new Error('Bilinmeyen işlem');
+    throw new Error(__('Bilinmeyen işlem'));
   });
 
   /* ---------------- plugin API: run a command ---------------- */
@@ -352,8 +353,8 @@ module.exports = function plugins({ app, ipcMain, protocol, shell, dialog, getWi
   // the whole tree: a command usually starts bash, ssh, node... under PowerShell
   const killTree = child => {
     child.stopped = true;
-    if (!IS_WIN) { try { process.kill(-child.pid, 'SIGKILL'); } catch (_) { try { child.kill('SIGKILL'); } catch (__) {} } return; } // its own process group
-    try { spawn('taskkill', ['/PID', String(child.pid), '/T', '/F'], { windowsHide: true }); } catch (_) { try { child.kill(); } catch (__) {} }
+    if (!IS_WIN) { try { process.kill(-child.pid, 'SIGKILL'); } catch (_) { try { child.kill('SIGKILL'); } catch (_e) {} } return; } // its own process group
+    try { spawn('taskkill', ['/PID', String(child.pid), '/T', '/F'], { windowsHide: true }); } catch (_) { try { child.kill(); } catch (_e) {} }
   };
   ipcMain.handle('plugin:shell', async (e, id, command, opts) => {
     need(id, 'shell');
@@ -383,7 +384,7 @@ module.exports = function plugins({ app, ipcMain, protocol, shell, dialog, getWi
       const finish = (code, error) => {
         if (done) return; done = true;
         clearTimeout(timer); set.delete(child);
-        resolve({ code, stdout: out.slice(0, MAX_OUT), stderr: err.slice(0, MAX_OUT), error: error || (timedOut ? 'Süre sınırı aşıldı' : child.stopped ? 'Durduruldu' : ''), stopped: !!child.stopped });
+        resolve({ code, stdout: out.slice(0, MAX_OUT), stderr: err.slice(0, MAX_OUT), error: error || (timedOut ? __('Süre sınırı aşıldı') : child.stopped ? __('Durduruldu') : ''), stopped: !!child.stopped });
       };
       child.on('error', er => finish(-1, er.message));
       child.on('close', code => finish(code));
@@ -444,7 +445,7 @@ module.exports = function plugins({ app, ipcMain, protocol, shell, dialog, getWi
     const head = (await fsp.readFile(path.join(SDK_DIR, 'CLAUDE.template.md'), 'utf8'))
       .split('{{PLUGINS_DIR}}').join(DIR).split('{{LOG_DIR}}').join(LOG_DIR);
     await fsp.writeFile(path.join(DIR, 'CLAUDE.md'), head + '\n\n' + guide, 'utf8');
-    const project = ensureProject(DIR, 'VoxStorm eklentileri');
+    const project = ensureProject(DIR, __('VoxStorm eklentileri'));
     return { project, dir: DIR, logDir: LOG_DIR };
   });
 

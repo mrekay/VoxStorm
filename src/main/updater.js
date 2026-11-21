@@ -19,6 +19,7 @@ const fs = (() => { try { return require('original-fs'); } catch (_) { return re
 const fsp = fs.promises;
 const crypto = require('crypto');
 const { spawn } = require('child_process');
+const I18N = require('../i18n/i18n.js'); const __ = I18N.t;
 
 const REPO = 'mrekay/claudelot';
 const API = process.env.CLAUDELOT_UPDATE_API || `https://api.github.com/repos/${REPO}/releases/latest`;
@@ -57,51 +58,51 @@ module.exports = function updater({ app, net, DATA, settings, notify, onState, b
   async function getJson(url) {
     const r = await net.fetch(url, { headers: { 'User-Agent': 'VoxStorm', Accept: 'application/vnd.github+json' } });
     if (r.status === 404) return null;
-    if (!r.ok) throw new Error(r.status === 403 ? 'GitHub istek sınırına ulaşıldı, biraz sonra tekrar dene.' : `GitHub yanıtı: ${r.status}`);
+    if (!r.ok) throw new Error(r.status === 403 ? __('GitHub istek sınırına ulaşıldı, biraz sonra tekrar dene.') : __('GitHub yanıtı: {status}', { status: r.status }));
     return r.json();
   }
   const asset = name => release && release.assets.find(a => a.name === name);
   // which file this copy needs, or why it cannot update itself
   function pick() {
-    if (kind === 'dev') return { reason: 'Geliştirme modunda (npm start) güncelleme yapılmaz.' };
+    if (kind === 'dev') return { reason: __('Geliştirme modunda (npm start) güncelleme yapılmaz.') };
     if (kind === 'mac') return pickMac();
-    if (kind === 'linux') return { reason: 'Paketle (.deb) kurulmuş: yeni sürümün .deb dosyasını sürüm sayfasından indirip kur.' };
+    if (kind === 'linux') return { reason: __('Paketle (.deb) kurulmuş: yeni sürümün .deb dosyasını sürüm sayfasından indirip kur.') };
     if (kind === 'appimage') return pickAppImage();
-    if (!manifest) return { reason: 'Bu sürümde otomatik kurulum bilgisi yok; sürüm sayfasından indirebilirsin.' };
+    if (!manifest) return { reason: __('Bu sürümde otomatik kurulum bilgisi yok; sürüm sayfasından indirebilirsin.') };
     const want = kind === 'nsis' ? 'setup' : kind === 'portable' ? 'portable' : 'asar';
     if (want === 'asar' && manifest.electron && manifest.electron !== process.versions.electron)
-      return { reason: `Bu sürüm Electron'u da güncelliyor (${process.versions.electron} → ${manifest.electron}); klasör kurulumunda kurulum dosyasıyla güncellemek gerekiyor.` };
+      return { reason: __('Bu sürüm Electron\'u da güncelliyor ({from} → {to}); klasör kurulumunda kurulum dosyasıyla güncellemek gerekiyor.', { from: process.versions.electron, to: manifest.electron }) };
     const f = manifest.files && manifest.files[want];
     const a = f && asset(f.name);
-    if (!f || !a || !/^[0-9a-f]{64}$/i.test(f.sha256 || '')) return { reason: 'Bu sürümde bu kurulum türü için dosya yok.' };
+    if (!f || !a || !/^[0-9a-f]{64}$/i.test(f.sha256 || '')) return { reason: __('Bu sürümde bu kurulum türü için dosya yok.') };
     return { want, f, a };
   }
 
   function pickMac() {
-    if (!/\.app$/.test(bundle)) return { reason: 'Uygulama paketi bulunamadı; sürüm sayfasından indirebilirsin.' };
+    if (!/\.app$/.test(bundle)) return { reason: __('Uygulama paketi bulunamadı; sürüm sayfasından indirebilirsin.') };
     // opened straight from the .dmg or from Downloads (macOS runs it from a read-only copy)
     if (/^\/Volumes\//.test(bundle) || bundle.includes('/AppTranslocation/'))
-      return { reason: 'Otomatik güncelleme için VoxStorm\'u Uygulamalar klasörüne taşıyıp oradan aç.' };
+      return { reason: __('Otomatik güncelleme için VoxStorm\'u Uygulamalar klasörüne taşıyıp oradan aç.') };
     try { fs.accessSync(path.dirname(bundle), fs.constants.W_OK); fs.accessSync(bundle, fs.constants.W_OK); }
-    catch (_) { return { reason: `${path.dirname(bundle)} klasörüne yazılamıyor; sürüm sayfasından indirebilirsin.` }; }
+    catch (_) { return { reason: __('{dir} klasörüne yazılamıyor; sürüm sayfasından indirebilirsin.', { dir: path.dirname(bundle) }) }; }
     const name = `VoxStorm-${release.tag_name.replace(/^v/, '')}-mac-${process.arch}.zip`;
     const a = asset(name);
     const sha = a && /^sha256:([0-9a-f]{64})$/i.exec(a.digest || '');
-    if (!a) return { reason: 'Bu sürümün macOS dosyası henüz yüklenmedi; biraz sonra tekrar kontrol et.' };
-    if (!sha) return { reason: 'Bu sürümün macOS dosyası doğrulanamıyor; sürüm sayfasından indirebilirsin.' };
+    if (!a) return { reason: __('Bu sürümün {os} dosyası henüz yüklenmedi; biraz sonra tekrar kontrol et.', { os: 'macOS' }) };
+    if (!sha) return { reason: __('Bu sürümün {os} dosyası doğrulanamıyor; sürüm sayfasından indirebilirsin.', { os: 'macOS' }) };
     return { want: 'mac', f: { name, size: a.size, sha256: sha[1].toLowerCase() }, a };
   }
 
   function pickAppImage() {
     const img = process.env.APPIMAGE;
     try { fs.accessSync(path.dirname(img), fs.constants.W_OK); fs.accessSync(img, fs.constants.W_OK); }
-    catch (_) { return { reason: `${path.dirname(img)} klasörüne yazılamıyor; sürüm sayfasından indirebilirsin.` }; }
+    catch (_) { return { reason: __('{dir} klasörüne yazılamıyor; sürüm sayfasından indirebilirsin.', { dir: path.dirname(img) }) }; }
     // electron-builder names AppImages by the Linux arch name: x86_64 / arm64
     const name = `VoxStorm-${release.tag_name.replace(/^v/, '')}-linux-${process.arch === 'x64' ? 'x86_64' : process.arch}.AppImage`;
     const a = asset(name);
     const sha = a && /^sha256:([0-9a-f]{64})$/i.exec(a.digest || '');
-    if (!a) return { reason: 'Bu sürümün Linux dosyası henüz yüklenmedi; biraz sonra tekrar kontrol et.' };
-    if (!sha) return { reason: 'Bu sürümün Linux dosyası doğrulanamıyor; sürüm sayfasından indirebilirsin.' };
+    if (!a) return { reason: __('Bu sürümün {os} dosyası henüz yüklenmedi; biraz sonra tekrar kontrol et.', { os: 'Linux' }) };
+    if (!sha) return { reason: __('Bu sürümün {os} dosyası doğrulanamıyor; sürüm sayfasından indirebilirsin.', { os: 'Linux' }) };
     return { want: 'appimage', f: { name, size: a.size, sha256: sha[1].toLowerCase() }, a };
   }
 
@@ -129,7 +130,7 @@ module.exports = function updater({ app, net, DATA, settings, notify, onState, b
         if (fs.existsSync(target) && (await sha256(target)) === p.f.sha256.toLowerCase()) { file = { path: target, want: p.want }; set({ status: 'ready', progress: 1 }); }
         else if (settings().auto) download();
       }
-      if (!quiet && (st.status === 'available' || st.status === 'manual')) tell(st.latest + ':found', `VoxStorm ${st.latest} çıktı`, st.status === 'manual' ? 'Ayrıntılar Ayarlar → Hakkında bölümünde.' : 'İndiriliyor; hazır olunca yeniden başlatman yeterli.');
+      if (!quiet && (st.status === 'available' || st.status === 'manual')) tell(st.latest + ':found', __('VoxStorm {version} çıktı', { version: st.latest }), st.status === 'manual' ? __('Ayrıntılar Ayarlar → Hakkında bölümünde.') : __('İndiriliyor; hazır olunca yeniden başlatman yeterli.'));
     } catch (e) {
       set({ status: 'error', error: e.message });
     }
@@ -155,7 +156,7 @@ module.exports = function updater({ app, net, DATA, settings, notify, onState, b
       const tmp = path.join(DIR, p.f.name + '.part');
       try {
         const r = await net.fetch(p.a.browser_download_url, { headers: { 'User-Agent': 'VoxStorm', Accept: 'application/octet-stream' } });
-        if (!r.ok || !r.body) throw new Error(`İndirme başarısız: ${r.status}`);
+        if (!r.ok || !r.body) throw new Error(__('İndirme başarısız: {status}', { status: r.status }));
         const total = Number(r.headers.get('content-length')) || p.f.size || p.a.size || 0;
         const out = fs.createWriteStream(tmp);
         const h = crypto.createHash('sha256');
@@ -170,13 +171,13 @@ module.exports = function updater({ app, net, DATA, settings, notify, onState, b
           if (total && Date.now() - last > 250) { last = Date.now(); set({ progress: Math.min(0.99, got / total) }); }
         }
         await new Promise((ok, bad) => out.end(err => (err ? bad(err) : ok())));
-        if (h.digest('hex') !== p.f.sha256.toLowerCase()) throw new Error('İndirilen dosya doğrulanamadı (sha256 tutmuyor); kurulmadı.');
+        if (h.digest('hex') !== p.f.sha256.toLowerCase()) throw new Error(__('İndirilen dosya doğrulanamadı (sha256 tutmuyor); kurulmadı.'));
         const target = path.join(DIR, p.f.name);
         await fsp.rm(target, { force: true });
         await fsp.rename(tmp, target);
         file = { path: target, want: p.want };
         set({ status: 'ready', progress: 1 });
-        tell(st.latest + ':ready', `VoxStorm ${st.latest} hazır`, 'Yeniden başlatınca kurulur. Çıkışta da kendiliğinden kurulur.');
+        tell(st.latest + ':ready', __('VoxStorm {version} hazır', { version: st.latest }), __('Yeniden başlatınca kurulur. Çıkışta da kendiliğinden kurulur.'));
       } catch (e) {
         await fsp.rm(tmp, { force: true }).catch(() => {});
         set({ status: 'error', error: e.message });
@@ -311,7 +312,7 @@ ${relaunch ? `nohup "$IMG"${process.argv.length > 1 ? ' ' + process.argv.slice(1
   function onQuit() { if (st.status === 'ready' && settings().auto) apply(false); }
 
   function start() {
-    if (kind === 'dev') { set({ status: 'idle', reason: 'Geliştirme modunda (npm start) güncelleme yapılmaz.' }); return; }
+    if (kind === 'dev') { set({ status: 'idle', reason: __('Geliştirme modunda (npm start) güncelleme yapılmaz.') }); return; }
     // the previous app.asar kept by an update for rollback; no longer needed once we are running
     if (kind === 'asar') fsp.rm(path.join(path.dirname(exe), 'resources', 'app.asar.old'), { force: true }).catch(() => {});
     const tick = () => { if (settings().check) check({ quiet: false }).catch(() => {}); };

@@ -3,17 +3,17 @@
 const $ = s => document.querySelector(s);
 const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const lower = s => String(s || '').toLocaleLowerCase('tr');
-const fmtUsd = n => '$' + n.toLocaleString('tr-TR', { minimumFractionDigits: n < 100 ? 2 : 0, maximumFractionDigits: n < 100 ? 2 : 0 });
-const fmtTok = n => n >= 1e6 ? (n / 1e6).toFixed(1).replace('.', ',') + ' M' : n >= 1e3 ? Math.round(n / 1e3) + ' B' : String(n);
+const fmtUsd = n => '$' + n.toLocaleString(I18N.locale(), { minimumFractionDigits: n < 100 ? 2 : 0, maximumFractionDigits: n < 100 ? 2 : 0 });
+const fmtTok = n => n >= 1e6 ? __('{n} M', { n: (n / 1e6).toLocaleString(I18N.locale(), { minimumFractionDigits: 1, maximumFractionDigits: 1 }) }) : n >= 1e3 ? __('{n} B', { n: Math.round(n / 1e3) }) : String(n);
 function rel(ms) {
   if (!ms) return '';
   const m = Math.floor((Date.now() - ms) / 60000);
-  if (m < 1) return 'az önce';
-  if (m < 60) return m + ' dk önce';
-  const h = Math.floor(m / 60); if (h < 24) return h + ' saat önce';
-  const g = Math.floor(h / 24); if (g === 1) return 'dün';
-  if (g < 7) return g + ' gün önce';
-  return new Date(ms).toLocaleDateString('tr-TR', { day: 'numeric', month: 'long' });
+  if (m < 1) return __('az önce');
+  if (m < 60) return __('{n} dk önce', { n: m });
+  const h = Math.floor(m / 60); if (h < 24) return __('{n} saat önce', { n: h });
+  const g = Math.floor(h / 24); if (g === 1) return __('dün');
+  if (g < 7) return __('{n} gün önce', { n: g });
+  return new Date(ms).toLocaleDateString(I18N.locale(), { day: 'numeric', month: 'long' });
 }
 
 /* ---------- greetings ----------
@@ -21,36 +21,36 @@ function rel(ms) {
    all three disappear when no form of address is set */
 const GREET = {
   morning: [
-    'Günaydın{, h}! Bugün ne yapıyoruz?',
-    'Kahveler hazır mı{ h}? Nereden başlıyoruz?',
-    'Güne hangi projeyle başlıyoruz{, h}?',
-    'Erkencisin{, h}. Hangi projeyi açıyoruz?',
+    __('Günaydın{, h}! Bugün ne yapıyoruz?'),
+    __('Kahveler hazır mı{ h}? Nereden başlıyoruz?'),
+    __('Güne hangi projeyle başlıyoruz{, h}?'),
+    __('Erkencisin{, h}. Hangi projeyi açıyoruz?'),
   ],
   day: [
-    'Hoş geldin{, h}. Bugün ne yapıyoruz?',
-    '{h, }hangi projeye dalıyoruz?',
-    'Emrin olur{, h}. Nereden başlayalım?',
-    'Hazırım{, h}. Hangi projeyi açıyoruz?',
+    __('Hoş geldin{, h}. Bugün ne yapıyoruz?'),
+    __('{h, }hangi projeye dalıyoruz?'),
+    __('Emrin olur{, h}. Nereden başlayalım?'),
+    __('Hazırım{, h}. Hangi projeyi açıyoruz?'),
   ],
   evening: [
-    'İyi akşamlar{, h}. Ne üzerinde çalışıyoruz?',
-    'Akşam mesaisi mi{ h}? Hangi proje?',
-    'Günün son işi ne olsun{, h}?',
+    __('İyi akşamlar{, h}. Ne üzerinde çalışıyoruz?'),
+    __('Akşam mesaisi mi{ h}? Hangi proje?'),
+    __('Günün son işi ne olsun{, h}?'),
   ],
   night: [
-    'Gece kuşu musun{ h}? Bugün ne yapıyoruz?',
-    'Bu saatte kod yazılır{, h}. Hangi proje?',
-    'Herkes uyuyor, biz çalışıyoruz{, h}. Nereden başlıyoruz?',
+    __('Gece kuşu musun{ h}? Bugün ne yapıyoruz?'),
+    __('Bu saatte kod yazılır{, h}. Hangi proje?'),
+    __('Herkes uyuyor, biz çalışıyoruz{, h}. Nereden başlıyoruz?'),
   ],
   any: [
-    'Bugün ne yapıyoruz{, h}?',
-    'Sıradaki iş ne{, h}?',
-    '{h, }bugün neyi bitiriyoruz?',
-    'Bir proje seç{, h}, gerisini birlikte hallederiz.',
+    __('Bugün ne yapıyoruz{, h}?'),
+    __('Sıradaki iş ne{, h}?'),
+    __('{h, }bugün neyi bitiriyoruz?'),
+    __('Bir proje seç{, h}, gerisini birlikte hallederiz.'),
   ],
-  monday: ['Yeni hafta, yeni iş{, h}. Nereden başlıyoruz?'],
-  friday: ['Cuma geldi{, h}. Haftayı neyle kapatıyoruz?'],
-  weekend: ['Hafta sonu mesaisi mi{ h}? Hangi proje?'],
+  monday: [__('Yeni hafta, yeni iş{, h}. Nereden başlıyoruz?')],
+  friday: [__('Cuma geldi{, h}. Haftayı neyle kapatıyoruz?')],
+  weekend: [__('Hafta sonu mesaisi mi{ h}? Hangi proje?')],
 };
 function greetingPool(now) {
   const h = now.getHours(), d = now.getDay();
@@ -92,25 +92,25 @@ function render() {
   sel = Math.min(sel, Math.max(0, view.length - 1));
   $('#wlCount').textContent = q ? `${view.length} / ${DATA.projects.length}` : '';
   if (!DATA.projects.length) {
-    $('#wlList').innerHTML = '<div class="wl-empty">Henüz proje yok.<br>Soldan <b>Klasör aç…</b> ile bir proje ekle.</div>';
+    $('#wlList').innerHTML = `<div class="wl-empty">${__('Henüz proje yok.<br>Soldan <b>Klasör aç…</b> ile bir proje ekle.')}</div>`;
     return;
   }
-  if (!view.length) { $('#wlList').innerHTML = `<div class="wl-empty">“${esc($('#wlQ').value)}” ile eşleşen proje yok.</div>`; return; }
+  if (!view.length) { $('#wlList').innerHTML = `<div class="wl-empty">${__('“{q}” ile eşleşen proje yok.', { q: esc($('#wlQ').value) })}</div>`; return; }
   const favs = view.filter(p => p.fav).length;
-  const head = i => (!favs ? '' : i === 0 ? '<div class="wl-sec"><i class="fa-solid fa-star"></i> Favoriler</div>' : i === favs && favs < view.length ? '<div class="wl-sec">Diğer projeler</div>' : '');
+  const head = i => (!favs ? '' : i === 0 ? `<div class="wl-sec"><i class="fa-solid fa-star"></i> ${__('Favoriler')}</div>` : i === favs && favs < view.length ? `<div class="wl-sec">${__('Diğer projeler')}</div>` : '');
   $('#wlList').innerHTML = view.map((p, i) => `${head(i)}
     <div class="wl-row ${i === sel ? 'sel' : ''}" role="option" aria-selected="${i === sel}" data-i="${i}">
       <div class="wl-av" style="background:${hueOf(p.name)}">${esc(initials(p.name))}</div>
       <div class="wl-info">
-        <div class="wl-name">${mark(p.name, q)}<button class="wl-star ${p.fav ? 'on' : ''}" data-fav="${i}" title="${p.fav ? 'Favorilerden çıkar' : 'Favorilere ekle: listenin başında durur'}" aria-label="${p.fav ? 'Favorilerden çıkar' : 'Favorilere ekle'}"><i class="fa-${p.fav ? 'solid' : 'regular'} fa-star"></i></button></div>
+        <div class="wl-name">${mark(p.name, q)}<button class="wl-star ${p.fav ? 'on' : ''}" data-fav="${i}" title="${esc(p.fav ? __('Favorilerden çıkar') : __('Favorilere ekle: listenin başında durur'))}" aria-label="${esc(p.fav ? __('Favorilerden çıkar') : __('Favorilere ekle'))}"><i class="fa-${p.fav ? 'solid' : 'regular'} fa-star"></i></button></div>
         <div class="wl-path">${mark(p.path, q)}</div>
-        ${p.missing ? '<div class="wl-miss">Klasör bulunamadı</div>' : p.lastTitle ? `<div class="wl-last" title="${esc(p.lastTitle)}">Son: ${esc(p.lastTitle)}</div>` : ''}
+        ${p.missing ? `<div class="wl-miss">${__('Klasör bulunamadı')}</div>` : p.lastTitle ? `<div class="wl-last" title="${esc(p.lastTitle)}">${__('Son: {title}', { title: esc(p.lastTitle) })}</div>` : ''}
       </div>
       <div class="wl-right">
-        <div class="wl-meta">${p.last ? rel(p.last) : p.added ? 'yeni eklendi' : 'oturum yok'}${p.count ? `<br>${p.count} oturum` : ''}</div>
-        <div class="wl-btns"><button class="btn primary" data-act="claude" data-i="${i}" title="Ctrl+Enter">+ Oturum</button>${p.restore
-          ? `<button class="btn" data-act="restore" data-i="${i}" title="Son kapanışta bu projede açık olan ${p.restore} terminali yeniden açar">Geri yükle (${p.restore})</button>`
-          : p.last ? `<button class="btn" data-act="restore" data-i="${i}" title="${esc(p.lastTitle)}">Son oturuma devam</button>` : ''}<button class="btn" data-act="ide" data-i="${i}">IDE'de aç</button></div>
+        <div class="wl-meta">${p.last ? rel(p.last) : p.added ? __('yeni eklendi') : __('oturum yok')}${p.count ? `<br>${__('{n} oturum', { n: p.count })}` : ''}</div>
+        <div class="wl-btns"><button class="btn primary" data-act="claude" data-i="${i}" title="Ctrl+Enter">${__('+ Oturum')}</button>${p.restore
+          ? `<button class="btn" data-act="restore" data-i="${i}" title="${esc(__('Son kapanışta bu projede açık olan {n} terminali yeniden açar', { n: p.restore }))}">${__('Geri yükle ({n})', { n: p.restore })}</button>`
+          : p.last ? `<button class="btn" data-act="restore" data-i="${i}" title="${esc(p.lastTitle)}">${__('Son oturuma devam')}</button>` : ''}<button class="btn" data-act="ide" data-i="${i}">${__('IDE\'de aç')}</button></div>
       </div>
     </div>`).join('');
   const el = $('.wl-row.sel'); if (el) el.scrollIntoView({ block: 'nearest' });
@@ -130,26 +130,26 @@ async function load() {
   if (own && window.Themes) Themes.show(own); // themes.js
   else if (DATA.skin && DATA.skin !== 'violet' && !String(DATA.skin).startsWith('custom:')) document.documentElement.dataset.skin = DATA.skin;
   const now = new Date();
-  $('#wlDate').textContent = now.toLocaleDateString('tr-TR', { weekday: 'long', day: 'numeric', month: 'long' });
+  $('#wlDate').textContent = now.toLocaleDateString(I18N.locale(), { weekday: 'long', day: 'numeric', month: 'long' });
   pool = greetingPool(now);
   greetIdx = Math.floor(Math.random() * pool.length);
   setGreeting(false);
   const last = DATA.projects.find(p => p.last);
   $('#wlSub').innerHTML = last
-    ? `En son <b>${esc(last.name)}</b> üzerinde çalıştın · ${rel(last.last)}`
-    : 'Bir proje seç ya da yeni bir klasör aç.';
-  const stats = [`<b>${DATA.projects.length}</b> proje`];
-  if (DATA.usage != null) stats.push(`bu hafta <b>${fmtTok(DATA.usage)}</b> token` + (DATA.cost != null ? ` (≈ <b>${fmtUsd(DATA.cost)}</b>)` : ''));
-  if (DATA.open) stats.push(`<b>${DATA.open}</b> açık terminal`);
+    ? __('En son <b>{name}</b> üzerinde çalıştın · {when}', { name: esc(last.name), when: rel(last.last) })
+    : __('Bir proje seç ya da yeni bir klasör aç.');
+  const stats = [__('<b>{n}</b> proje', { n: DATA.projects.length })];
+  if (DATA.usage != null) stats.push(__('bu hafta <b>{tokens}</b> token', { tokens: fmtTok(DATA.usage) }) + (DATA.cost != null ? ` (≈ <b>${fmtUsd(DATA.cost)}</b>)` : ''));
+  if (DATA.open) stats.push(__('<b>{n}</b> açık terminal', { n: DATA.open }));
   $('#wlStats').innerHTML = stats.join(' · ');
   $('#restoreAll').disabled = !DATA.restoreAll;
   $('#restoreN').textContent = DATA.restoreAll || '';
-  $('#restoreAll').title = DATA.restoreAll ? `Son kapanışta açık olan ${DATA.restoreAll} terminali yeniden açar` : 'Geri yüklenecek oturum yok';
+  $('#restoreAll').title = DATA.restoreAll ? __('Son kapanışta açık olan {n} terminali yeniden açar', { n: DATA.restoreAll }) : __('Geri yüklenecek oturum yok');
   render();
   $('#wlQ').focus();
   if (DATA.usage == null) {
     // usage scan may still be running at startup; fill it in when it finishes
-    api.invoke('usage:get').then(u => { if (u && u.total != null) { stats.splice(1, 0, `bu hafta <b>${fmtTok(u.total)}</b> token` + (u.cost != null ? ` (≈ <b>${fmtUsd(u.cost)}</b>)` : '')); $('#wlStats').innerHTML = stats.join(' · '); } }).catch(() => {});
+    api.invoke('usage:get').then(u => { if (u && u.total != null) { stats.splice(1, 0, __('bu hafta <b>{tokens}</b> token', { tokens: fmtTok(u.total) }) +(u.cost != null ? ` (≈ <b>${fmtUsd(u.cost)}</b>)` : '')); $('#wlStats').innerHTML = stats.join(' · '); } }).catch(() => {});
   }
 }
 
@@ -176,7 +176,7 @@ $('#wlList').addEventListener('mousemove', e => {
 });
 const $$rows = () => [...document.querySelectorAll('.wl-row')];
 $('#wlGreet').addEventListener('click', () => setGreeting(true));
-$('#wlGreet').title = 'Başka bir selam için tıkla';
+$('#wlGreet').title = __('Başka bir selam için tıkla');
 $('#addFolder').onclick = async () => {
   const p = await api.invoke('welcome:addFolder');
   if (p) await load();

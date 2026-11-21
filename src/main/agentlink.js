@@ -9,6 +9,7 @@ const http = require('http');
 const path = require('path');
 const fs = require('fs');
 const crypto = require('crypto');
+const I18N = require('../i18n/i18n.js'); const __ = I18N.t;
 
 const MAX_TEXT = 100 * 1024; // characters of tool output sent back
 const toml = s => JSON.stringify(String(s));
@@ -74,20 +75,21 @@ module.exports = function setupAgentLink({ DATA, getSsh, getDb, getDocker, getTh
     if (pending.has(pk)) return pending.get(pk);
     const p = (async () => {
       const info = sessionInfo(ptyId);
-      const thing = kind === 'ssh' ? 'SSH sunucusunu' : 'veritabanını';
       const r = await showBox(info, {
-        title: `${info.agent} izin istiyor`, icon: kind === 'ssh' ? 'fa-server' : 'fa-database',
-        message: `${info.agent}, “${item.name}” ${thing} kullanmak istiyor.`,
+        title: __('{agent} izin istiyor', { agent: info.agent }), icon: kind === 'ssh' ? 'fa-server' : 'fa-database',
+        message: kind === 'ssh'
+          ? __('{agent}, “{name}” SSH sunucusunu kullanmak istiyor.', { agent: info.agent, name: item.name })
+          : __('{agent}, “{name}” veritabanını kullanmak istiyor.', { agent: info.agent, name: item.name }),
         detail: [
-          `${kind === 'ssh' ? 'Sunucu' : 'Bağlantı'}: ${item.label}`,
-          `Oturum: ${info.agent} · ${info.project}`,
-          'Bağlantı bilgileri ve parolalar ajana verilmez; bağlantıyı VoxStorm kurar, ajan yalnızca çıktıyı görür.',
-          'Evet dersen bu oturum, kapanana kadar bu bağlantıyı yeniden sormadan kullanabilir.',
-          kind === 'ssh' ? 'İlk komut:' : 'İlk sorgu:',
+          kind === 'ssh' ? __('Sunucu: {label}', { label: item.label }) : __('Bağlantı: {label}', { label: item.label }),
+          __('Oturum: {agent} · {project}', { agent: info.agent, project: info.project }),
+          __('Bağlantı bilgileri ve parolalar ajana verilmez; bağlantıyı VoxStorm kurar, ajan yalnızca çıktıyı görür.'),
+          __('Evet dersen bu oturum, kapanana kadar bu bağlantıyı yeniden sormadan kullanabilir.'),
+          kind === 'ssh' ? __('İlk komut:') : __('İlk sorgu:'),
         ].join('\n'),
         code: clip(what, 600),
-        ok: 'Evet', cancel: 'Hayır', focusCancel: true,
-        check: 'Bu kararı her zaman hatırla (bütün Claude ve Codex oturumları için)',
+        ok: __('Evet'), cancel: __('Hayır'), focusCancel: true,
+        check: __('Bu kararı her zaman hatırla (bütün Claude ve Codex oturumları için)'),
       });
       const yes = r.ok;
       if (r.checked) {
@@ -106,11 +108,11 @@ module.exports = function setupAgentLink({ DATA, getSsh, getDb, getDocker, getTh
   async function confirmDanger(ptyId, item, notes, sql) {
     const info = sessionInfo(ptyId);
     const r = await showBox(info, {
-      title: `${info.agent} onay istiyor`, danger: true,
-      message: `${info.agent}, “${item.name}” üzerinde veri silebilecek bir sorgu çalıştırmak istiyor.`,
-      detail: `Bağlantı: ${item.label}\n\n` + notes.map(n => '• ' + n).join('\n'),
+      title: __('{agent} onay istiyor', { agent: info.agent }), danger: true,
+      message: __('{agent}, “{name}” üzerinde veri silebilecek bir sorgu çalıştırmak istiyor.', { agent: info.agent, name: item.name }),
+      detail: __('Bağlantı: {label}', { label: item.label }) + '\n\n' + notes.map(n => '• ' + n).join('\n'),
       code: clip(sql, 1500),
-      ok: 'Çalıştır', cancel: 'Vazgeç',
+      ok: __('Çalıştır'), cancel: __('Vazgeç'),
     });
     return r.ok;
   }
@@ -119,54 +121,60 @@ module.exports = function setupAgentLink({ DATA, getSsh, getDb, getDocker, getTh
   async function askOnce(ptyId, key, opts) {
     const set = approved.get(ptyId);
     if (set && set.has(key)) return true;
-    const r = await showBox(sessionInfo(ptyId), Object.assign({ focusCancel: true, check: 'Bu oturumda bir daha sorma' }, opts));
+    const r = await showBox(sessionInfo(ptyId), Object.assign({ focusCancel: true, check: __('Bu oturumda bir daha sorma') }, opts));
     if (r.ok && r.checked) { if (!approved.has(ptyId)) approved.set(ptyId, new Set()); approved.get(ptyId).add(key); }
     return r.ok;
   }
 
   /* ---------------- tools ---------------- */
-  const TOOLS = [
+  // built on each call: the descriptions follow the interface language
+  const TOOLS = () => [
     {
       name: 'list_connections',
-      description: 'VoxStorm’da kayıtlı SSH sunucularını ve veritabanı bağlantılarını listeler (yalnızca kimlik, ad, tür ve grup; adres ve parola verilmez). ssh_exec ve db_query bu listedeki "id" ya da "name" ile çalışır.',
+      description: __('VoxStorm’da kayıtlı SSH sunucularını ve veritabanı bağlantılarını listeler (yalnızca kimlik, ad, tür ve grup; adres ve parola verilmez). ssh_exec ve db_query bu listedeki "id" ya da "name" ile çalışır.'),
       inputSchema: { type: 'object', properties: {}, additionalProperties: false },
     },
     {
       name: 'ssh_exec',
-      description: 'VoxStorm’da kayıtlı bir SSH sunucusunda bir kabuk komutu çalıştırır ve çıktısını (stdout, stderr, çıkış kodu) döndürür. Bağlantıyı VoxStorm kurar. Bir sunucu bu oturumda ilk kez kullanılırken kullanıcıdan VoxStorm’da onay istenir; reddedilirse aynı isteği ısrarla tekrarlama. Etkileşimli komutlar (vim, top, sudo parola sorusu) çalışmaz. Dosya yazmak için stdin kullan: ör. command "cat > /yol/dosya", stdin içerik.',
+      description: __('VoxStorm’da kayıtlı bir SSH sunucusunda bir kabuk komutu çalıştırır ve çıktısını (stdout, stderr, çıkış kodu) döndürür. Bağlantıyı VoxStorm kurar. Bir sunucu bu oturumda ilk kez kullanılırken kullanıcıdan VoxStorm’da onay istenir; reddedilirse aynı isteği ısrarla tekrarlama. Etkileşimli komutlar (vim, top, sudo parola sorusu) çalışmaz. Dosya yazmak için stdin kullan: ör. command "cat > /yol/dosya", stdin içerik.'),
       inputSchema: {
         type: 'object',
         properties: {
-          connection: { type: 'string', description: 'list_connections’taki id ya da ad' },
-          command: { type: 'string', description: 'Sunucuda çalışacak komut' },
-          stdin: { type: 'string', description: 'İsteğe bağlı: komutun standart girdisine yazılacak metin' },
-          timeout_sec: { type: 'number', description: 'Zaman aşımı (varsayılan 120, en çok 900)' },
+          connection: { type: 'string', description: __('list_connections’taki id ya da ad') },
+          command: { type: 'string', description: __('Sunucuda çalışacak komut') },
+          stdin: { type: 'string', description: __('İsteğe bağlı: komutun standart girdisine yazılacak metin') },
+          timeout_sec: { type: 'number', description: __('Zaman aşımı (varsayılan 120, en çok 900)') },
         },
         required: ['connection', 'command'], additionalProperties: false,
       },
     },
     {
       name: 'db_query',
-      description: 'VoxStorm’da kayıtlı bir veritabanı bağlantısında SQL çalıştırır ve sonuçları sekmeyle ayrılmış metin olarak döndürür. Bağlantıyı VoxStorm kurar; aynı oturumda aynı bağlantı açık kalır (USE, geçici tablolar korunur). Bağlantı bu oturumda ilk kez kullanılırken kullanıcıdan onay istenir. Salt okunur bağlantılarda yazma ifadeleri engellenir; DROP, TRUNCATE ve WHERE’siz UPDATE/DELETE her seferinde kullanıcıya sorulur. Tablo ve sütunlar için INFORMATION_SCHEMA sorgulayabilirsin.',
+      description: __('VoxStorm’da kayıtlı bir veritabanı bağlantısında SQL çalıştırır ve sonuçları sekmeyle ayrılmış metin olarak döndürür. Bağlantıyı VoxStorm kurar; aynı oturumda aynı bağlantı açık kalır (USE, geçici tablolar korunur). Bağlantı bu oturumda ilk kez kullanılırken kullanıcıdan onay istenir. Salt okunur bağlantılarda yazma ifadeleri engellenir; DROP, TRUNCATE ve WHERE’siz UPDATE/DELETE her seferinde kullanıcıya sorulur. Tablo ve sütunlar için INFORMATION_SCHEMA sorgulayabilirsin.'),
       inputSchema: {
         type: 'object',
         properties: {
-          connection: { type: 'string', description: 'list_connections’taki id ya da ad' },
-          sql: { type: 'string', description: 'Çalışacak sorgu (MSSQL’de GO ile toplu işler ayrılabilir)' },
-          database: { type: 'string', description: 'İsteğe bağlı: kullanılacak veritabanı (boşsa bağlantının varsayılanı)' },
-          max_rows: { type: 'number', description: 'Sonuç kümesi başına döndürülecek en çok satır (varsayılan 200, en çok 5000)' },
-          timeout_sec: { type: 'number', description: 'Zaman aşımı (varsayılan 120, en çok 900)' },
+          connection: { type: 'string', description: __('list_connections’taki id ya da ad') },
+          sql: { type: 'string', description: __('Çalışacak sorgu (MSSQL’de GO ile toplu işler ayrılabilir)') },
+          database: { type: 'string', description: __('İsteğe bağlı: kullanılacak veritabanı (boşsa bağlantının varsayılanı)') },
+          max_rows: { type: 'number', description: __('Sonuç kümesi başına döndürülecek en çok satır (varsayılan 200, en çok 5000)') },
+          timeout_sec: { type: 'number', description: __('Zaman aşımı (varsayılan 120, en çok 900)') },
         },
         required: ['connection', 'sql'], additionalProperties: false,
       },
     },
   ];
 
-  function find(list, ref, what) {
+  // kind: 'ssh' | 'db'
+  function find(list, ref, kind) {
     const r = String(ref || '').trim();
     const lower = r.toLocaleLowerCase('tr');
     const x = list.find(c => c.id === r) || list.find(c => c.name.toLocaleLowerCase('tr') === lower);
-    if (!x) throw new Error(`“${r}” adında bir ${what} bulunamadı. list_connections ile kayıtlı bağlantılara bak.`);
+    if (!x) {
+      throw new Error(kind === 'ssh'
+        ? __('“{name}” adında bir SSH sunucusu bulunamadı. list_connections ile kayıtlı bağlantılara bak.', { name: r })
+        : __('“{name}” adında bir veritabanı bağlantısı bulunamadı. list_connections ile kayıtlı bağlantılara bak.', { name: r }));
+    }
     return x;
   }
   // workspace tools: IDE, git, questions, terminals, Docker, plugins (agenttools.js)
@@ -176,35 +184,35 @@ module.exports = function setupAgentLink({ DATA, getSsh, getDb, getDocker, getTh
   async function callTool(name, a, ptyId) {
     a = a || {};
     if (WT.has(name)) {
-      if (WT.needsLink(name) && !enabled()) throw new Error('VoxStorm bağlantılarının ajanlarla kullanımı Ayarlar’da kapatılmış.');
+      if (WT.needsLink(name) && !enabled()) throw new Error(__('VoxStorm bağlantılarının ajanlarla kullanımı Ayarlar’da kapatılmış.'));
       return WT.call(name, a, ptyId);
     }
-    if (!enabled()) throw new Error('VoxStorm bağlantılarının ajanlarla kullanımı Ayarlar’da kapatılmış.');
+    if (!enabled()) throw new Error(__('VoxStorm bağlantılarının ajanlarla kullanımı Ayarlar’da kapatılmış.'));
     if (name === 'list_connections') {
       const ssh = getSsh().agentList(), db = getDb().agentList();
-      const note = c => (c.aiAccess === 'allow' ? 'izinli' : 'ilk kullanımda sorulur');
+      const note = c => (c.aiAccess === 'allow' ? __('izinli') : __('ilk kullanımda sorulur'));
       return JSON.stringify({
         ssh: ssh.map(c => ({ id: c.id, name: c.name, group: c.group || undefined, access: note(c) })),
         databases: db.map(c => ({ id: c.id, name: c.name, type: c.typeName, readOnly: c.readOnly || undefined, access: note(c) })),
       }, null, 1);
     }
     if (name === 'ssh_exec') {
-      const h = find(getSsh().agentList(), a.connection, 'SSH sunucusu');
+      const h = find(getSsh().agentList(), a.connection, 'ssh');
       const cmd = String(a.command || '');
-      if (!cmd.trim()) throw new Error('Komut boş.');
-      if (!(await authorize('ssh', h, ptyId, cmd))) throw new Error(`Kullanıcı “${h.name}” sunucusunun kullanılmasına izin vermedi.`);
+      if (!cmd.trim()) throw new Error(__('Komut boş.'));
+      if (!(await authorize('ssh', h, ptyId, cmd))) throw new Error(__('Kullanıcı “{name}” sunucusunun kullanılmasına izin vermedi.', { name: h.name }));
       const r = await getSsh().agentExec(h.id, cmd, { stdin: a.stdin, timeout: secs(a.timeout_sec, 120) * 1000 });
-      const parts = [r.code === -2 ? 'Zaman aşımı: komut durduruldu.' : `Çıkış kodu: ${r.code}`];
-      if (r.stdout) parts.push('--- stdout ---\n' + clip(r.stdout, MAX_TEXT) + (r.cut ? '\n… (çıktı kısaltıldı)' : ''));
+      const parts = [r.code === -2 ? __('Zaman aşımı: komut durduruldu.') : __('Çıkış kodu: {code}', { code: r.code })];
+      if (r.stdout) parts.push('--- stdout ---\n' + clip(r.stdout, MAX_TEXT) + (r.cut ? '\n' + __('… (çıktı kısaltıldı)') : ''));
       if (r.stderr) parts.push('--- stderr ---\n' + clip(r.stderr, MAX_TEXT / 4));
-      if (!r.stdout && !r.stderr) parts.push('(çıktı yok)');
+      if (!r.stdout && !r.stderr) parts.push(__('(çıktı yok)'));
       return { text: parts.join('\n'), isError: r.code !== 0 };
     }
     if (name === 'db_query') {
-      const c = find(getDb().agentList(), a.connection, 'veritabanı bağlantısı');
+      const c = find(getDb().agentList(), a.connection, 'db');
       const sql = String(a.sql || '');
-      if (!sql.trim()) throw new Error('Sorgu boş.');
-      if (!(await authorize('db', c, ptyId, sql))) throw new Error(`Kullanıcı “${c.name}” bağlantısının kullanılmasına izin vermedi.`);
+      if (!sql.trim()) throw new Error(__('Sorgu boş.'));
+      if (!(await authorize('db', c, ptyId, sql))) throw new Error(__('Kullanıcı “{name}” bağlantısının kullanılmasına izin vermedi.', { name: c.name }));
       const info = sessionInfo(ptyId);
       const r = await getDb().agentQuery(c.id, sql, {
         session: ptyId, by: info.agent, db: a.database ? String(a.database) : '',
@@ -214,24 +222,26 @@ module.exports = function setupAgentLink({ DATA, getSsh, getDb, getDocker, getTh
       });
       return { text: clip(formatQuery(r), MAX_TEXT), isError: r.failed };
     }
-    throw new Error('Bilinmeyen araç: ' + name);
+    throw new Error(__('Bilinmeyen araç: {name}', { name }));
   }
   const cellText = v => (v === null || v === undefined ? 'NULL' : String(v).replace(/\\/g, '\\\\').replace(/\t/g, '\\t').replace(/\r?\n/g, '\\n'));
   function formatQuery(r) {
     const out = [];
     r.results.forEach((x, i) => {
-      out.push(`# Sonuç ${i + 1}: ${x.total} satır${x.rows.length < x.total ? ` (ilk ${x.rows.length} gösteriliyor)` : ''}`);
+      out.push(x.rows.length < x.total
+        ? __('# Sonuç {i}: {n} satır (ilk {shown} gösteriliyor)', { i: i + 1, n: x.total, shown: x.rows.length })
+        : __('# Sonuç {i}: {n} satır', { i: i + 1, n: x.total }));
       out.push(x.columns.map(c => c.name).join('\t'));
       for (const row of x.rows) out.push(row.map(cellText).join('\t'));
       out.push('');
     });
-    for (const m of r.messages) out.push((m.type === 'error' ? 'HATA: ' : '') + m.text);
-    out.push(`(${r.ms} ms${r.currentDb ? ', veritabanı: ' + r.currentDb : ''}${r.cancelled ? ', iptal edildi / zaman aşımı' : ''})`);
+    for (const m of r.messages) out.push(m.type === 'error' ? __('HATA: {text}', { text: m.text }) : m.text);
+    out.push(`(${r.ms} ms${r.currentDb ? __(', veritabanı: {db}', { db: r.currentDb }) : ''}${r.cancelled ? __(', iptal edildi / zaman aşımı') : ''})`);
     return out.join('\n');
   }
 
   /* ---------------- MCP over HTTP ---------------- */
-  const INSTRUCTIONS = 'Bu oturum VoxStorm’un içinde çalışıyor ve VoxStorm’u kullanabilirsin: dosyaları kullanıcının önünde IDE’de aç ya da işaretle (show_file, highlight_lines), kullanıcının açık dosyasını ve seçimini oku (get_editor_state), değişiklikleri git penceresinde göster ve onay iste (show_diff), soru sor (ask_user), iş bitince bildirim gönder (notify_user), görünür terminalde komut çalıştır ve terminalleri oku (run_in_terminal, read_terminal), diğer oturumlarla haberleş (send_to_session), Docker konteynerlerine bak (docker_*), eklenti araçlarını kullan (list_plugin_tools), VoxStorm’un arayüz temasını tasarla (get_theme, save_theme). Kullanıcıya bir şey göstermek ya da sormak gerektiğinde terminal metni yerine bu araçları tercih et. VoxStorm’da kayıtlı SSH sunucuları ve veritabanı bağlantıları: Önce list_connections ile hangi bağlantıların olduğuna bak. Bağlantı adresi ve parolası sana verilmez; komutu ya da sorguyu VoxStorm çalıştırır ve çıktıyı döndürür. Bir bağlantıyı ilk kullanışta kullanıcıya VoxStorm’da onay sorulur.';
+  const INSTRUCTIONS = () => __('Bu oturum VoxStorm’un içinde çalışıyor ve VoxStorm’u kullanabilirsin: dosyaları kullanıcının önünde IDE’de aç ya da işaretle (show_file, highlight_lines), kullanıcının açık dosyasını ve seçimini oku (get_editor_state), değişiklikleri git penceresinde göster ve onay iste (show_diff), soru sor (ask_user), iş bitince bildirim gönder (notify_user), görünür terminalde komut çalıştır ve terminalleri oku (run_in_terminal, read_terminal), diğer oturumlarla haberleş (send_to_session), Docker konteynerlerine bak (docker_*), eklenti araçlarını kullan (list_plugin_tools), VoxStorm’un arayüz temasını tasarla (get_theme, save_theme). Kullanıcıya bir şey göstermek ya da sormak gerektiğinde terminal metni yerine bu araçları tercih et. VoxStorm’da kayıtlı SSH sunucuları ve veritabanı bağlantıları: Önce list_connections ile hangi bağlantıların olduğuna bak. Bağlantı adresi ve parolası sana verilmez; komutu ya da sorguyu VoxStorm çalıştırır ve çıktıyı döndürür. Bir bağlantıyı ilk kullanışta kullanıcıya VoxStorm’da onay sorulur.');
   async function rpc(msg, ptyId) {
     const { id, method, params } = msg || {};
     const ok = result => ({ jsonrpc: '2.0', id, result });
@@ -241,12 +251,12 @@ module.exports = function setupAgentLink({ DATA, getSsh, getDb, getDocker, getTh
       return ok({
         protocolVersion: (params && params.protocolVersion) || '2025-06-18',
         capabilities: { tools: { listChanged: false } },
-        serverInfo: { name: 'voxstorm', title: 'VoxStorm bağlantıları', version: version || '0' },
-        instructions: INSTRUCTIONS,
+        serverInfo: { name: 'voxstorm', title: __('VoxStorm bağlantıları'), version: version || '0' },
+        instructions: INSTRUCTIONS(),
       });
     }
     if (method === 'ping') return ok({});
-    if (method === 'tools/list') return ok({ tools: enabled() ? [...WT.tools(true), ...TOOLS] : WT.tools(false) });
+    if (method === 'tools/list') return ok({ tools: enabled() ? [...WT.tools(true), ...TOOLS()] : WT.tools(false) });
     if (method === 'resources/list') return ok({ resources: [] });
     if (method === 'prompts/list') return ok({ prompts: [] });
     if (method === 'tools/call') {
@@ -258,7 +268,7 @@ module.exports = function setupAgentLink({ DATA, getSsh, getDb, getDocker, getTh
         return ok({ content: [{ type: 'text', text: String((e && e.message) || e) }], isError: true });
       }
     }
-    return fail(-32601, 'Bilinmeyen yöntem: ' + method);
+    return fail(-32601, __('Bilinmeyen yöntem: {method}', { method }));
   }
 
   function start() {

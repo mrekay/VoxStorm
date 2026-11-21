@@ -4,6 +4,7 @@
 const fs = require('fs');
 const path = require('path');
 const { spawn } = require('child_process');
+const I18N = require('../i18n/i18n.js'); const __ = I18N.t;
 
 const onPath = cmd => (process.env.PATH || '').split(':').some(d => d && fs.existsSync(path.join(d, cmd)));
 
@@ -31,7 +32,7 @@ function openLinux(h, password) {
     catch (e) { return { error: e.message }; }
     return { ok: true };
   }
-  return { error: 'Uzak Masaüstü için FreeRDP ya da Remmina gerekli (ör. sudo apt install freerdp3-x11 veya remmina).' };
+  return { error: __('Uzak Masaüstü için FreeRDP ya da Remmina gerekli (ör. sudo apt install freerdp3-x11 veya remmina).') };
 }
 
 module.exports = { openLinux };
