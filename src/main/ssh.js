@@ -51,17 +51,18 @@ module.exports = function registerSsh({ ipcMain, dialog, getWin, send, sendTo, D
   const canEncrypt = () => require('./platform').canEncrypt(safeStorage); // false on Linux without a keyring
   const encrypt = s => safeStorage.encryptString(String(s)).toString('base64');
   const decrypt = b => { try { return safeStorage.decryptString(Buffer.from(b, 'base64')); } catch (_) { return null; } };
-  function secretOf(h, kind) { // kind: 'pw' | 'pp'
+  function secretOf(h, kind) { // kind: 'pw' | 'pp' | 'sp' (sudo / root password, for agents)
     const k = `${h.id}:${kind}`;
     if (mem.has(k)) return mem.get(k);
+    if (kind === 'sp') return h.sdp ? decrypt(h.sdp) : null; // saved on purpose: not tied to askPassword
     const stored = kind === 'pw' ? h.pwd : h.pph;
     if (h.askPassword) return null;
     if (stored) return decrypt(stored);
     return null;
   }
   const publicHost = h => {
-    const { pwd, pph, ...rest } = h;
-    return { ...rest, hasPassword: !!pwd || mem.has(h.id + ':pw'), hasPassphrase: !!pph || mem.has(h.id + ':pp') };
+    const { pwd, pph, sdp, ...rest } = h;
+    return { ...rest, hasPassword: !!pwd || mem.has(h.id + ':pw'), hasPassphrase: !!pph || mem.has(h.id + ':pp'), hasSudoPassword: !!sdp || mem.has(h.id + ':sp') };
   };
   const scrub = (msg, ...secrets) => { msg = String(msg || ''); for (const s of secrets) if (s && s.length > 2) msg = msg.split(s).join('•••'); return msg; };
 
@@ -94,6 +95,7 @@ module.exports = function registerSsh({ ipcMain, dialog, getWin, send, sendTo, D
       tunnels: cleanTunnels(d.tunnels),
       // Claude / Codex through VoxStorm (agentlink.js): '' = ask, 'allow', 'deny'
       aiAccess: ['allow', 'deny'].includes(d.aiAccess) ? d.aiAccess : '',
+      sudoAuto: !!d.sudoAuto, // an agent's sudo request runs with the saved password, without asking
       // RDP
       fullscreen: !!d.fullscreen,
       admin: !!d.admin,
@@ -116,6 +118,8 @@ module.exports = function registerSsh({ ipcMain, dialog, getWin, send, sendTo, D
       mem.set(h.id + ':pp', d.pp);
       if (!h.askPassword && canEncrypt()) h.pph = encrypt(d.pp);
     }
+    if (typeof d.sp === 'string' && d.sp) setSudoPassword(h.id, d.sp, true);
+    if (d.clearSp) { delete h.sdp; mem.delete(h.id + ':sp'); }
     if (d.clearPw || h.askPassword) { delete h.pwd; delete h.pph; if (d.clearPw) { mem.delete(h.id + ':pw'); mem.delete(h.id + ':pp'); } }
     if (h.auth !== 'password' && h.kind === 'ssh') delete h.pwd;
     if (h.auth !== 'key') delete h.pph;
@@ -769,6 +773,20 @@ module.exports = function registerSsh({ ipcMain, dialog, getWin, send, sendTo, D
   // what an agent may see: no host name, user, port or secret
   // sudo for agents (agentlink.js): the saved login password, offered to the user, never to the agent
   const agentLoginPassword = id => { const h = hostById(id); return h && h.kind === 'ssh' && h.auth === 'password' ? secretOf(h, 'pw') : null; };
+  // the saved sudo / root password, else the login password
+  const agentSudoPassword = id => { const h = hostById(id); if (!h || h.kind !== 'ssh') return null; const s = secretOf(h, 'sp'); return s != null ? s : agentLoginPassword(id); };
+  const agentSudoAuto = id => { const h = hostById(id); return !!(h && h.sudoAuto); };
+  function setSudoPassword(id, pw, noWrite) {
+    const h = hostById(id); if (!h || !pw) return;
+    mem.set(h.id + ':sp', pw);
+    if (canEncrypt()) h.sdp = encrypt(pw);
+    if (!noWrite) write('hosts', true);
+  }
+  function setSudoAuto(id, v) {
+    const h = hostById(id); if (!h) return;
+    h.sudoAuto = !!v;
+    write('hosts', true);
+  }
   const agentList = () => hosts().filter(h => h.kind === 'ssh' && h.aiAccess !== 'deny').map(h => ({
     id: h.id, name: h.name || __('Adsız sunucu {id}', { id: h.id }), group: h.group, aiAccess: h.aiAccess || '', label: label(h),
   }));
@@ -779,7 +797,7 @@ module.exports = function registerSsh({ ipcMain, dialog, getWin, send, sendTo, D
   }
 
   return {
-    agentList, agentExec, agentSftp, agentLoginPassword, setAiAccess,
+    agentList, agentExec, agentSftp, agentLoginPassword, agentSudoPassword, agentSudoAuto, setSudoPassword, setSudoAuto, setAiAccess,
     addChannel, execPty, execOut, execStream,
     hasSession: sid => sessions.has(sid),
     sessionWc: sid => (sessions.get(sid) || {}).wc,

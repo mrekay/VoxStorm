@@ -57,7 +57,9 @@ module.exports = function setupAgentLink({ DATA, getSsh, getDb, getDocker, getTh
       const wc = w.webContents;
       if (wc.isLoading()) await new Promise(r => wc.once('did-finish-load', r));
       const r = await wc.executeJavaScript(`window.uiAsk(${JSON.stringify(opts)})`, true);
-      return r && typeof r === 'object' ? { ok: !!r.ok, checked: !!r.checked, text: typeof r.text === 'string' ? r.text : '' } : { ok: !!r, checked: false, text: '' };
+      return r && typeof r === 'object'
+        ? { ok: !!r.ok, checked: !!r.checked, text: typeof r.text === 'string' ? r.text : '', checks: Array.isArray(r.checks) ? r.checks.map(Boolean) : [], auto: !!r.auto }
+        : { ok: !!r, checked: false, text: '', checks: [], auto: false };
     } catch (_) {
       return { ok: false, checked: false };
     } finally {
@@ -124,28 +126,40 @@ module.exports = function setupAgentLink({ DATA, getSsh, getDb, getDocker, getTh
   const shq = s => "'" + String(s).replace(/'/g, "'\\''") + "'";
   const NEEDS_PW = /a password is required|a terminal is required|no tty present|askpass/i;
   const BAD_PW = /incorrect password|sorry, try again|authentication failure|\d+ incorrect password attempt/i;
-  async function sudoPassword(ptyId, h, cmd) {
-    const k = ptyId + '|' + h.id;
-    if (sudoPw.has(k)) return sudoPw.get(k);
+  /* -> { pw, session, all, auto } or null (refused). The ticks are applied by sshRun only after the
+     password worked. With a saved password the dialog counts down 10 s and, untouched, tries it by
+     itself; after a wrong password it opens again with the error (and without the countdown when the
+     saved password is the one that failed). The host's "auto approve" skips the dialog altogether. */
+  const SUDO_WAIT = 10;
+  async function sudoPassword(ptyId, h, cmd, { error = '', failed = null } = {}) {
+    const SSH = getSsh(), k = ptyId + '|' + h.id;
+    if (!error && sudoPw.has(k)) return { pw: sudoPw.get(k) };
+    const saved = SSH.agentSudoPassword ? SSH.agentSudoPassword(h.id) : null;
+    const usable = saved != null && saved !== failed;
+    if (!error && usable && SSH.agentSudoAuto && SSH.agentSudoAuto(h.id)) return { pw: saved };
     const info = sessionInfo(ptyId);
-    const saved = getSsh().agentLoginPassword ? getSsh().agentLoginPassword(h.id) : null;
     const r = await showBox(info, {
       title: __('{agent} sudo yetkisi istiyor', { agent: info.agent }), icon: 'fa-user-shield',
       message: __('{agent}, “{name}” sunucusunda bir komutu sudo ile (yönetici olarak) çalıştırmak istiyor.', { agent: info.agent, name: h.name }),
       detail: [
         __('Oturum: {agent} · {project}', { agent: info.agent, project: info.project }),
         __('Parola ajana verilmez; VoxStorm komuta doğrudan iletir.'),
-        saved ? __('Boş bırakırsan bu sunucunun kayıtlı giriş parolası kullanılır.') : '',
+        saved != null ? __('Boş bırakırsan bu sunucunun kayıtlı sudo / giriş parolası kullanılır.') : '',
       ].filter(Boolean).join('\n'),
-      code: clip(cmd, 800), input: '', password: true, maxLength: 512,
-      placeholder: saved ? __('sudo parolası (boş: kayıtlı parola)') : __('sudo parolası'),
+      code: clip(cmd, 800), input: '', password: true, maxLength: 512, error,
+      placeholder: saved != null ? __('sudo parolası (boş: kayıtlı parola)') : __('sudo parolası'),
       ok: __('Çalıştır'), cancel: __('Vazgeç'),
+      countdown: usable ? SUDO_WAIT : 0,
+      countdownText: __('{n} sn içinde dokunmazsan kayıtlı parolayla denenecek.'),
       check: __('Bu oturum boyunca hatırla (sudo için yeniden sorma)'),
+      checks: [
+        { label: __('Tüm oturumlar için hatırla'), hint: __('Parola bu sunucunun ayarlarına “sudo parolası” olarak kaydedilir'), red: true },
+        { label: __('sudo isteklerini otomatik onayla'), hint: __('Sunucu ayarı: bu sunucuda sudo bir daha sorulmaz, kayıtlı parola kullanılır'), red: true },
+      ],
     });
     if (!r.ok) return null;
-    const pw = r.text || saved || '';
-    if (r.checked) sudoPw.set(k, pw);
-    return pw;
+    const pw = r.text || (saved != null ? saved : '');
+    return { pw, session: r.checked, all: !!r.checks[0], auto: !!r.checks[1] };
   }
   // run a command; with sudo (asked for, or a command that starts with "sudo ") as root
   async function sshRun(ptyId, h, cmd, a) {
@@ -161,13 +175,27 @@ module.exports = function setupAgentLink({ DATA, getSsh, getDb, getDocker, getTh
     const wrapped = `-- sh -c ${shq(body)}`;
     const r1 = await SSH.agentExec(h.id, `sudo -n ${wrapped}`, { stdin: a.stdin, timeout });
     if (!(r1.code !== 0 && NEEDS_PW.test(r1.stderr))) return r1; // passwordless sudo (or a real result)
-    const pw = await sudoPassword(ptyId, h, body);
-    if (pw == null) throw new Error(__('Kullanıcı sudo ile çalıştırmaya izin vermedi.'));
-    const r2 = await SSH.agentExec(h.id, `sudo -S -p '' ${wrapped}`, { stdin: pw + '\n' + (a.stdin || ''), timeout });
-    if (r2.code !== 0 && BAD_PW.test(r2.stderr)) {
-      sudoPw.delete(ptyId + '|' + h.id);
-      r2.stderr = __('[VoxStorm] sudo parolası yanlış; komut çalışmadı. Tekrar denersen kullanıcıya yeniden sorulur.');
+    const k = ptyId + '|' + h.id;
+    let error = '', failed = null, r2 = null;
+    for (let i = 0; i < 4; i++) {
+      const s = await sudoPassword(ptyId, h, body, { error, failed });
+      if (s == null) throw new Error(__('Kullanıcı sudo ile çalıştırmaya izin vermedi.'));
+      r2 = await SSH.agentExec(h.id, `sudo -S -p '' ${wrapped}`, { stdin: s.pw + '\n' + (a.stdin || ''), timeout });
+      if (r2.code !== 0 && BAD_PW.test(r2.stderr)) {
+        // wrong: forget it for the session and ask again, saying so
+        sudoPw.delete(k);
+        failed = s.pw;
+        error = __('Parola yanlış, komut çalışmadı. Doğru sudo / root parolasını gir.');
+        continue;
+      }
+      // the password worked: now keep what the ticks asked for
+      if (s.session) sudoPw.set(k, s.pw);
+      if ((s.all || s.auto) && s.pw && SSH.setSudoPassword) SSH.setSudoPassword(h.id, s.pw);
+      if (s.auto && SSH.setSudoAuto) SSH.setSudoAuto(h.id, true);
+      if (s.all || s.auto) onAccessChanged('ssh');
+      return r2;
     }
+    r2.stderr = __('[VoxStorm] sudo parolası yanlış; komut çalışmadı. Tekrar denersen kullanıcıya yeniden sorulur.');
     return r2;
   }
 

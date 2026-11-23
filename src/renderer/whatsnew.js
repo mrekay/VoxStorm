@@ -8,6 +8,13 @@
   // try: what the "Dene" button does (optional)
   const NOTES = [
     {
+      id: '2026-11-23', title: __('Sürüm {v}', { v: '1.1.0' }), date: '2026-11-23',
+      items: [
+        { icon: 'fa-solid fa-user-shield', title: __('sudo: kayıtlı parola ve otomatik onay'), text: __('Sunucunun düzenleme penceresine ayrı bir sudo / root parolası kaydedebilir, sudo isteklerini otomatik onaylatabilirsin. sudo penceresinde iki yeni kutu var: “Tüm oturumlar için hatırla” ve “sudo isteklerini otomatik onayla”; ikisi de sunucu ayarına yazılır.') },
+        { icon: 'fa-solid fa-stopwatch', title: __('sudo’da 10 saniye'), text: __('Kayıtlı bir parola varsa sudo penceresi 10 saniye sayar; dokunmazsan kayıtlı parolayla dener. Parola yanlışsa pencere hatayla yeniden açılır.') },
+      ],
+    },
+    {
       id: '2026-11-22', title: __('Sürüm {v}', { v: '1.0.0' }), date: '2026-11-22',
       items: [
         { icon: 'fa-solid fa-language', title: __('Beş dil'), text: __('VoxStorm artık Türkçe, İngilizce, Almanca, İspanyolca ve Fransızca. İlk açılışta sistem diline göre seçilir; Ayarlar → Dil’den değişir. Claude ve Codex’in yanıt dili ayrıca seçilir.'), try: () => openSettings('dil') },

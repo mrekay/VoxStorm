@@ -218,6 +218,8 @@ body.db-dragging *,body.db-dragging-x *{cursor:inherit!important}
 .db-row{display:flex!important;align-items:center;justify-content:space-between;gap:10px}
 .db-ck{display:flex;align-items:flex-start;gap:8px;cursor:pointer;line-height:1.4;padding:2px 0;color:var(--fg)}
 .db-ck input{margin-top:2px;accent-color:var(--accent)}
+.db-ck.db-ck-red{color:var(--danger)}
+.db-ck.db-ck-red input{accent-color:var(--danger)}
 .db-typesel{display:flex;gap:6px;flex-wrap:wrap}
 .db-typesel label{cursor:pointer}
 .db-typesel input{position:absolute;opacity:0;pointer-events:none}

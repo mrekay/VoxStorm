@@ -774,6 +774,11 @@
         <label class="db-f full ssh-only"><span>${__('Tüneller (yerel port yönlendirme) · her satır: <code>yerelPort hedef:port</code>')}</span><textarea name="tunnels" rows="2" spellcheck="false" placeholder="3307 127.0.0.1:3306">${esc(tun)}</textarea></label>
         <label class="db-ck full ssh-only"><input type="checkbox" name="tunAuto"${chk((v.tunnels || []).some(t => t.auto))}><span>${__('Bağlanınca tünelleri otomatik aç (örn. DB modunda <code>localhost:3307</code> ile bağlan)')}</span></label>
         <label class="db-f full ssh-only"><span>${__('Claude / Codex erişimi · bağlantıyı VoxStorm kurar, adres ve parola ajana verilmez')}</span><select name="aiAccess"><option value=""${sel(v.aiAccess || '', '')}>${__('Her oturumda ilk kullanımda sor')}</option><option value="allow"${sel(v.aiAccess, 'allow')}>${__('Her zaman izin ver')}</option><option value="deny"${sel(v.aiAccess, 'deny')}>${__('Asla izin verme (ajanlar bu bağlantıyı görmez)')}</option></select></label>
+        <label class="db-f full ssh-only"><span>${__('sudo / root parolası · Claude / Codex sudo isteyince kullanılır (boşsa giriş parolası)')}</span><input type="password" name="sp" autocomplete="new-password" placeholder="${esc(c && c.hasSudoPassword ? __('Kayıtlı parola değişmez') : __('İsteğe bağlı'))}"></label>
+        <div class="db-f full db-row ssh-only">
+          <label class="db-ck db-ck-red"><input type="checkbox" name="sudoAuto"${chk(v.sudoAuto)}><span>${__('sudo isteklerini otomatik onayla (kayıtlı parolayla, sormadan)')}</span></label>
+          ${c && c.hasSudoPassword ? `<button type="button" class="db-link" data-mb="clearSp">${__('Kayıtlı sudo parolasını sil')}</button>` : ''}
+        </div>
         <label class="db-ck full rdp-only"><input type="checkbox" name="fullscreen"${chk(v.fullscreen)}><span>${__('Tam ekran aç')}</span></label>
         <label class="db-ck full rdp-only"><input type="checkbox" name="admin"${chk(v.admin)}><span>${__('Yönetici oturumu (/admin)')}</span></label>
         <div class="db-f full"><span>${__('Renk')}</span><div class="db-colors">${COLORS.map(([k, l]) => `<label title="${esc(l)}"><input type="radio" name="color" value="${k}"${chk((v.color || '') === k)}><span class="db-sw db-c-${k || 'none'}"></span></label>`).join('')}</div></div>
@@ -802,13 +807,14 @@
       onAction: async (act, f, form) => {
         if (act === 'pickKey') { const p = await inv('ssh:pickKey'); if (p && typeof p === 'string') form.querySelector('[name=keyPath]').value = p; return true; }
         if (act === 'clearPw') { await inv('ssh:save', { ...v, id: c.id, clearPw: true }); await loadHosts(); toast(__('Kayıtlı parola silindi')); form.querySelector('[data-mb=clearPw]').remove(); return true; }
+        if (act === 'clearSp') { await inv('ssh:save', { ...v, id: c.id, clearSp: true }); await loadHosts(); toast(__('Kayıtlı sudo parolası silindi')); form.querySelector('[data-mb=clearSp]').remove(); return true; }
         if (!f.host.trim()) { form.querySelector('[name=host]').focus(); toast(__('Sunucu adresi gerekli')); return true; }
         const tunnels = parseTunnels(f.tunnels, !!f.tunAuto);
         const bad = tunnels.find(x => x.bad);
         if (bad && f.kind === 'ssh') { toast(__('Tünel satırı anlaşılamadı'), __('{line} — örnek: 3307 127.0.0.1:3306', { line: bad.bad })); return true; }
         f.tunnels = tunnels;
         if (f.kind === 'ssh' && f.auth === 'key' && !f.keyPath.trim()) { toast(__('Anahtar dosyası seç')); return true; }
-        const saved = await inv('ssh:save', { ...f, id: c ? c.id : undefined, pw: f.pw || undefined, pp: f.pp || undefined });
+        const saved = await inv('ssh:save', { ...f, id: c ? c.id : undefined, pw: f.pw || undefined, pp: f.pp || undefined, sp: f.sp || undefined });
         if (saved.error) { toast(__('Kaydedilemedi'), saved.error); return true; }
         v.savedId = saved.id;
         return false;
