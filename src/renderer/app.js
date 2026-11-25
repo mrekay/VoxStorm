@@ -188,6 +188,7 @@ const CAMPBELL = {
 function termTheme() {
   const base = { background: cssVar('--term-bg'), foreground: cssVar('--term-fg'), cursor: cssVar('--term-cursor'), cursorAccent: cssVar('--term-bg'), selectionBackground: cssVar('--term-sel') };
   if (!CFG || (CFG.settings.termColors || 'windows') === 'windows') Object.assign(base, CAMPBELL, { cursor: '#cccccc', selectionBackground: '#3a3d41' });
+  else { const own = window.Themes && Themes.active(); if (own && own.ansi) Object.assign(base, own.ansi); } // a theme's own 16 terminal colours
   return base;
 }
 function applySkin(k) {
@@ -207,8 +208,8 @@ function renderSkinMenu() {
 }
 // built-in skins, then the user's own (themes.js) with an edit button, then "new" / "design with Claude"
 const skinOptions = () => SKINS.concat((CFG.settings.customThemes || []).map(t => ({ k: 'custom:' + t.id, name: esc(t.name), sub: `${t.dark ? __('Koyu') : __('Açık')}${t.image ? ' · ' + __('resimli') : ''}${t.by ? ' · ' + __('{name} tasarladı', { name: esc(t.by) }) : ''}`, c: Themes.swatches(t), own: t.id })))
-  .map(s => `<div class="skin-row"><button class="skin-opt" data-skin="${s.k}"><span class="sw3">${s.c.map(c => `<i style="background:${c}"></i>`).join('')}</span><span class="nm">${s.name}<small>${s.sub}</small></span><span class="ck">${s.k === CFG.settings.skin ? '✓' : ''}</span></button>${s.own ? `<button class="skin-ed" data-themeedit="${s.own}" title="${esc(__('Temayı düzenle'))}" aria-label="${esc(__('Temayı düzenle'))}"><i class="fa-solid fa-pen"></i></button>` : ''}</div>`).join('')
-  + `<div class="skin-new"><button class="btn" data-themenew><i class="fa-solid fa-plus"></i> ${__('Yeni tema')}</button><button class="btn" data-themeclaude><i class="fa-solid fa-robot"></i> ${__('Claude ile tasarla')}</button></div>`;
+  .map(s => `<div class="skin-row"><button class="skin-opt" data-skin="${s.k}"><span class="sw3">${s.c.map(c => `<i style="background:${c}"></i>`).join('')}</span><span class="nm">${s.name}<small>${s.sub}</small></span><span class="ck">${s.k === CFG.settings.skin ? '✓' : ''}</span></button>${s.own ? `<button class="skin-ed" data-themeedit="${s.own}" title="${esc(__('Temayı düzenle'))}" aria-label="${esc(__('Temayı düzenle'))}"><i class="fa-solid fa-pen"></i></button><button class="skin-ed" data-themeshare="${s.own}" title="${esc(__('Paylaş: .voxtheme dosyası olarak kaydet'))}" aria-label="${esc(__('Paylaş'))}"><i class="fa-solid fa-share-nodes"></i></button>` : ''}</div>`).join('')
+  + `<div class="skin-new"><button class="btn" data-themenew><i class="fa-solid fa-plus"></i> ${__('Yeni tema')}</button><button class="btn" data-themeclaude><i class="fa-solid fa-robot"></i> ${__('Claude ile tasarla')}</button><button class="btn" data-themeimport title="${esc(__('Birinin paylaştığı .voxtheme dosyasını ekler'))}"><i class="fa-solid fa-file-import"></i> ${__('İçe aktar')}</button></div>`;
 
 /* ---------------- history & usage ---------------- */
 async function refreshHistory(pid) {
@@ -1415,6 +1416,7 @@ async function saveFile(fp) {
   f.gen = f.doc.changeGeneration(true);
   f.eol0 = f.eol; f.conflict = false; f.missing = false;
   renderEdChrome();
+  if (window.ideFtp) ideFtp.saved(fp); // deployment: automatic upload on save (ftp.js)
   return true;
 }
 /* bring an open file up to date with the disk. Unsaved edits are never overwritten
@@ -1981,6 +1983,8 @@ function openIdeMenu(e, ctx) {
       + it('reveal', 'fa-regular fa-folder-open', __('Dosya Gezgini’nde göster'))
       + (root ? '' : sep + it('ask', 'fa-solid fa-comment-dots', askLabel(), '', 'accent'));
   }
+  // deployment: upload / download / compare / sync with the project's server (ftp.js)
+  if (ctx.kind !== 'dock' && window.ideFtp) html += ideFtp.menuHtml(it, sep, ctx);
   // items plugins added to the file menu (tree and editor tabs)
   if (ctx.kind !== 'dock' && window.pluginHost) {
     const fp = ctx.path || projRoot();
@@ -2001,6 +2005,7 @@ function ideMenuAction(act) {
   if (ctx.kind === 'dock') return dockMenuAction(act, ctx);
   const r = projRoot(), fp = ctx.path || r, isDir = ctx.kind === 'tree' && (!ctx.path || ctx.dir);
   const s = ist();
+  if (act.startsWith('ftp') && window.ideFtp) { ideFtp.menuAction(act, fp, isDir); return; }
   if (act === 'close') closeFile(fp);
   else if (act === 'closeothers') closeFiles(s.tabs.filter(k => k !== fp));
   else if (act === 'closeright') closeFiles(s.tabs.slice(s.tabs.indexOf(fp) + 1));
@@ -2167,6 +2172,7 @@ function setMode(m, initial) {
     applyIdeUi();
     showFile();
     if (window.ideDb && !IDE.dbBuilt) { IDE.dbBuilt = true; ideDb.showSide(true); } // the DB panel of the IDE dock
+    if (window.ideFtp) ideFtp.ensure(); // the Deployment panel (FTP / SFTP)
   } else if (!tabById(S.active) && S.tabs.length) S.active = S.tabs[S.tabs.length - 1].id;
   if (typeof applyPanels === 'function') applyPanels(); // the dock of this mode (AI or IDE)
   const t = tabById(S.active);
@@ -2853,6 +2859,8 @@ function bindEvents() {
       api.invoke('app:relaunch');
     }
     else if (d.themeedit != null) { $('#skinMenu').hidden = true; Themes.openEditor(d.themeedit); }
+    else if (d.themeshare != null) { $('#skinMenu').hidden = true; const t = Themes.byId(d.themeshare); if (t) Themes.exportTheme(t); }
+    else if (d.themeimport != null) { $('#skinMenu').hidden = true; Themes.importTheme(); }
     else if (d.themenew != null) { $('#skinMenu').hidden = true; Themes.openEditor(null); }
     else if (d.themeclaude != null) { $('#skinMenu').hidden = true; $('#settings').hidden = true; Themes.designWithClaude(); }
     else if (d.proj) switchIdeProject(d.proj);

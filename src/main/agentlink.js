@@ -14,7 +14,7 @@ const I18N = require('../i18n/i18n.js'); const __ = I18N.t;
 const MAX_TEXT = 100 * 1024; // characters of tool output sent back
 const toml = s => JSON.stringify(String(s));
 
-module.exports = function setupAgentLink({ DATA, getSsh, getDb, getDocker, getThemes, enabled, sessionInfo, notify, notifyTab, winFor, onAccessChanged, version }) {
+module.exports = function setupAgentLink({ DATA, getSsh, getDb, getFtp, getDocker, getThemes, enabled, sessionInfo, notify, notifyTab, winFor, onAccessChanged, version }) {
   const token = crypto.randomBytes(18).toString('hex');
   const DIR = path.join(DATA, 'mcp');
   let port = 0;
@@ -78,16 +78,17 @@ module.exports = function setupAgentLink({ DATA, getSsh, getDb, getDocker, getTh
     const p = (async () => {
       const info = sessionInfo(ptyId);
       const r = await showBox(info, {
-        title: __('{agent} izin istiyor', { agent: info.agent }), icon: kind === 'ssh' ? 'fa-server' : 'fa-database',
+        title: __('{agent} izin istiyor', { agent: info.agent }), icon: kind === 'ssh' ? 'fa-server' : kind === 'ftp' ? 'fa-cloud-arrow-up' : 'fa-database',
         message: kind === 'ssh'
           ? __('{agent}, “{name}” SSH sunucusunu kullanmak istiyor.', { agent: info.agent, name: item.name })
+          : kind === 'ftp' ? __('{agent}, “{name}” FTP / deployment sunucusunu kullanmak istiyor.', { agent: info.agent, name: item.name })
           : __('{agent}, “{name}” veritabanını kullanmak istiyor.', { agent: info.agent, name: item.name }),
         detail: [
-          kind === 'ssh' ? __('Sunucu: {label}', { label: item.label }) : __('Bağlantı: {label}', { label: item.label }),
+          kind !== 'db' ? __('Sunucu: {label}', { label: item.label }) : __('Bağlantı: {label}', { label: item.label }),
           __('Oturum: {agent} · {project}', { agent: info.agent, project: info.project }),
           __('Bağlantı bilgileri ve parolalar ajana verilmez; bağlantıyı VoxStorm kurar, ajan yalnızca çıktıyı görür.'),
           __('Evet dersen bu oturum, kapanana kadar bu bağlantıyı yeniden sormadan kullanabilir.'),
-          kind === 'ssh' ? __('İlk komut:') : __('İlk sorgu:'),
+          kind === 'ssh' ? __('İlk komut:') : kind === 'ftp' ? __('İlk işlem:') : __('İlk sorgu:'),
         ].join('\n'),
         code: clip(what, 600),
         ok: __('Evet'), cancel: __('Hayır'), focusCancel: true,
@@ -95,7 +96,8 @@ module.exports = function setupAgentLink({ DATA, getSsh, getDb, getDocker, getTh
       });
       const yes = r.ok;
       if (r.checked) {
-        (kind === 'ssh' ? getSsh() : getDb()).setAiAccess(item.id, yes ? 'allow' : 'deny');
+        if (kind === 'ftp') getFtp().agent.setAiAccess(item.id, yes ? 'allow' : 'deny');
+        else (kind === 'ssh' ? getSsh() : getDb()).setAiAccess(item.id, yes ? 'allow' : 'deny');
         onAccessChanged(kind);
       } else if (yes) {
         if (!approved.has(ptyId)) approved.set(ptyId, new Set());
@@ -213,7 +215,7 @@ module.exports = function setupAgentLink({ DATA, getSsh, getDb, getDocker, getTh
   const TOOLS = () => [
     {
       name: 'list_connections',
-      description: __('VoxStorm’da kayıtlı SSH sunucularını ve veritabanı bağlantılarını listeler (yalnızca kimlik, ad, tür ve grup; adres ve parola verilmez). ssh_exec ve db_query bu listedeki "id" ya da "name" ile çalışır.'),
+      description: __('VoxStorm’da kayıtlı SSH sunucularını, veritabanı bağlantılarını ve FTP / SFTP deployment sunucularını listeler (yalnızca kimlik, ad, tür ve grup; adres ve parola verilmez). ssh_exec, db_query ve ftp_* araçları bu listedeki "id" ya da "name" ile çalışır.'),
       inputSchema: { type: 'object', properties: {}, additionalProperties: false },
     },
     {
@@ -262,6 +264,8 @@ module.exports = function setupAgentLink({ DATA, getSsh, getDb, getDocker, getTh
   }
   // workspace tools: IDE, git, questions, terminals, Docker, plugins (agenttools.js)
   const WT = require('./agenttools')({ sessionInfo, winFor, notify, notifyTab, getDocker, getThemes, getSsh, getDb, find, authorize, askOnce, clip });
+  // FTP / FTPS / SFTP deployment servers of the IDE (agentftp.js)
+  const FT = require('./agentftp')({ getFtp, authorize, sessionInfo, showBox, clip, MAX_TEXT });
   const secs = (v, def) => Math.max(5, Math.min(900, Number(v) || def));
 
   async function callTool(name, a, ptyId) {
@@ -271,12 +275,14 @@ module.exports = function setupAgentLink({ DATA, getSsh, getDb, getDocker, getTh
       return WT.call(name, a, ptyId);
     }
     if (!enabled()) throw new Error(__('VoxStorm bağlantılarının ajanlarla kullanımı Ayarlar’da kapatılmış.'));
+    if (FT.has(name)) return FT.call(name, a, ptyId);
     if (name === 'list_connections') {
       const ssh = getSsh().agentList(), db = getDb().agentList();
       const note = c => (c.aiAccess === 'allow' ? __('izinli') : __('ilk kullanımda sorulur'));
       return JSON.stringify({
         ssh: ssh.map(c => ({ id: c.id, name: c.name, group: c.group || undefined, access: note(c) })),
         databases: db.map(c => ({ id: c.id, name: c.name, type: c.typeName, readOnly: c.readOnly || undefined, access: note(c) })),
+        ftp: FT.list(ptyId),
       }, null, 1);
     }
     if (name === 'ssh_exec') {
@@ -324,7 +330,7 @@ module.exports = function setupAgentLink({ DATA, getSsh, getDb, getDocker, getTh
   }
 
   /* ---------------- MCP over HTTP ---------------- */
-  const INSTRUCTIONS = () => __('Bu oturum VoxStorm’un içinde çalışıyor ve VoxStorm’u kullanabilirsin: dosyaları kullanıcının önünde IDE’de aç ya da işaretle (show_file, highlight_lines), kullanıcının açık dosyasını ve seçimini oku (get_editor_state), değişiklikleri git penceresinde göster ve onay iste (show_diff), soru sor (ask_user), iş bitince bildirim gönder (notify_user), görünür terminalde komut çalıştır ve terminalleri oku (run_in_terminal, read_terminal), diğer oturumlarla haberleş (send_to_session), Docker konteynerlerine bak (docker_*), eklenti araçlarını kullan (list_plugin_tools), VoxStorm’un arayüz temasını tasarla (get_theme, save_theme). Kullanıcıya bir şey göstermek ya da sormak gerektiğinde terminal metni yerine bu araçları tercih et. VoxStorm’da kayıtlı SSH sunucuları ve veritabanı bağlantıları: Önce list_connections ile hangi bağlantıların olduğuna bak. Bağlantı adresi ve parolası sana verilmez; komutu ya da sorguyu VoxStorm çalıştırır ve çıktıyı döndürür. Bir bağlantıyı ilk kullanışta kullanıcıya VoxStorm’da onay sorulur.');
+  const INSTRUCTIONS = () => __('Bu oturum VoxStorm’un içinde çalışıyor ve VoxStorm’u kullanabilirsin: dosyaları kullanıcının önünde IDE’de aç ya da işaretle (show_file, highlight_lines), kullanıcının açık dosyasını ve seçimini oku (get_editor_state), değişiklikleri git penceresinde göster ve onay iste (show_diff), soru sor (ask_user), iş bitince bildirim gönder (notify_user), görünür terminalde komut çalıştır ve terminalleri oku (run_in_terminal, read_terminal), diğer oturumlarla haberleş (send_to_session), Docker konteynerlerine bak (docker_*), eklenti araçlarını kullan (list_plugin_tools), VoxStorm’un arayüz temasını tasarla (get_theme, save_theme). Kullanıcıya bir şey göstermek ya da sormak gerektiğinde terminal metni yerine bu araçları tercih et. VoxStorm’da kayıtlı SSH sunucuları, veritabanı bağlantıları ve FTP / SFTP deployment sunucuları (ftp_*, deploy_upload): Önce list_connections ile hangi bağlantıların olduğuna bak. Bağlantı adresi ve parolası sana verilmez; komutu ya da sorguyu VoxStorm çalıştırır ve çıktıyı döndürür. Bir bağlantıyı ilk kullanışta kullanıcıya VoxStorm’da onay sorulur.');
   async function rpc(msg, ptyId) {
     const { id, method, params } = msg || {};
     const ok = result => ({ jsonrpc: '2.0', id, result });
@@ -339,7 +345,7 @@ module.exports = function setupAgentLink({ DATA, getSsh, getDb, getDocker, getTh
       });
     }
     if (method === 'ping') return ok({});
-    if (method === 'tools/list') return ok({ tools: enabled() ? [...WT.tools(true), ...TOOLS()] : WT.tools(false) });
+    if (method === 'tools/list') return ok({ tools: enabled() ? [...WT.tools(true), ...TOOLS(), ...FT.tools()] : WT.tools(false) });
     if (method === 'resources/list') return ok({ resources: [] });
     if (method === 'prompts/list') return ok({ prompts: [] });
     if (method === 'tools/call') {

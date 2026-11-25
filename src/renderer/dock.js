@@ -38,6 +38,7 @@ const IDE_DOCK_VIEWS = {
   ifiles: { el: '#ideFiles', name: __('Dosyalar'), icon: 'fa-regular fa-folder', side: 'left', size: 3 },
   isearch: { el: '#psearch', name: __('Projede ara'), short: __('Ara'), icon: 'fa-solid fa-magnifying-glass', side: 'left', size: 2 },
   idb: { el: '#idbSide', name: __('Veritabanı'), short: 'DB', icon: 'fa-solid fa-database', side: 'left', size: 2 },
+  iftp: { el: '#iftpSide', name: __('Deployment (FTP / SFTP)'), short: __('Deployment'), icon: 'fa-solid fa-cloud-arrow-up', side: 'right', size: 2 },
   iplug: { el: '#plugSideIde', name: __('Eklentiler'), icon: 'fa-solid fa-puzzle-piece', side: 'left', size: 1.5, avail: el => !!el && !el.hidden },
 };
 const DOCK_CTX = {
@@ -574,7 +575,7 @@ function dockIdeExplorer(on) {
 }
 // show one of the IDE explorer views (files / search / db)
 function dockIdeShow(view) {
-  const k = { files: 'ifiles', search: 'isearch', db: 'idb' }[view] || view;
+  const k = { files: 'ifiles', search: 'isearch', db: 'idb', ftp: 'iftp' }[view] || view;
   dockUse('ide');
   return showPanel(k);
 }

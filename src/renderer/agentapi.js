@@ -213,13 +213,18 @@
 
   /* ---------------- themes (themes.js) ---------------- */
   const getTheme = () => Themes.current();
-  async function saveTheme({ name, dark, colors, image, by = 'Claude' }) {
+  async function saveTheme({ name, dark, colors, image, panels, ansi, termColors, by = 'Claude' }) {
     const c = colors && typeof colors === 'object' ? colors : {};
     const bad = Object.keys(c).filter(k => c[k] && !Themes.norm(c[k]));
     if (bad.length) return fail(__('Geçersiz renk (#rrggbb olmalı): {list}', { list: bad.join(', ') }));
     const known = Themes.FIELDS.map(f => f[0]), unknown = Object.keys(c).filter(k => !known.includes(k));
     if (unknown.length) return fail(__('Bilinmeyen renk alanı: {list}. Alanlar: {fields}', { list: unknown.join(', '), fields: known.join(', ') }));
-    const t = await Themes.save({ name: String(name || __('Yeni tema')), dark, colors: c, image, by });
+    const an = ansi && typeof ansi === 'object' ? ansi : {};
+    const badA = Object.keys(an).filter(k => !Themes.ANSI.includes(k) || (an[k] && !Themes.norm(an[k])));
+    if (badA.length) return fail(__('Geçersiz ansi rengi: {list}. Alanlar: {fields}', { list: badA.join(', '), fields: Themes.ANSI.join(', ') }));
+    const pn = {}; // each save is a new theme: only the panel pictures given now
+    if (panels) for (const k of Object.keys(panels)) if (panels[k]) pn[k] = panels[k];
+    const t = await Themes.save({ name: String(name || __('Yeni tema')), dark, colors: c, image, panels: pn, ansi: an, by }, { termColors });
     toast(__('{agent} yeni bir tema uyguladı', { agent: by }), __('“{name}” · Tema menüsünden değiştirebilir ya da düzenleyebilirsin.', { name: t.name }));
     return { ok: true, id: t.id, name: t.name };
   }

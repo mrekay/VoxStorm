@@ -18,6 +18,16 @@
     ['termBg', __('Terminal zemini'), __('Terminal ve konsol arka planı')],
     ['termFg', __('Terminal yazısı'), __('“Temaya uyumlu” terminal renklerinde yazı rengi')],
   ];
+  // picture slots: the whole window ("image") or one kind of panel. Panel pictures sit under that panel only,
+  // whose own surfaces turn see-through, so each panel can have its own picture.
+  const PANELS = [
+    ['side', __('Yan paneller'), '.dock-side'],
+    ['term', __('Terminal'), '.term-slot'],
+    ['editor', __('Kod editörü'), '.code'],
+  ];
+  const SLOTS = [['image', __('Tüm pencere')]].concat(PANELS.map(([k, l]) => [k, l]));
+  // the 16 terminal colours; used when terminal colours follow the theme
+  const ANSI = ['black', 'red', 'green', 'yellow', 'blue', 'magenta', 'cyan', 'white', 'brightBlack', 'brightRed', 'brightGreen', 'brightYellow', 'brightBlue', 'brightMagenta', 'brightCyan', 'brightWhite'];
   const BASE = { // starting point of a new theme: the default dark one
     dark: true,
     colors: { bg: '#0b0a12', surface: '#15131f', fg: '#e7e4f3', muted: '#8e89a8', accent: '#a78bfa', warn: '#f2b155', ok: '#6fd39a', danger: '#f27b8c', termBg: '#0a0911', termFg: '#ddd8ef' },
@@ -44,13 +54,19 @@
     const c = Object.assign({}, BASE.colors);
     for (const [k] of FIELDS) { const v = norm(t.colors && t.colors[k]); if (v) c[k] = v; }
     const dark = typeof t.dark === 'boolean' ? t.dark : lum(c.bg) < 0.3;
-    const im = t.image && t.image.url ? { url: String(t.image.url), file: String(t.image.file || ''), show: Math.max(5, Math.min(90, +t.image.show || 35)), blur: Math.max(0, Math.min(30, +t.image.blur || 0)) } : null;
-    return { id: String(t.id || ''), name: String(t.name || __('Tema')).slice(0, 40), dark, colors: c, image: im, by: t.by ? String(t.by).slice(0, 20) : undefined };
+    const pic = x => x && x.url ? { url: String(x.url), file: String(x.file || ''), show: Math.max(5, Math.min(90, +x.show || 35)), blur: Math.max(0, Math.min(30, +x.blur || 0)) } : null;
+    const panels = {};
+    for (const [k] of PANELS) { const p = pic(t.panels && t.panels[k]); if (p) panels[k] = p; }
+    let ansi = null;
+    if (t.ansi && typeof t.ansi === 'object') for (const k of ANSI) { const v = norm(t.ansi[k]); if (v) (ansi = ansi || {})[k] = v; }
+    return { id: String(t.id || ''), name: String(t.name || __('Tema')).slice(0, 40), dark, colors: c, image: pic(t.image), panels: Object.keys(panels).length ? panels : undefined, ansi: ansi || undefined, by: t.by ? String(t.by).slice(0, 20) : undefined };
   }
+  const files = t => { const x = clean(t); return [x.image, ...Object.values(x.panels || {})].filter(p => p && p.file).map(p => p.file); };
+  const cssUrl = u => `url("${String(u).replace(/["\\]/g, '')}")`;
 
   // every CSS variable the app uses, from the ten base colours
   function vars(th) {
-    const { colors: c, dark, image } = clean(th);
+    const { colors: c, dark, image, panels } = clean(th);
     const violet = mix(c.accent, c.danger, 0.5);
     const v = {
       '--bg': c.bg, '--surface': c.surface, '--surface-2': mix(c.surface, c.bg, 0.5), '--hover': mix(c.surface, c.fg, 0.08), '--line': mix(c.surface, c.fg, 0.14),
@@ -65,26 +81,40 @@
       const s = image.show / 100;
       Object.assign(v, {
         '--bg': rgba(c.bg, 1 - s), '--surface': rgba(c.surface, 1 - s * 0.7), '--surface-2': rgba(mix(c.surface, c.bg, 0.5), 1 - s * 0.75),
-        '--term-bg': rgba(c.termBg, 1 - s * 0.8), '--bg-img': `url("${image.url.replace(/["\\]/g, '')}")`, '--bg-blur': image.blur + 'px',
+        '--term-bg': rgba(c.termBg, 1 - s * 0.8), '--bg-img': cssUrl(image.url), '--bg-blur': image.blur + 'px',
       });
     }
-    return { v, dark, image };
+    // a terminal picture: the terminal itself has to be see-through (xterm reads --term-bg from the root)
+    if (panels && panels.term && !image) v['--term-bg'] = rgba(c.termBg, 1 - panels.term.show / 100 * 0.8);
+    return { v, dark, image, panels };
+  }
+  // one panel's picture: under the panel's content, with that panel's surfaces made see-through
+  function panelCss(sel, p, c) {
+    const s = p.show / 100, r = ':root[data-skin="custom"] ' + sel;
+    const own = `--bg:${rgba(c.bg, 1 - s)};--surface:${rgba(c.surface, 1 - s * 0.7)};--surface-2:${rgba(mix(c.surface, c.bg, 0.5), 1 - s * 0.75)};--term-bg:${rgba(c.termBg, 1 - s * 0.8)}`;
+    return `${r}{${own};position:relative;isolation:isolate}`
+      + `${r}::before{content:"";position:absolute;inset:0;z-index:-1;clip-path:inset(0);background:${cssUrl(p.url)} center/cover no-repeat;filter:blur(${p.blur}px);pointer-events:none}`;
   }
   function css(th) {
-    const { v, dark } = vars(th);
-    return `:root[data-skin="custom"]{color-scheme:${dark ? 'dark' : 'light'};${Object.entries(v).map(([k, x]) => `${k}:${x}`).join(';')}}`;
+    const { v, dark, panels } = vars(th), c = clean(th).colors;
+    return `:root[data-skin="custom"]{color-scheme:${dark ? 'dark' : 'light'};${Object.entries(v).map(([k, x]) => `${k}:${x}`).join(';')}}`
+      + PANELS.filter(([k]) => panels && panels[k]).map(([k, , sel]) => panelCss(sel, panels[k], c)).join('');
   }
 
   // show a theme (or none: back to the built-in ones)
   function show(th) {
     const root = document.documentElement;
     let el = document.getElementById('voxCustomTheme');
-    if (!th) { if (el) el.remove(); delete root.dataset.bgimg; return; }
+    if (!th) { if (el) el.remove(); delete root.dataset.bgimg; delete root.dataset.termclear; return; }
     if (!el) { el = document.createElement('style'); el.id = 'voxCustomTheme'; document.head.appendChild(el); }
     el.textContent = css(th);
     root.dataset.skin = 'custom';
-    if (clean(th).image) root.dataset.bgimg = ''; else delete root.dataset.bgimg;
+    const x = clean(th);
+    if (x.image) root.dataset.bgimg = ''; else delete root.dataset.bgimg;
+    // terminals are see-through when a picture is behind them (the window's or the terminal's own)
+    if (x.image || (x.panels && x.panels.term)) root.dataset.termclear = ''; else delete root.dataset.termclear;
   }
+  const active = () => { const k = (typeof CFG !== 'undefined' && CFG && CFG.settings.skin) || ''; const t = k.startsWith('custom:') && byId(k.slice(7)); return t ? clean(t) : null; };
   const list = () => (typeof CFG !== 'undefined' && CFG && CFG.settings.customThemes) || [];
   const byId = id => list().find(t => t.id === id) || null;
 
@@ -107,6 +137,7 @@
         <div class="seg te-mode"><button data-te-dark="1">${__('Koyu')}</button><button data-te-dark="0">${__('Açık')}</button></div>
         <div class="te-grid">${FIELDS.map(([k, l, h]) => `<label class="te-c" title="${attr(h)}"><input type="color" data-tc="${k}"><span><b>${l}</b><small data-tx="${k}"></small></span></label>`).join('')}</div>
         <h4>${__('Arka plan resmi')}</h4>
+        <div class="seg te-slots">${SLOTS.map(([k, l]) => `<button data-te-slot="${k}">${l}<i class="te-dot" data-te-dot="${k}"></i></button>`).join('')}</div>
         <div class="te-img">
           <div class="te-thumb" data-te="thumb"></div>
           <div class="te-img-r">
@@ -119,12 +150,13 @@
       </div>
       <div class="ui-dlg-f">
         ${orig ? `<button class="btn te-del" data-te="del"><i class="fa-solid fa-trash-can"></i> ${__('Sil')}</button>` : ''}
+        <button class="btn" data-te="export" title="${attr(__('Temayı resimleriyle birlikte bir .voxtheme dosyasına kaydeder; başkası Tema menüsünden içe aktarabilir.'))}"><i class="fa-solid fa-share-nodes"></i> ${__('Paylaş')}</button>
         <button class="btn" data-te="claude"><i class="fa-solid fa-robot"></i> ${__('Claude ile tasarla')}</button>
         <span style="flex:1"></span>
         <button class="btn" data-te="cancel">${__('Vazgeç')}</button><button class="btn primary" data-te="save">${__('Kaydet ve uygula')}</button>
       </div></div>`;
     document.body.appendChild(el);
-    ed = { th, orig, el, skinBefore: CFG.settings.skin };
+    ed = { th, orig, el, skinBefore: CFG.settings.skin, slot: 'image' };
     fill();
     preview();
     el.addEventListener('input', onInput);
@@ -137,8 +169,10 @@
     el.querySelector('[data-te=name]').value = th.name;
     el.querySelectorAll('[data-te-dark]').forEach(b => b.classList.toggle('on', (b.dataset.teDark === '1') === th.dark));
     for (const [k] of FIELDS) { el.querySelector(`[data-tc="${k}"]`).value = th.colors[k]; el.querySelector(`[data-tx="${k}"]`).textContent = th.colors[k]; }
-    const im = th.image;
-    el.querySelector('[data-te=thumb]').style.backgroundImage = im ? `url("${im.url}")` : '';
+    el.querySelectorAll('[data-te-slot]').forEach(b => b.classList.toggle('on', b.dataset.teSlot === ed.slot));
+    el.querySelectorAll('[data-te-dot]').forEach(d => { d.hidden = !getPic(th, d.dataset.teDot); });
+    const im = getPic(th, ed.slot);
+    el.querySelector('[data-te=thumb]').style.backgroundImage = im ? cssUrl(im.url) : '';
     el.querySelector('[data-te=thumb]').classList.toggle('empty', !im);
     for (const k of ['show', 'blur']) {
       const r = el.querySelector(`[data-te=${k}]`); r.disabled = !im; r.value = im ? im[k] : (k === 'show' ? 35 : 0);
@@ -146,10 +180,17 @@
     }
     el.querySelector('[data-te=noimg]').disabled = !im;
   }
+  // a picture slot: "image" (whole window) or a panel key
+  const getPic = (th, slot) => slot === 'image' ? th.image : (th.panels && th.panels[slot]) || null;
+  function setPic(th, slot, p) {
+    if (slot === 'image') { th.image = p; return; }
+    th.panels = Object.assign({}, th.panels);
+    if (p) th.panels[slot] = p; else delete th.panels[slot];
+  }
   // terminals take real colours: give them the new ones (and see-through when there is a picture)
   function repaintTerms() {
     if (typeof termTheme !== 'function' || typeof S === 'undefined') return;
-    const th = termTheme(), clear = 'bgimg' in document.documentElement.dataset;
+    const th = termTheme(), clear = 'termclear' in document.documentElement.dataset;
     S.tabs.forEach(t => { if (t.term) { try { if (clear) t.term.options.allowTransparency = true; } catch (_) {} t.term.options.theme = th; } });
   }
   const preview = () => { show(ed.th); repaintTerms(); };
@@ -157,27 +198,30 @@
     const t = e.target, th = ed.th;
     if (t.dataset.tc) { th.colors[t.dataset.tc] = t.value; ed.el.querySelector(`[data-tx="${t.dataset.tc}"]`).textContent = t.value; }
     else if (t.dataset.te === 'name') { th.name = t.value; return; }
-    else if (t.dataset.te === 'show' || t.dataset.te === 'blur') { if (th.image) th.image[t.dataset.te] = +t.value; fill(); }
+    else if (t.dataset.te === 'show' || t.dataset.te === 'blur') { const p = getPic(th, ed.slot); if (p) p[t.dataset.te] = +t.value; fill(); }
     preview();
   }
   async function onClick(e) {
     const b = e.target.closest('button'); if (!b) return;
     const th = ed.th;
     if (b.dataset.teDark) { th.dark = b.dataset.teDark === '1'; fill(); preview(); return; }
+    if (b.dataset.teSlot) { ed.slot = b.dataset.teSlot; fill(); return; }
     const a = b.dataset.te;
     if (a === 'pick') {
       const r = await api.invoke('theme:pickImage');
       if (!r) return;
       if (r.error) { uiAlert({ title: __('Resim eklenemedi'), message: r.error }); return; }
-      th.image = { url: r.url, file: r.file, show: th.image ? th.image.show : 35, blur: th.image ? th.image.blur : 0 };
+      const was = getPic(th, ed.slot);
+      setPic(th, ed.slot, { url: r.url, file: r.file, show: was ? was.show : 35, blur: was ? was.blur : 0 });
       fill(); preview();
-    } else if (a === 'noimg') { th.image = null; fill(); preview(); }
+    } else if (a === 'noimg') { setPic(th, ed.slot, null); fill(); preview(); }
+    else if (a === 'export') exportTheme(th);
     else if (a === 'cancel') closeEditor(false);
     else if (a === 'save') { await save(th); closeEditor(true); }
     else if (a === 'del') {
       if (!(await uiConfirm({ title: __('Tema silinsin mi?'), message: __('“{name}” silinecek.', { name: th.name }), ok: __('Sil'), danger: true }))) return;
       const cur = byId(th.id);
-      if (cur && cur.image && cur.image.file) api.invoke('theme:removeImage', cur.image.file).catch(() => {});
+      if (cur) files(cur).forEach(f => api.invoke('theme:removeImage', f).catch(() => {}));
       const back = CFG.settings.skin === 'custom:' + th.id ? 'mono' : CFG.settings.skin;
       await setCfg({ settings: { customThemes: list().filter(x => x.id !== th.id), skin: back } });
       ed.skinBefore = back;
@@ -201,12 +245,29 @@
     const t = clean(th);
     if (!t.id) t.id = 't' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5);
     const old = byId(t.id);
-    if (old && old.image && old.image.file && (!t.image || t.image.file !== old.image.file)) api.invoke('theme:removeImage', old.image.file).catch(() => {});
+    if (old) { const keep = files(t); files(old).filter(f => !keep.includes(f)).forEach(f => api.invoke('theme:removeImage', f).catch(() => {})); }
     const next = list().filter(x => x.id !== t.id).concat(t);
-    await setCfg({ settings: { customThemes: next, skin: 'custom:' + t.id } });
+    const set = { customThemes: next, skin: 'custom:' + t.id };
+    if (opts.termColors === 'theme' || opts.termColors === 'windows') set.termColors = opts.termColors;
+    await setCfg({ settings: set });
     applySkin('custom:' + t.id);
     if (!opts.quiet && typeof renderSettings === 'function') { renderSettings(); renderSkinMenu(); }
     return t;
+  }
+
+  /* ---------------- share: a .voxtheme file carries the colours and the pictures ---------------- */
+  async function exportTheme(th) {
+    const t = clean(th);
+    const r = await api.invoke('theme:export', { name: t.name, dark: t.dark, colors: t.colors, ansi: t.ansi, image: t.image, panels: t.panels });
+    if (r && r.error) uiAlert({ title: __('Tema paylaşılamadı'), message: r.error });
+    else if (r && r.path && typeof toast === 'function') toast(__('Tema kaydedildi'), __('“{name}” → {path}', { name: t.name, path: r.path }));
+  }
+  async function importTheme() {
+    const r = await api.invoke('theme:import');
+    if (!r) return;
+    if (r.error) { uiAlert({ title: __('Tema içe aktarılamadı'), message: r.error }); return; }
+    const t = await save(Object.assign({}, r.theme, { id: '' }));
+    if (typeof toast === 'function') toast(__('Tema içe aktarıldı'), __('“{name}” uygulandı.', { name: t.name }));
   }
 
   /* ---------------- Claude designs it ---------------- */
@@ -218,7 +279,7 @@
     if (S.mode !== 'claude') setMode('claude');
     const t = await openTerminal({ kind: 'claude', projectId: pid, title: __('Tema tasarımı') });
     if (!t) return;
-    t.pendingPrompt = __('VoxStorm için yeni bir arayüz teması tasarla: {desc}\n\nÖnce VoxStorm\'un get_theme aracıyla şu anki temaya ve renk alanlarına bak. Sonra save_theme ile kaydet: ad, koyu/açık ve on rengin hepsi (#rrggbb). Yazı ile zemin arasında okunur bir kontrast olsun (WCAG AA). Bir resim kullanmak istersem image_path ile yerel bir resim yolu ver. Kaydedince tema hemen uygulanır; bana kısaca hangi renkleri neden seçtiğini anlat.', { desc: desc.trim() });
+    t.pendingPrompt = __('VoxStorm için yeni bir arayüz teması tasarla: {desc}\n\nÖnce VoxStorm\'un get_theme aracıyla şu anki temaya ve renk alanlarına bak. Sonra save_theme ile kaydet: ad, koyu/açık ve on rengin hepsi (#rrggbb). Yazı ile zemin arasında okunur bir kontrast olsun (WCAG AA). Bir resim kullanmak istersem image_path ile tüm pencereye, panel_images ile yalnızca yan panellere, terminale ya da kod editörüne yerel bir resim koyabilirsin. Terminal yazısının da temaya uyması için term_colors: "theme" ver (istersen ansi ile 16 terminal rengini de seç). Kaydedince tema hemen uygulanır; bana kısaca hangi renkleri neden seçtiğini anlat.', { desc: desc.trim() });
     setTimeout(() => sendPendingPrompt(t), 12000);
   }
 
@@ -229,11 +290,19 @@
     const cs = getComputedStyle(document.documentElement), g = n => cs.getPropertyValue(n).trim();
     const now = own ? clean(own) : { name: k, dark: g('color-scheme') !== 'light', colors: { bg: g('--bg'), surface: g('--surface'), fg: g('--fg'), muted: g('--muted'), accent: g('--accent'), warn: g('--warn'), ok: g('--ok'), danger: g('--danger'), termBg: g('--term-bg'), termFg: g('--term-fg') } };
     return {
-      current: { skin: k, name: own ? own.name : k, dark: now.dark, colors: now.colors, image: own && own.image ? { show: own.image.show, blur: own.image.blur } : null },
+      current: {
+        skin: k, name: own ? own.name : k, dark: now.dark, colors: now.colors,
+        image: own && own.image ? { show: own.image.show, blur: own.image.blur } : null,
+        panel_images: own && own.panels ? Object.fromEntries(Object.entries(clean(own).panels || {}).map(([p, x]) => [p, { show: x.show, blur: x.blur }])) : null,
+        term_colors: (CFG && CFG.settings.termColors) || 'windows', ansi: own ? clean(own).ansi || null : null,
+      },
       fields: FIELDS.map(([k2, l, h]) => ({ key: k2, label: l, use: h })),
+      panels: PANELS.map(([p, l]) => ({ key: p, label: l })),
+      ansi_keys: ANSI,
+      notes: __('term_colors "windows" iken Claude Code terminalde Windows Terminal renkleriyle görünür ve termFg / ansi kullanılmaz; "theme" iken terminal yazısı termFg, 16 renk ansi’den gelir. Terminal zemini (termBg) ikisinde de uygulanır.'),
       custom: list().map(x => ({ id: x.id, name: x.name })),
     };
   }
 
-  window.Themes = { repaintTerms, FIELDS, clean, css, show, byId, list, swatches, openEditor, save, designWithClaude, current, norm };
+  window.Themes = { repaintTerms, FIELDS, PANELS, ANSI, clean, css, show, byId, list, active, swatches, openEditor, save, designWithClaude, current, norm, exportTheme, importTheme };
 })();

@@ -8,6 +8,15 @@
   // try: what the "Dene" button does (optional)
   const NOTES = [
     {
+      id: '2026-11-25', title: __('Sürüm {v}', { v: '1.2.0' }), date: '2026-11-25',
+      items: [
+        { icon: 'fa-solid fa-cloud-arrow-up', title: __('Deployment: FTP, FTPS ve SFTP'), text: __('IDE’de yeni Deployment paneli: projeye bir sunucu ve klasör eşlemesi ekle, dosyaları yükle / indir, karşılaştırıp senkronla, uzaktaki dosyaları doğrudan düzenle. İstersen her kayıtta ya da projedeki her değişiklikte (Claude’un düzenlemeleri dahil) otomatik yüklenir. Claude ve Codex de bu sunucuları VoxStorm üzerinden, izin alarak kullanabilir.'), try: () => setMode('ide') },
+        { icon: 'fa-regular fa-images', title: __('Panellere ayrı resim'), text: __('Tema düzenleyicide resim artık yalnızca tüm pencereye değil, yan panellere, terminale ve kod editörüne ayrı ayrı konabilir; her birinin görünürlüğü ve bulanıklığı ayrı.'), try: () => Themes.openEditor(null) },
+        { icon: 'fa-solid fa-terminal', title: __('Konsol renkleri temadan'), text: __('Claude ile tema tasarlarken terminal yazısı ve terminalin 16 rengi de temaya göre seçilebilir (Ayarlar → Tema → Terminal yazı renkleri: Temaya uyumlu).') },
+        { icon: 'fa-solid fa-share-nodes', title: __('Tema paylaş'), text: __('Tema menüsünde temanın yanındaki paylaş düğmesi temayı resimleriyle birlikte bir .voxtheme dosyasına kaydeder; “İçe aktar” ile başkasının temasını eklersin.') },
+      ],
+    },
+    {
       id: '2026-11-23', title: __('Sürüm {v}', { v: '1.1.0' }), date: '2026-11-23',
       items: [
         { icon: 'fa-solid fa-user-shield', title: __('sudo: kayıtlı parola ve otomatik onay'), text: __('Sunucunun düzenleme penceresine ayrı bir sudo / root parolası kaydedebilir, sudo isteklerini otomatik onaylatabilirsin. sudo penceresinde iki yeni kutu var: “Tüm oturumlar için hatırla” ve “sudo isteklerini otomatik onayla”; ikisi de sunucu ayarına yazılır.') },

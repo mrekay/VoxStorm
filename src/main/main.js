@@ -1198,6 +1198,7 @@ function spawnTerminal(opts, owner) {
 /* ---------------- updates (GitHub Releases) ---------------- */
 let U = null;
 let SSH = null;
+let FTP = null; // IDE deployment: FTP / FTPS / SFTP servers (ftp.js)
 let DB = null;
 let AGENT = null;
 const ptyMeta = new Map(); // pty id -> { agent: 'Claude' | 'Codex', cwd } for the AI sessions
@@ -1206,7 +1207,7 @@ const agentNotes = new Set();
 function setupAgentLink() {
   AGENT = require('./agentlink')({
     DATA, version: app.getVersion(),
-    getSsh: () => SSH, getDb: () => DB,
+    getSsh: () => SSH, getDb: () => DB, getFtp: () => FTP,
     enabled: () => config.settings.agentLink !== false,
     sessionInfo: id => {
       const m = ptyMeta.get(id) || { agent: __('Ajan'), cwd: '' };
@@ -1815,6 +1816,8 @@ function registerIpc() {
   DB = require('./db')({ ipcMain, app, dialog, getWin: () => ownerWin('db'), DATA, getProjects: () => config.projects });
   // SSH mode: terminal + SFTP (PuTTY / WinSCP), tunnels, Remote Desktop launcher
   SSH = require('./ssh')({ ipcMain, dialog, getWin: () => ownerWin('ssh'), sendTo, DATA });
+  // IDE deployment (PhpStorm-like): FTP / FTPS / SFTP servers, mappings, sync, automatic upload
+  FTP = require('./ftp')({ ipcMain, DATA, sendTo, getWin: () => ownerWin('ide'), insideProject });
   // Docker: containers on this computer and on open SSH sessions
   DOCKER = require('./docker')({ ipcMain, shell, getSsh: () => SSH });
   THEMES = require('./themes')({ ipcMain, dialog, BrowserWindow, DATA });
@@ -1844,7 +1847,7 @@ function addProject(p, auto) {
 /* ---------------- start ---------------- */
 app.on('second-instance', () => showWindow());
 app.on('activate', () => showWindow()); // macOS: clicking the Dock icon brings the window back
-app.on('before-quit', () => { isQuitting = true; for (const [m, w] of modeWins) rememberBounds(m, w); killAll(); saveConfigNow(); if (U) U.onQuit(); if (SSH) SSH.shutdown(); if (DOCKER) DOCKER.shutdown(); });
+app.on('before-quit', () => { isQuitting = true; for (const [m, w] of modeWins) rememberBounds(m, w); killAll(); saveConfigNow(); if (U) U.onQuit(); if (SSH) SSH.shutdown(); if (FTP) FTP.shutdown(); if (DOCKER) DOCKER.shutdown(); });
 app.on('window-all-closed', e => e.preventDefault());
 
 /* ---------------- Start Menu shortcuts (notification name, icon, click target) ---------------- */

@@ -1435,6 +1435,10 @@ html.is-mac.is-fullscreen .titlebar .tb-left{padding-left:10px}
 .te-c span{display:grid;min-width:0}
 .te-c b{font-weight:500;font-size:12.5px}
 .te-c small{color:var(--muted);font:11px var(--f-mono)}
+.te-slots{margin:0 0 10px;flex-wrap:wrap}
+.te-slots button{position:relative}
+.te-dot{display:inline-block;width:6px;height:6px;margin-left:6px;border-radius:50%;background:var(--accent);vertical-align:middle}
+.te-dot[hidden]{display:none}
 .te-img{display:flex;gap:12px;align-items:stretch}
 .te-thumb{width:150px;flex:none;aspect-ratio:16/10;border-radius:8px;border:1px solid var(--line);background:var(--surface-2) center/cover no-repeat}
 .te-thumb.empty{background-image:repeating-linear-gradient(45deg,transparent 0 8px,var(--hover) 8px 16px)}

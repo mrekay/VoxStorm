@@ -769,7 +769,7 @@
         <div class="db-df">${(buttons || []).map(([v, l, k]) => `<button type="${k === 'primary' || k === 'danger' ? 'submit' : 'button'}" class="btn ${k === 'danger' ? 'db-bdanger' : k || ''}" data-mb="${v}">${esc(l)}</button>`).join('')}</div></form>`;
       el.hidden = false;
       const form = el.querySelector('form');
-      const values = () => { const o = {}; form.querySelectorAll('[name]').forEach(x => { o[x.name] = x.type === 'checkbox' ? x.checked : x.value; }); return o; };
+      const values = () => { const o = {}; form.querySelectorAll('[name]').forEach(x => { o[x.name] = x.type === 'checkbox' ? x.checked : x.type === 'radio' ? (x.checked ? x.value : (o[x.name] || '')) : x.value; }); return o; };
       const done = v => { if (modalDone !== done) return; modalDone = null; el.hidden = true; el.innerHTML = ''; resolve(v); };
       modalDone = done;
       form.addEventListener('submit', e => { e.preventDefault(); const b = form.querySelector('.db-df [type=submit]'); finish(b ? b.dataset.mb : 'ok'); });

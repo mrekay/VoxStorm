@@ -59,14 +59,19 @@ const tools = () => [
   ['call_plugin_tool', S(__('Bir VoxStorm eklentisinin aracını çağırır ve sonucunu döndürür.'), {
     plugin: str(__('Eklenti kimliği (list_plugin_tools’taki "plugin")')), tool: str(__('Araç adı')), args: { type: 'object', description: __('Aracın parametreleri') },
   }, ['plugin', 'tool'])],
-  ['get_theme', S(__('VoxStorm’un şu anki arayüz temasını (on temel renk, koyu/açık, arka plan resmi), renk alanlarının ne işe yaradığını ve kullanıcının özel temalarını döndürür. save_theme’den önce bak.'))],
-  ['save_theme', S(__('VoxStorm için yeni bir arayüz teması kaydeder ve hemen uygular (kullanıcı Tema menüsünden geri dönebilir ya da düzenleyebilir). On temel renk verilir (#rrggbb); ara tonları VoxStorm hesaplar. Yazı ile zemin arasında okunur kontrast bırak. İstersen yerel bir resmi arka plan yapabilirsin.'), {
+  ['get_theme', S(__('VoxStorm’un şu anki arayüz temasını (on temel renk, koyu/açık, pencere ve panel resimleri, terminal renkleri), renk alanlarının ne işe yaradığını ve kullanıcının özel temalarını döndürür. save_theme’den önce bak.'))],
+  ['save_theme', S(__('VoxStorm için yeni bir arayüz teması kaydeder ve hemen uygular (kullanıcı Tema menüsünden geri dönebilir ya da düzenleyebilir). On temel renk verilir (#rrggbb); ara tonları VoxStorm hesaplar. Yazı ile zemin arasında okunur kontrast bırak. İstersen yerel bir resmi tüm pencerenin (image_path) ya da yalnızca yan panellerin, terminalin, kod editörünün (panel_images) arka planı yapabilirsin; Claude Code konsolunun yazı renkleri için term_colors ve ansi.'), {
     name: str(__('Temanın adı')),
     dark: bool(__('Koyu tema mı (false: açık)')),
     colors: { type: 'object', description: __('Renkler: bg, surface, fg, muted, accent, warn, ok, danger, termBg, termFg (hepsi #rrggbb). Verilmeyenler varsayılan koyu temadan gelir.'), properties: Object.fromEntries(['bg', 'surface', 'fg', 'muted', 'accent', 'warn', 'ok', 'danger', 'termBg', 'termFg'].map(k => [k, { type: 'string' }])), additionalProperties: false },
     image_path: str(__('İsteğe bağlı: arka plan resmi olacak yerel dosyanın tam yolu (png, jpg, webp…)')),
     image_show: num(__('Resmin görünürlüğü, yüzde (5–90, varsayılan 35)')),
     image_blur: num(__('Resmin bulanıklığı, piksel (0–30, varsayılan 0)')),
+    panel_images: { type: 'object', description: __('İsteğe bağlı: yalnızca bir panelin arkasına resim. Anahtarlar: side (yan paneller), term (terminal), editor (kod editörü); her biri { path: yerel tam yol, show: 5–90, blur: 0–30 }. Tüm pencere resminden (image_path) bağımsızdır.'), additionalProperties: false,
+      properties: Object.fromEntries(['side', 'term', 'editor'].map(k => [k, { type: ['object', 'null'], properties: { path: { type: 'string' }, show: { type: 'number' }, blur: { type: 'number' } } }])) },
+    term_colors: { type: 'string', enum: ['theme', 'windows'], description: __('Terminal yazı renkleri: "theme" — Claude Code konsolu termFg ve ansi renklerini kullanır; "windows" — Windows Terminal renkleri (termFg ve ansi kullanılmaz). Konsol yazı rengini değiştirmek istiyorsan "theme" ver.') },
+    ansi: { type: 'object', description: __('İsteğe bağlı: terminalin 16 rengi (#rrggbb): black, red, green, yellow, blue, magenta, cyan, white ve bright… sürümleri. Yalnızca term_colors "theme" iken kullanılır.'), additionalProperties: false,
+      properties: Object.fromEntries(['black', 'red', 'green', 'yellow', 'blue', 'magenta', 'cyan', 'white', 'brightBlack', 'brightRed', 'brightGreen', 'brightYellow', 'brightBlue', 'brightMagenta', 'brightCyan', 'brightWhite'].map(k => [k, { type: 'string' }])) },
   }, ['name', 'colors'])],
   // these need the "SSH / DB for agents" setting (served with the SSH / DB tools)
   ['show_query', S(__('Bir SQL sorgusunu VoxStorm’un DB modunda, kullanıcının önünde bir sorgu sekmesinde açar; salt okunur bir sorguysa (SELECT, WITH, SHOW…) hemen çalıştırır ve sonuç tablo olarak görünür, değilse çalıştırmayı kullanıcıya bırakır. Kullanıcıya bir sonucu göstermek istediğinde db_query yerine bunu kullan.'), {
@@ -189,7 +194,15 @@ module.exports = function agentTools({ sessionInfo, winFor, notify, notifyTab, g
     async save_theme(a, info) {
       let image = null;
       if (a.image_path) { const im = getThemes().importImage(String(a.image_path)); image = { url: im.url, file: im.file, show: a.image_show || 35, blur: a.image_blur || 0 }; }
-      const r = await ui(winFor('main'), 'saveTheme', { name: a.name, dark: a.dark, colors: a.colors, image, by: info.agent }, { front: true });
+      let panels;
+      if (a.panel_images && typeof a.panel_images === 'object') {
+        panels = {};
+        for (const k of ['side', 'term', 'editor']) {
+          const p = a.panel_images[k];
+          if (p && p.path) { const im = getThemes().importImage(String(p.path)); panels[k] = { url: im.url, file: im.file, show: p.show || 35, blur: p.blur || 0 }; }
+        }
+      }
+      const r = await ui(winFor('main'), 'saveTheme', { name: a.name, dark: a.dark, colors: a.colors, image, panels, ansi: a.ansi, termColors: a.term_colors, by: info.agent }, { front: true });
       return __('“{name}” teması kaydedildi ve uygulandı (custom:{id}).', { name: r.name, id: r.id });
     },
     async show_query(a, info, ptyId) {
