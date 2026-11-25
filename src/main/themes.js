@@ -76,7 +76,7 @@ module.exports = function registerThemes({ ipcMain, dialog, BrowserWindow, DATA 
       if (r.canceled || !r.filePath) return null;
       const panels = {};
       for (const k of SLOTS) { const p = packPic(th.panels && th.panels[k]); if (p) panels[k] = p; }
-      const out = { voxtheme: 1, name: String(th.name || ''), dark: !!th.dark, colors: th.colors || {}, ansi: th.ansi || undefined, image: packPic(th.image) || undefined, panels: Object.keys(panels).length ? panels : undefined };
+      const out = { voxtheme: 1, name: String(th.name || ''), dark: !!th.dark, colors: th.colors || {}, popup: +th.popup || 100, ansi: th.ansi || undefined, image: packPic(th.image) || undefined, panels: Object.keys(panels).length ? panels : undefined };
       fs.writeFileSync(r.filePath, JSON.stringify(out));
       return { path: r.filePath };
     } catch (err) { return { error: err.message }; }
@@ -94,7 +94,7 @@ module.exports = function registerThemes({ ipcMain, dialog, BrowserWindow, DATA 
       const keep = p => { if (p) made.push(p.file); return p; };
       const panels = {};
       for (const k of SLOTS) { const p = keep(unpackPic(j.panels && j.panels[k])); if (p) panels[k] = p; }
-      return { theme: { name: String(j.name || __('Tema')).slice(0, 40), dark: typeof j.dark === 'boolean' ? j.dark : undefined, colors: j.colors, ansi: j.ansi, image: keep(unpackPic(j.image)), panels } };
+      return { theme: { name: String(j.name || __('Tema')).slice(0, 40), dark: typeof j.dark === 'boolean' ? j.dark : undefined, colors: j.colors, popup: j.popup, ansi: j.ansi, image: keep(unpackPic(j.image)), panels } };
     } catch (err) { made.forEach(removeImage); return { error: err.message }; }
   });
 

@@ -2581,4 +2581,10 @@
   "Claude ile tema tasarlarken terminal yazısı ve terminalin 16 rengi de temaya göre seçilebilir (Ayarlar → Tema → Terminal yazı renkleri: Temaya uyumlu).": "En concevant un thème avec Claude, le texte du terminal et ses 16 couleurs peuvent aussi suivre le thème (Paramètres → Thème → Couleurs du texte du terminal : Assorties au thème).",
   "Tema paylaş": "Partager des thèmes",
   "Tema menüsünde temanın yanındaki paylaş düğmesi temayı resimleriyle birlikte bir .voxtheme dosyasına kaydeder; “İçe aktar” ile başkasının temasını eklersin.": "Le bouton partager à côté d’un thème dans le menu Thème l’enregistre avec ses images dans un fichier .voxtheme ; avec « Importer », tu ajoutes le thème de quelqu’un d’autre.",
+  "Açılan pencerelerin (ayarlar, diyaloglar, menüler, bildirimler) opaklığı, yüzde (50–100, varsayılan 100: tam opak, arkadaki resim görünmez)": "Opacité de ce qui s’ouvre par-dessus (paramètres, dialogues, menus, notifications), en pourcentage (50–100, 100 par défaut : totalement opaque, l’image derrière ne se voit pas)",
+  "Açılan pencereler": "Fenêtres qui s’ouvrent",
+  "Opaklık": "Opacité",
+  "Ayarlar, diyaloglar, menüler ve bildirimler. %100: arkalarından hiçbir şey görünmez.": "Paramètres, dialogues, menus et notifications. 100 % : rien ne transparaît.",
+  "Açılan pencereler artık opak": "Les fenêtres qui s’ouvrent sont désormais opaques",
+  "Temada resim olsa da ayarlar, diyaloglar, menüler ve bildirimler tam opak; arkalarından resim görünmez. İstersen tema düzenleyicideki “Açılan pencereler → Opaklık” ile buzlu cam gibi yarı saydam yaparsın.": "Même avec une image dans le thème, les paramètres, dialogues, menus et notifications sont totalement opaques ; l’image ne transparaît pas. Si tu veux, rends-les translucides comme du verre dépoli avec « Fenêtres qui s’ouvrent → Opacité » dans l’éditeur de thème.",
 });

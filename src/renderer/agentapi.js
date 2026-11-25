@@ -213,7 +213,7 @@
 
   /* ---------------- themes (themes.js) ---------------- */
   const getTheme = () => Themes.current();
-  async function saveTheme({ name, dark, colors, image, panels, ansi, termColors, by = 'Claude' }) {
+  async function saveTheme({ name, dark, colors, popup, image, panels, ansi, termColors, by = 'Claude' }) {
     const c = colors && typeof colors === 'object' ? colors : {};
     const bad = Object.keys(c).filter(k => c[k] && !Themes.norm(c[k]));
     if (bad.length) return fail(__('Geçersiz renk (#rrggbb olmalı): {list}', { list: bad.join(', ') }));
@@ -224,7 +224,7 @@
     if (badA.length) return fail(__('Geçersiz ansi rengi: {list}. Alanlar: {fields}', { list: badA.join(', '), fields: Themes.ANSI.join(', ') }));
     const pn = {}; // each save is a new theme: only the panel pictures given now
     if (panels) for (const k of Object.keys(panels)) if (panels[k]) pn[k] = panels[k];
-    const t = await Themes.save({ name: String(name || __('Yeni tema')), dark, colors: c, image, panels: pn, ansi: an, by }, { termColors });
+    const t = await Themes.save({ name: String(name || __('Yeni tema')), dark, colors: c, popup, image, panels: pn, ansi: an, by }, { termColors });
     toast(__('{agent} yeni bir tema uyguladı', { agent: by }), __('“{name}” · Tema menüsünden değiştirebilir ya da düzenleyebilirsin.', { name: t.name }));
     return { ok: true, id: t.id, name: t.name };
   }

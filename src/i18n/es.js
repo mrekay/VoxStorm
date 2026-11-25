@@ -2581,4 +2581,10 @@
   "Claude ile tema tasarlarken terminal yazısı ve terminalin 16 rengi de temaya göre seçilebilir (Ayarlar → Tema → Terminal yazı renkleri: Temaya uyumlu).": "Al diseñar un tema con Claude, el texto del terminal y sus 16 colores también pueden seguir el tema (Ajustes → Tema → Colores del texto del terminal: Acordes con el tema).",
   "Tema paylaş": "Compartir temas",
   "Tema menüsünde temanın yanındaki paylaş düğmesi temayı resimleriyle birlikte bir .voxtheme dosyasına kaydeder; “İçe aktar” ile başkasının temasını eklersin.": "El botón compartir junto a un tema en el menú Tema lo guarda con sus imágenes en un archivo .voxtheme; con «Importar» añades el tema de otra persona.",
+  "Açılan pencerelerin (ayarlar, diyaloglar, menüler, bildirimler) opaklığı, yüzde (50–100, varsayılan 100: tam opak, arkadaki resim görünmez)": "Opacidad de lo que se abre encima (ajustes, diálogos, menús, notificaciones), porcentaje (50–100, por defecto 100: totalmente opaco, la imagen de detrás no se ve)",
+  "Açılan pencereler": "Ventanas emergentes",
+  "Opaklık": "Opacidad",
+  "Ayarlar, diyaloglar, menüler ve bildirimler. %100: arkalarından hiçbir şey görünmez.": "Ajustes, diálogos, menús y notificaciones. 100 %: no se ve nada a través de ellos.",
+  "Açılan pencereler artık opak": "Las ventanas emergentes ahora son opacas",
+  "Temada resim olsa da ayarlar, diyaloglar, menüler ve bildirimler tam opak; arkalarından resim görünmez. İstersen tema düzenleyicideki “Açılan pencereler → Opaklık” ile buzlu cam gibi yarı saydam yaparsın.": "Aunque el tema tenga una imagen, los ajustes, diálogos, menús y notificaciones son totalmente opacos; la imagen no se ve a través de ellos. Si quieres, hazlos semitransparentes como vidrio esmerilado con «Ventanas emergentes → Opacidad» en el editor de temas.",
 });

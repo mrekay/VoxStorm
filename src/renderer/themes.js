@@ -25,6 +25,9 @@
     ['term', __('Terminal'), '.term-slot'],
     ['editor', __('Kod editörü'), '.code'],
   ];
+  // what opens on top of the window: dialogs, settings, menus, toasts… They get their own opacity (default
+  // 100: solid), so a background picture does not show through them.
+  const POPUPS = '.ui-dlg,.settings,.skin-menu,.new-menu,.popover,.db-ctx,.db-dlg,.sec-drop,.has-sub>.sub,.toast,.ui-tip,.git-panel,.gp-drop,.start-panel,.plug-drawer,.dock-peek,.im-drop';
   const SLOTS = [['image', __('Tüm pencere')]].concat(PANELS.map(([k, l]) => [k, l]));
   // the 16 terminal colours; used when terminal colours follow the theme
   const ANSI = ['black', 'red', 'green', 'yellow', 'blue', 'magenta', 'cyan', 'white', 'brightBlack', 'brightRed', 'brightGreen', 'brightYellow', 'brightBlue', 'brightMagenta', 'brightCyan', 'brightWhite'];
@@ -59,7 +62,8 @@
     for (const [k] of PANELS) { const p = pic(t.panels && t.panels[k]); if (p) panels[k] = p; }
     let ansi = null;
     if (t.ansi && typeof t.ansi === 'object') for (const k of ANSI) { const v = norm(t.ansi[k]); if (v) (ansi = ansi || {})[k] = v; }
-    return { id: String(t.id || ''), name: String(t.name || __('Tema')).slice(0, 40), dark, colors: c, image: pic(t.image), panels: Object.keys(panels).length ? panels : undefined, ansi: ansi || undefined, by: t.by ? String(t.by).slice(0, 20) : undefined };
+    const popup = Math.max(50, Math.min(100, Math.round(+t.popup || 100)));
+    return { id: String(t.id || ''), name: String(t.name || __('Tema')).slice(0, 40), dark, colors: c, image: pic(t.image), popup, panels: Object.keys(panels).length ? panels : undefined, ansi: ansi || undefined, by: t.by ? String(t.by).slice(0, 20) : undefined };
   }
   const files = t => { const x = clean(t); return [x.image, ...Object.values(x.panels || {})].filter(p => p && p.file).map(p => p.file); };
   const cssUrl = u => `url("${String(u).replace(/["\\]/g, '')}")`;
@@ -95,10 +99,18 @@
     return `${r}{${own};position:relative;isolation:isolate}`
       + `${r}::before{content:"";position:absolute;inset:0;z-index:-1;clip-path:inset(0);background:${cssUrl(p.url)} center/cover no-repeat;filter:blur(${p.blur}px);pointer-events:none}`;
   }
+  // dialogs, settings and menus: their own opacity, whatever is behind them
+  function popupCss(x) {
+    const c = x.colors, a = x.popup / 100;
+    if (a >= 1 && !x.image && !x.panels) return ''; // nothing see-through: the plain colours already are solid
+    const col = h => a >= 1 ? h : rgba(h, a);
+    return `:root[data-skin="custom"] :is(${POPUPS}){--bg:${col(c.bg)};--surface:${col(c.surface)};--surface-2:${col(mix(c.surface, c.bg, 0.5))}${a < 1 ? ';backdrop-filter:blur(14px)' : ''}}`;
+  }
   function css(th) {
-    const { v, dark, panels } = vars(th), c = clean(th).colors;
-    return `:root[data-skin="custom"]{color-scheme:${dark ? 'dark' : 'light'};${Object.entries(v).map(([k, x]) => `${k}:${x}`).join(';')}}`
-      + PANELS.filter(([k]) => panels && panels[k]).map(([k, , sel]) => panelCss(sel, panels[k], c)).join('');
+    const { v, dark, panels } = vars(th), x = clean(th), c = x.colors;
+    return `:root[data-skin="custom"]{color-scheme:${dark ? 'dark' : 'light'};${Object.entries(v).map(([k, y]) => `${k}:${y}`).join(';')}}`
+      + PANELS.filter(([k]) => panels && panels[k]).map(([k, , sel]) => panelCss(sel, panels[k], c)).join('')
+      + popupCss(x);
   }
 
   // show a theme (or none: back to the built-in ones)
@@ -146,6 +158,9 @@
             <label class="te-sl"><span>${__('Bulanıklık')}</span><input type="range" min="0" max="30" data-te="blur"><b data-te="blurv"></b></label>
           </div>
         </div>
+        <h4>${__('Açılan pencereler')}</h4>
+        <label class="te-sl"><span>${__('Opaklık')}</span><input type="range" min="50" max="100" data-te="popup"><b data-te="popupv"></b></label>
+        <p class="set-note">${__('Ayarlar, diyaloglar, menüler ve bildirimler. %100: arkalarından hiçbir şey görünmez.')}</p>
         <p class="set-note">${__('Değişiklikler hemen önizlenir. Vazgeçersen önceki tema geri gelir.')}</p>
       </div>
       <div class="ui-dlg-f">
@@ -179,6 +194,8 @@
       el.querySelector(`[data-te=${k}v]`).textContent = im ? (k === 'show' ? '%' + im.show : im.blur + ' px') : '–';
     }
     el.querySelector('[data-te=noimg]').disabled = !im;
+    el.querySelector('[data-te=popup]').value = th.popup;
+    el.querySelector('[data-te=popupv]').textContent = '%' + th.popup;
   }
   // a picture slot: "image" (whole window) or a panel key
   const getPic = (th, slot) => slot === 'image' ? th.image : (th.panels && th.panels[slot]) || null;
@@ -198,6 +215,7 @@
     const t = e.target, th = ed.th;
     if (t.dataset.tc) { th.colors[t.dataset.tc] = t.value; ed.el.querySelector(`[data-tx="${t.dataset.tc}"]`).textContent = t.value; }
     else if (t.dataset.te === 'name') { th.name = t.value; return; }
+    else if (t.dataset.te === 'popup') { th.popup = +t.value; ed.el.querySelector('[data-te=popupv]').textContent = '%' + th.popup; }
     else if (t.dataset.te === 'show' || t.dataset.te === 'blur') { const p = getPic(th, ed.slot); if (p) p[t.dataset.te] = +t.value; fill(); }
     preview();
   }
@@ -258,7 +276,7 @@
   /* ---------------- share: a .voxtheme file carries the colours and the pictures ---------------- */
   async function exportTheme(th) {
     const t = clean(th);
-    const r = await api.invoke('theme:export', { name: t.name, dark: t.dark, colors: t.colors, ansi: t.ansi, image: t.image, panels: t.panels });
+    const r = await api.invoke('theme:export', { name: t.name, dark: t.dark, colors: t.colors, popup: t.popup, ansi: t.ansi, image: t.image, panels: t.panels });
     if (r && r.error) uiAlert({ title: __('Tema paylaşılamadı'), message: r.error });
     else if (r && r.path && typeof toast === 'function') toast(__('Tema kaydedildi'), __('“{name}” → {path}', { name: t.name, path: r.path }));
   }
@@ -293,6 +311,7 @@
       current: {
         skin: k, name: own ? own.name : k, dark: now.dark, colors: now.colors,
         image: own && own.image ? { show: own.image.show, blur: own.image.blur } : null,
+        popup_opacity: own ? clean(own).popup : 100,
         panel_images: own && own.panels ? Object.fromEntries(Object.entries(clean(own).panels || {}).map(([p, x]) => [p, { show: x.show, blur: x.blur }])) : null,
         term_colors: (CFG && CFG.settings.termColors) || 'windows', ansi: own ? clean(own).ansi || null : null,
       },

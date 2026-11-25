@@ -2581,4 +2581,10 @@
   "Claude ile tema tasarlarken terminal yazısı ve terminalin 16 rengi de temaya göre seçilebilir (Ayarlar → Tema → Terminal yazı renkleri: Temaya uyumlu).": "Beim Entwerfen eines Themes mit Claude können auch der Terminaltext und die 16 Terminalfarben dem Theme folgen (Einstellungen → Theme → Terminal-Textfarben: Passend zum Theme).",
   "Tema paylaş": "Themes teilen",
   "Tema menüsünde temanın yanındaki paylaş düğmesi temayı resimleriyle birlikte bir .voxtheme dosyasına kaydeder; “İçe aktar” ile başkasının temasını eklersin.": "Der Teilen-Knopf neben einem Theme im Theme-Menü speichert es samt Bildern in einer .voxtheme-Datei; mit „Importieren“ fügst du das Theme eines anderen hinzu.",
+  "Açılan pencerelerin (ayarlar, diyaloglar, menüler, bildirimler) opaklığı, yüzde (50–100, varsayılan 100: tam opak, arkadaki resim görünmez)": "Deckkraft von allem, was sich darüber öffnet (Einstellungen, Dialoge, Menüs, Benachrichtigungen), Prozent (50–100, Standard 100: voll deckend, das Bild dahinter ist nicht zu sehen)",
+  "Açılan pencereler": "Aufklappende Fenster",
+  "Opaklık": "Deckkraft",
+  "Ayarlar, diyaloglar, menüler ve bildirimler. %100: arkalarından hiçbir şey görünmez.": "Einstellungen, Dialoge, Menüs und Benachrichtigungen. 100 %: nichts scheint durch.",
+  "Açılan pencereler artık opak": "Aufklappende Fenster sind jetzt deckend",
+  "Temada resim olsa da ayarlar, diyaloglar, menüler ve bildirimler tam opak; arkalarından resim görünmez. İstersen tema düzenleyicideki “Açılan pencereler → Opaklık” ile buzlu cam gibi yarı saydam yaparsın.": "Auch mit einem Bild im Theme sind Einstellungen, Dialoge, Menüs und Benachrichtigungen voll deckend; das Bild scheint nicht durch. Wenn du willst, machst du sie im Theme-Editor mit „Aufklappende Fenster → Deckkraft“ halbtransparent wie Milchglas.",
 });

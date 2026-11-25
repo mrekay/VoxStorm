@@ -67,6 +67,7 @@ const tools = () => [
     image_path: str(__('İsteğe bağlı: arka plan resmi olacak yerel dosyanın tam yolu (png, jpg, webp…)')),
     image_show: num(__('Resmin görünürlüğü, yüzde (5–90, varsayılan 35)')),
     image_blur: num(__('Resmin bulanıklığı, piksel (0–30, varsayılan 0)')),
+    popup_opacity: num(__('Açılan pencerelerin (ayarlar, diyaloglar, menüler, bildirimler) opaklığı, yüzde (50–100, varsayılan 100: tam opak, arkadaki resim görünmez)')),
     panel_images: { type: 'object', description: __('İsteğe bağlı: yalnızca bir panelin arkasına resim. Anahtarlar: side (yan paneller), term (terminal), editor (kod editörü); her biri { path: yerel tam yol, show: 5–90, blur: 0–30 }. Tüm pencere resminden (image_path) bağımsızdır.'), additionalProperties: false,
       properties: Object.fromEntries(['side', 'term', 'editor'].map(k => [k, { type: ['object', 'null'], properties: { path: { type: 'string' }, show: { type: 'number' }, blur: { type: 'number' } } }])) },
     term_colors: { type: 'string', enum: ['theme', 'windows'], description: __('Terminal yazı renkleri: "theme" — Claude Code konsolu termFg ve ansi renklerini kullanır; "windows" — Windows Terminal renkleri (termFg ve ansi kullanılmaz). Konsol yazı rengini değiştirmek istiyorsan "theme" ver.') },
@@ -202,7 +203,7 @@ module.exports = function agentTools({ sessionInfo, winFor, notify, notifyTab, g
           if (p && p.path) { const im = getThemes().importImage(String(p.path)); panels[k] = { url: im.url, file: im.file, show: p.show || 35, blur: p.blur || 0 }; }
         }
       }
-      const r = await ui(winFor('main'), 'saveTheme', { name: a.name, dark: a.dark, colors: a.colors, image, panels, ansi: a.ansi, termColors: a.term_colors, by: info.agent }, { front: true });
+      const r = await ui(winFor('main'), 'saveTheme', { name: a.name, dark: a.dark, colors: a.colors, popup: a.popup_opacity, image, panels, ansi: a.ansi, termColors: a.term_colors, by: info.agent }, { front: true });
       return __('“{name}” teması kaydedildi ve uygulandı (custom:{id}).', { name: r.name, id: r.id });
     },
     async show_query(a, info, ptyId) {

@@ -8,6 +8,12 @@
   // try: what the "Dene" button does (optional)
   const NOTES = [
     {
+      id: '2026-11-25b', title: __('Sürüm {v}', { v: '1.2.1' }), date: '2026-11-25',
+      items: [
+        { icon: 'fa-solid fa-window-restore', title: __('Açılan pencereler artık opak'), text: __('Temada resim olsa da ayarlar, diyaloglar, menüler ve bildirimler tam opak; arkalarından resim görünmez. İstersen tema düzenleyicideki “Açılan pencereler → Opaklık” ile buzlu cam gibi yarı saydam yaparsın.'), try: () => Themes.openEditor(null) },
+      ],
+    },
+    {
       id: '2026-11-25', title: __('Sürüm {v}', { v: '1.2.0' }), date: '2026-11-25',
       items: [
         { icon: 'fa-solid fa-cloud-arrow-up', title: __('Deployment: FTP, FTPS ve SFTP'), text: __('IDE’de yeni Deployment paneli: projeye bir sunucu ve klasör eşlemesi ekle, dosyaları yükle / indir, karşılaştırıp senkronla, uzaktaki dosyaları doğrudan düzenle. İstersen her kayıtta ya da projedeki her değişiklikte (Claude’un düzenlemeleri dahil) otomatik yüklenir. Claude ve Codex de bu sunucuları VoxStorm üzerinden, izin alarak kullanabilir.'), try: () => setMode('ide') },

@@ -2581,4 +2581,10 @@
   "Claude ile tema tasarlarken terminal yazısı ve terminalin 16 rengi de temaya göre seçilebilir (Ayarlar → Tema → Terminal yazı renkleri: Temaya uyumlu).": "When designing a theme with Claude, the terminal text and the terminal’s 16 colors can follow the theme too (Settings → Theme → Terminal text colors: Match theme).",
   "Tema paylaş": "Share themes",
   "Tema menüsünde temanın yanındaki paylaş düğmesi temayı resimleriyle birlikte bir .voxtheme dosyasına kaydeder; “İçe aktar” ile başkasının temasını eklersin.": "The share button next to a theme in the Theme menu saves it with its pictures to a .voxtheme file; add someone else’s theme with “Import”.",
+  "Açılan pencerelerin (ayarlar, diyaloglar, menüler, bildirimler) opaklığı, yüzde (50–100, varsayılan 100: tam opak, arkadaki resim görünmez)": "Opacity of what opens on top (settings, dialogs, menus, notifications), percent (50–100, default 100: fully opaque, the picture behind does not show)",
+  "Açılan pencereler": "Pop-up windows",
+  "Opaklık": "Opacity",
+  "Ayarlar, diyaloglar, menüler ve bildirimler. %100: arkalarından hiçbir şey görünmez.": "Settings, dialogs, menus and notifications. 100%: nothing shows through them.",
+  "Açılan pencereler artık opak": "Pop-up windows are opaque now",
+  "Temada resim olsa da ayarlar, diyaloglar, menüler ve bildirimler tam opak; arkalarından resim görünmez. İstersen tema düzenleyicideki “Açılan pencereler → Opaklık” ile buzlu cam gibi yarı saydam yaparsın.": "Even with a picture in the theme, settings, dialogs, menus and notifications are fully opaque; the picture does not show through them. If you like, make them frosted-glass see-through with “Pop-up windows → Opacity” in the theme editor.",
 });
