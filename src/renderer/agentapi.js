@@ -222,13 +222,28 @@
     const an = ansi && typeof ansi === 'object' ? ansi : {};
     const badA = Object.keys(an).filter(k => !Themes.ANSI.includes(k) || (an[k] && !Themes.norm(an[k])));
     if (badA.length) return fail(__('Geçersiz ansi rengi: {list}. Alanlar: {fields}', { list: badA.join(', '), fields: Themes.ANSI.join(', ') }));
-    const pn = {}; // each save is a new theme: only the panel pictures given now
+    const pn = {}; // the theme is what this call gives: only the panel pictures given now
     if (panels) for (const k of Object.keys(panels)) if (panels[k]) pn[k] = panels[k];
-    const t = await Themes.save({ name: String(name || __('Yeni tema')), dark, colors: c, popup, image, panels: pn, ansi: an, by }, { termColors });
-    toast(__('{agent} yeni bir tema uyguladı', { agent: by }), __('“{name}” · Tema menüsünden değiştirebilir ya da düzenleyebilirsin.', { name: t.name }));
-    return { ok: true, id: t.id, name: t.name };
+    // a theme with the same name is replaced (its id stays); further copies of that name go, with their pictures
+    const nm = String(name || __('Yeni tema')).slice(0, 40), key = nm.trim().toLocaleLowerCase();
+    const same = Themes.list().filter(x => String(x.name || '').trim().toLocaleLowerCase() === key);
+    if (same.length > 1) await Themes.remove(same.slice(1).map(x => x.id), { quiet: true });
+    const t = await Themes.save({ id: same.length ? same[0].id : '', name: nm, dark, colors: c, popup, image, panels: pn, ansi: an, by }, { termColors });
+    toast(same.length ? __('{agent} temayı güncelledi', { agent: by }) : __('{agent} yeni bir tema uyguladı', { agent: by }), __('“{name}” · Tema menüsünden değiştirebilir ya da düzenleyebilirsin.', { name: t.name }));
+    return { ok: true, id: t.id, name: t.name, replaced: same.length > 0 };
+  }
+  // delete one of the user's own themes (by id or name); the user confirms in VoxStorm
+  async function deleteTheme({ theme, by = 'Claude' }) {
+    const q = String(theme || '').trim(), key = q.replace(/^custom:/, '');
+    const hit = Themes.list().filter(x => x.id === key || String(x.name || '').trim().toLocaleLowerCase() === q.toLocaleLowerCase());
+    if (!hit.length) return fail(__('Böyle bir tema yok: {name}. Kullanıcının temaları: {list}', { name: q, list: Themes.list().map(x => `${x.name} (${x.id})`).join(', ') || '–' }));
+    const names = hit.map(x => x.name).join(', ');
+    const ok = await uiConfirm({ title: __('{agent} tema silmek istiyor', { agent: by }), message: hit.length > 1 ? __('“{name}” adlı {n} tema silinecek.', { name: names.split(', ')[0], n: hit.length }) : __('“{name}” silinecek.', { name: names }), ok: __('Sil'), danger: true });
+    if (!ok) return fail(__('Kullanıcı silmeye izin vermedi.'));
+    await Themes.remove(hit.map(x => x.id));
+    return { ok: true, deleted: hit.map(x => ({ id: x.id, name: x.name })) };
   }
 
-  window.agentApi = { getTheme, saveTheme, showFile, highlight, editorState, showDiff, askUser, listTerminals, readTerminal, runInTerminal, sendToSession, showQuery, pluginTools, callPluginTool };
+  window.agentApi = { getTheme, saveTheme, deleteTheme, showFile, highlight, editorState, showDiff, askUser, listTerminals, readTerminal, runInTerminal, sendToSession, showQuery, pluginTools, callPluginTool };
   window.agentShowFile = (fp, line, openTab, by) => showFile({ path: fp, line, openTab, by });
 })();

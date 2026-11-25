@@ -273,6 +273,16 @@
     return t;
   }
 
+  // delete themes by id, with their pictures; the active one falls back to a built-in theme
+  async function remove(ids, opts = {}) {
+    const gone = list().filter(x => ids.includes(x.id));
+    gone.forEach(x => files(x).forEach(f => api.invoke('theme:removeImage', f).catch(() => {})));
+    const skin = CFG.settings.skin, back = ids.some(id => skin === 'custom:' + id) ? 'mono' : skin;
+    await setCfg({ settings: { customThemes: list().filter(x => !ids.includes(x.id)), skin: back } });
+    if (back !== skin) applySkin(back);
+    if (!opts.quiet && typeof renderSettings === 'function') { renderSettings(); renderSkinMenu(); }
+  }
+
   /* ---------------- share: a .voxtheme file carries the colours and the pictures ---------------- */
   async function exportTheme(th) {
     const t = clean(th);
@@ -323,5 +333,5 @@
     };
   }
 
-  window.Themes = { repaintTerms, FIELDS, PANELS, ANSI, clean, css, show, byId, list, active, swatches, openEditor, save, designWithClaude, current, norm, exportTheme, importTheme };
+  window.Themes = { remove, repaintTerms, FIELDS, PANELS, ANSI, clean, css, show, byId, list, active, swatches, openEditor, save, designWithClaude, current, norm, exportTheme, importTheme };
 })();

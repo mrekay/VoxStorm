@@ -8,6 +8,13 @@
   // try: what the "Dene" button does (optional)
   const NOTES = [
     {
+      id: '2026-11-25c', title: __('Sürüm {v}', { v: '1.2.2' }), date: '2026-11-25',
+      items: [
+        { icon: 'fa-solid fa-clone', title: __('Claude temayı kopyalamadan günceller'), text: __('Claude aynı adla bir tema kaydedince yenisi eklenmez, o tema güncellenir; önceki kopyalar ve kullanılmayan resimleri temizlenir. Claude artık bir temayı silebilir de (her seferinde sana sorulur).') },
+        { icon: 'fa-solid fa-film', title: __('Hareketli arka plan'), text: __('Tema resmi olarak GIF de seçebilirsin: tüm pencerede ya da yalnızca bir panelde oynar.') },
+      ],
+    },
+    {
       id: '2026-11-25b', title: __('Sürüm {v}', { v: '1.2.1' }), date: '2026-11-25',
       items: [
         { icon: 'fa-solid fa-window-restore', title: __('Açılan pencereler artık opak'), text: __('Temada resim olsa da ayarlar, diyaloglar, menüler ve bildirimler tam opak; arkalarından resim görünmez. İstersen tema düzenleyicideki “Açılan pencereler → Opaklık” ile buzlu cam gibi yarı saydam yaparsın.'), try: () => Themes.openEditor(null) },

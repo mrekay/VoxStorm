@@ -60,7 +60,7 @@ const tools = () => [
     plugin: str(__('Eklenti kimliği (list_plugin_tools’taki "plugin")')), tool: str(__('Araç adı')), args: { type: 'object', description: __('Aracın parametreleri') },
   }, ['plugin', 'tool'])],
   ['get_theme', S(__('VoxStorm’un şu anki arayüz temasını (on temel renk, koyu/açık, pencere ve panel resimleri, terminal renkleri), renk alanlarının ne işe yaradığını ve kullanıcının özel temalarını döndürür. save_theme’den önce bak.'))],
-  ['save_theme', S(__('VoxStorm için yeni bir arayüz teması kaydeder ve hemen uygular (kullanıcı Tema menüsünden geri dönebilir ya da düzenleyebilir). On temel renk verilir (#rrggbb); ara tonları VoxStorm hesaplar. Yazı ile zemin arasında okunur kontrast bırak. İstersen yerel bir resmi tüm pencerenin (image_path) ya da yalnızca yan panellerin, terminalin, kod editörünün (panel_images) arka planı yapabilirsin; Claude Code konsolunun yazı renkleri için term_colors ve ansi.'), {
+  ['save_theme', S(__('VoxStorm için bir arayüz teması kaydeder ve hemen uygular (kullanıcı Tema menüsünden geri dönebilir ya da düzenleyebilir). Aynı adda bir tema varsa onun yerine geçer: tema bu çağrıda verilenlerden oluşur, verilmeyen resimler kaldırılır. On temel renk verilir (#rrggbb); ara tonları VoxStorm hesaplar. Yazı ile zemin arasında okunur kontrast bırak. İstersen yerel bir resmi tüm pencerenin (image_path) ya da yalnızca yan panellerin, terminalin, kod editörünün (panel_images) arka planı yapabilirsin; Claude Code konsolunun yazı renkleri için term_colors ve ansi.'), {
     name: str(__('Temanın adı')),
     dark: bool(__('Koyu tema mı (false: açık)')),
     colors: { type: 'object', description: __('Renkler: bg, surface, fg, muted, accent, warn, ok, danger, termBg, termFg (hepsi #rrggbb). Verilmeyenler varsayılan koyu temadan gelir.'), properties: Object.fromEntries(['bg', 'surface', 'fg', 'muted', 'accent', 'warn', 'ok', 'danger', 'termBg', 'termFg'].map(k => [k, { type: 'string' }])), additionalProperties: false },
@@ -74,6 +74,9 @@ const tools = () => [
     ansi: { type: 'object', description: __('İsteğe bağlı: terminalin 16 rengi (#rrggbb): black, red, green, yellow, blue, magenta, cyan, white ve bright… sürümleri. Yalnızca term_colors "theme" iken kullanılır.'), additionalProperties: false,
       properties: Object.fromEntries(['black', 'red', 'green', 'yellow', 'blue', 'magenta', 'cyan', 'white', 'brightBlack', 'brightRed', 'brightGreen', 'brightYellow', 'brightBlue', 'brightMagenta', 'brightCyan', 'brightWhite'].map(k => [k, { type: 'string' }])) },
   }, ['name', 'colors'])],
+  ['delete_theme', S(__('Kullanıcının kendi temalarından birini siler (id ya da ad; aynı adda birden çok varsa hepsi). Kullanıcıya VoxStorm’da onay sorulur. Hazır temalar silinmez.'), {
+    theme: str(__('Temanın id’si (get_theme’deki custom listesinden) ya da adı')),
+  }, ['theme'])],
   // these need the "SSH / DB for agents" setting (served with the SSH / DB tools)
   ['show_query', S(__('Bir SQL sorgusunu VoxStorm’un DB modunda, kullanıcının önünde bir sorgu sekmesinde açar; salt okunur bir sorguysa (SELECT, WITH, SHOW…) hemen çalıştırır ve sonuç tablo olarak görünür, değilse çalıştırmayı kullanıcıya bırakır. Kullanıcıya bir sonucu göstermek istediğinde db_query yerine bunu kullan.'), {
     connection: str(__('list_connections’taki id ya da ad')), sql: str(__('Sorgu')), database: str(__('İsteğe bağlı: veritabanı')),
@@ -190,6 +193,10 @@ module.exports = function agentTools({ sessionInfo, winFor, notify, notifyTab, g
     async call_plugin_tool(a) {
       const r = await ui(winFor('main'), 'callPluginTool', { plugin: a.plugin, tool: a.tool, args: a.args || {} });
       return typeof r.result === 'string' ? r.result : json(r.result);
+    },
+    async delete_theme(a, info) {
+      const r = await ui(winFor('main'), 'deleteTheme', { theme: a.theme, by: info.agent }, { front: true });
+      return __('Silindi: {list}', { list: r.deleted.map(x => `${x.name} (${x.id})`).join(', ') });
     },
     async get_theme() { return json(await ui(winFor('main'), 'getTheme', {})); },
     async save_theme(a, info) {
